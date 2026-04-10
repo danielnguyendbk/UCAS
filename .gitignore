@@ -1,0 +1,47 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build output
+dist/
+build/
+coverage/
+**/dist/
+**/build/
+**/coverage/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Python (if backend uses Python later)
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+
+# Backend runtime files
+*.sqlite3
+*.db
