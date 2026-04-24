@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: qlphonghoc
+  datasource:
+    url: jdbc:mysql://localhost:3306/qlphonghoc?useSSL=false&serverTimezone=Asia/Bangkok&allowPublicKeyRetrieval=true
+    username: daniel
+    password: Thai06112005
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+    show-sql: false
+
+server:
+  port: 8080
+
+app:
+  jwt:
+    secret: YjY0MTE3YmY1MGE4Zjg3NDQyZDJkM2VkNjM5ZDJmMTgzZjczYWE0Zjk0YmNlODZiNDE0YzE5Mzk4YTVjZTQ5ZA==
+    expiration: 86400000
+  seed:
+    enabled: true
