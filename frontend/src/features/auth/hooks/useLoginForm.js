@@ -1,19 +1,19 @@
 import { useState } from "react";
 import { DEMO_PASSWORD } from "../constants/credentials";
 const useLoginForm = () => {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const fillCredential = (credential) => {
-    setEmail(credential.email);
+    setUsername(credential.username);
     setPassword(DEMO_PASSWORD);
     setError("");
   };
   return {
-    email,
-    setEmail,
+    username,
+    setUsername,
     password,
     setPassword,
     showPassword,

@@ -4,14 +4,14 @@ import { authService } from "../services/authService";
 const AuthContext = createContext(void 0);
 const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => authService.getPersistedUser());
-  const login = async (email, password) => {
-    const loggedInUser = await authService.login({ email, password });
+  const login = async (username, password) => {
+    const { user: loggedInUser } = await authService.login({ username, password });
     setUser(loggedInUser);
-    authService.persistUser(loggedInUser);
+    return loggedInUser;
   };
   const logout = () => {
     setUser(null);
-    authService.persistUser(null);
+    authService.clearAuth();
   };
   const contextValue = useMemo(
     () => ({

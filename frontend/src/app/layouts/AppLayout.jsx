@@ -21,6 +21,15 @@ const defaultRootPaths = new Set([
   APP_ROUTES.studentDashboard
 ]);
 
+const ROLE_PATH_GUARDS = {
+  ADMIN: [/^\/$/, /^\/(classrooms|courses|lecturers|timetable|auto-assignment|weekly-schedule|reports|user-management|settings)(\/|$)/],
+  STAFF: [/^\/staff(\/|$)/],
+  LECTURER: [/^\/lecturer(\/|$)/],
+  STUDENT: [/^\/student(\/|$)/],
+  FACILITY: [/^\/employee(\/|$)/],
+  EMPLOYEES: [/^\/employee(\/|$)/]
+};
+
 const AppLayout = () => {
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
@@ -38,6 +47,16 @@ const AppLayout = () => {
       navigate(APP_ROUTES.login);
     }
   }, [isAuthenticated, navigate]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !user?.backendRole) return;
+
+    const allowedMatchers = ROLE_PATH_GUARDS[user.backendRole] ?? [];
+    const isAllowed = allowedMatchers.some((matcher) => matcher.test(location.pathname));
+    if (!isAllowed) {
+      navigate(user.redirectPath ?? APP_ROUTES.home, { replace: true });
+    }
+  }, [isAuthenticated, location.pathname, navigate, user]);
 
   if (!isAuthenticated || !user) {
     return null;
