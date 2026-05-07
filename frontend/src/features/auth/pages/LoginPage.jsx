@@ -1,23 +1,15 @@
 import { jsx, jsxs } from "react/jsx-runtime";
 import { AlertCircle, Eye, EyeOff, GraduationCap } from "lucide-react";
 import { useNavigate } from "react-router";
-import { APP_ROUTES } from "@/constants/routes";
 import { Button } from "@/components/common/Button";
 import { Input } from "@/components/common/Input";
 import { ROLE_CREDENTIALS } from "../constants/credentials";
 import { useAuth } from "../hooks/useAuth";
 import { useLoginForm } from "../hooks/useLoginForm";
-const getRoleRedirect = (email) => {
-  if (email.includes("lecturer") || email.includes("gv")) return APP_ROUTES.lecturerDashboard;
-  if (email.includes("employee") || email.includes("nv")) return APP_ROUTES.employeeDashboard;
-  if (email.includes("student") || email.includes("sv")) return APP_ROUTES.studentDashboard;
-  if (email.includes("staff")) return APP_ROUTES.staffDashboard;
-  return APP_ROUTES.home;
-};
 const LoginPage = () => {
   const {
-    email,
-    setEmail,
+    username,
+    setUsername,
     password,
     setPassword,
     showPassword,
@@ -33,16 +25,21 @@ const LoginPage = () => {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
-    if (!email || !password) {
+    if (!username || !password) {
       setError("Vui l\xF2ng nh\u1EADp \u0111\u1EA7y \u0111\u1EE7 t\xE0i kho\u1EA3n v\xE0 m\u1EADt kh\u1EA9u.");
       return;
     }
     setLoading(true);
     try {
-      await login(email, password);
-      navigate(getRoleRedirect(email));
-    } catch {
-      setError("\u0110\u0103ng nh\u1EADp th\u1EA5t b\u1EA1i. Vui l\xF2ng ki\u1EC3m tra l\u1EA1i th\xF4ng tin.");
+      const loggedInUser = await login(username, password);
+      navigate(loggedInUser.redirectPath);
+    } catch (error) {
+      const statusCode = error?.response?.status;
+      if (statusCode === 401) {
+        setError("Sai t\xE0i kho\u1EA3n ho\u1EB7c m\u1EADt kh\u1EA9u.");
+      } else {
+        setError("\u0110\u0103ng nh\u1EADp th\u1EA5t b\u1EA1i. Vui l\xF2ng ki\u1EC3m tra l\u1EA1i th\xF4ng tin.");
+      }
     } finally {
       setLoading(false);
     }
@@ -77,15 +74,15 @@ const LoginPage = () => {
         ] }),
         /* @__PURE__ */ jsxs("form", { onSubmit: handleSubmit, className: "space-y-4", children: [
           /* @__PURE__ */ jsxs("div", { className: "space-y-1.5", children: [
-            /* @__PURE__ */ jsx("label", { htmlFor: "email", className: "text-sm font-medium text-gray-700", children: "T\xE0i kho\u1EA3n email" }),
+            /* @__PURE__ */ jsx("label", { htmlFor: "username", className: "text-sm font-medium text-gray-700", children: "T\xEAn \u0111\u0103ng nh\u1EADp" }),
             /* @__PURE__ */ jsx(
               Input,
               {
-                id: "email",
-                type: "email",
-                placeholder: "example@university.edu.vn",
-                value: email,
-                onChange: (event) => setEmail(event.target.value),
+                id: "username",
+                type: "text",
+                placeholder: "Nh\u1EADp username",
+                value: username,
+                onChange: (event) => setUsername(event.target.value),
                 className: "h-11"
               }
             )
@@ -129,12 +126,12 @@ const LoginPage = () => {
                   /* @__PURE__ */ jsx("span", { className: "text-xs font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded mr-2", children: credential.role }),
                   /* @__PURE__ */ jsx("span", { className: "text-xs text-gray-500", children: credential.hint })
                 ] }),
-                /* @__PURE__ */ jsx("span", { className: "text-xs text-gray-400 group-hover:text-blue-500 truncate max-w-[140px]", children: credential.email })
+                /* @__PURE__ */ jsx("span", { className: "text-xs text-gray-400 group-hover:text-blue-500 truncate max-w-[140px]", children: credential.username })
               ]
             },
             credential.role
           )) }),
-          /* @__PURE__ */ jsx("p", { className: "text-xs text-gray-400 text-center mt-2", children: "M\u1EADt kh\u1EA9u: password123" })
+          /* @__PURE__ */ jsx("p", { className: "text-xs text-gray-400 text-center mt-2", children: "M\u1EADt kh\u1EA9u: 123456" })
         ] })
       ] })
     ] })
