@@ -2,14 +2,16 @@ import axios from "axios";
 
 const TOKEN_STORAGE_KEY = "csms_access_token";
 const USER_STORAGE_KEY = "csms_user";
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080").replace(/\/+$/, "");
+const apiBaseUrl = (
+  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080"
+).replace(/\/+$/, "");
 
 const httpClient = axios.create({
   baseURL: apiBaseUrl,
   timeout: 15e3,
   headers: {
-    "Content-Type": "application/json"
-  }
+    "Content-Type": "application/json",
+  },
 });
 
 httpClient.interceptors.request.use((config) => {
@@ -40,8 +42,6 @@ httpClient.interceptors.response.use(
       }
     }
     return Promise.reject(error);
-  }
+  },
 );
-export {
-  httpClient
-};
+export { httpClient };
