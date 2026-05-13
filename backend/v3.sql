@@ -258,6 +258,7 @@ CREATE TABLE section_schedules (
     day_of_week      ENUM('MON','TUE','WED','THU','FRI','SAT','SUN') NOT NULL,
     time_slot_id     INT NOT NULL,
     created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
     UNIQUE (section_id, day_of_week, time_slot_id),
     CONSTRAINT fk_section_schedules_section
         FOREIGN KEY (section_id) REFERENCES class_sections(id),
@@ -1069,3 +1070,160 @@ JOIN buildings b              ON b.id = cr.building_id
 JOIN time_slots ts            ON ts.id = ss.time_slot_id
 LEFT JOIN users hu            ON hu.id = cir.handled_by
 WHERE cir.is_deleted = FALSE;
+
+-- =========================================================
+-- 13) DU LIEU MAU
+-- Luu y: moi class section chi co 1 day + 1 slot / tuan trong section_schedules
+-- =========================================================
+
+INSERT INTO academic_years (id, year_label, start_date, end_date, is_current) VALUES
+(1, '2025-2026', '2025-09-01', '2026-08-31', TRUE);
+
+INSERT INTO semesters (id, academic_year_id, semester_type, semester_name, start_date, end_date, status) VALUES
+(1, 1, 'FALL',   'Hoc ky 1 nam hoc 2025-2026', '2025-09-08', '2026-01-18', 'COMPLETED'),
+(2, 1, 'SPRING', 'Hoc ky 2 nam hoc 2025-2026', '2026-02-02', '2026-06-14', 'ACTIVE'),
+(3, 1, 'SUMMER', 'Hoc ky he nam hoc 2025-2026', '2026-06-22', '2026-08-16', 'UPCOMING');
+
+INSERT INTO faculties (id, name, code) VALUES
+(1, 'Khoa Cong nghe Thong tin', 'CNTT'),
+(2, 'Khoa Kinh te', 'KT'),
+(3, 'Khoa Ngoai ngu', 'NN');
+
+INSERT INTO departments (id, faculty_id, name, code) VALUES
+(1, 1, 'Bo mon Khoa hoc May tinh', 'KHMT'),
+(2, 1, 'Bo mon Cong nghe Phan mem', 'CNPM'),
+(3, 1, 'Bo mon He thong Thong tin', 'HTTT'),
+(4, 2, 'Bo mon Phan tich Kinh doanh', 'PTKD'),
+(5, 3, 'Bo mon Tieng Anh', 'TA');
+
+INSERT INTO users (id, username, email, password_hash, full_name, role, is_active) VALUES
+(1,  'admin01',      'admin01@qlphonghoc.edu.vn',      '$2y$10$demo_admin01',      'Nguyen Van Admin',       'ADMIN',    TRUE),
+(2,  'staff01',      'staff01@qlphonghoc.edu.vn',      '$2y$10$demo_staff01',      'Tran Thi Dieu Phoi',     'STAFF',    TRUE),
+(3,  'facility01',   'facility01@qlphonghoc.edu.vn',   '$2y$10$demo_facility01',   'Le Van Co So',           'FACILITY', TRUE),
+(4,  'facility02',   'facility02@qlphonghoc.edu.vn',   '$2y$10$demo_facility02',   'Pham Thi Lao Cong',      'FACILITY', TRUE),
+(5,  'lecturer01',   'lecturer01@qlphonghoc.edu.vn',   '$2y$10$demo_lecturer01',   'TS Nguyen Minh Quan',    'LECTURER', TRUE),
+(6,  'lecturer02',   'lecturer02@qlphonghoc.edu.vn',   '$2y$10$demo_lecturer02',   'ThS Tran Thu Ha',        'LECTURER', TRUE),
+(7,  'lecturer03',   'lecturer03@qlphonghoc.edu.vn',   '$2y$10$demo_lecturer03',   'TS Le Hoang Nam',        'LECTURER', TRUE),
+(8,  'lecturer04',   'lecturer04@qlphonghoc.edu.vn',   '$2y$10$demo_lecturer04',   'ThS Pham Ngoc Anh',      'LECTURER', TRUE),
+(9,  'student01',    'student01@qlphonghoc.edu.vn',    '$2y$10$demo_student01',    'Vo Minh Khang',          'STUDENT',  TRUE),
+(10, 'student02',    'student02@qlphonghoc.edu.vn',    '$2y$10$demo_student02',    'Dang Hoai An',           'STUDENT',  TRUE),
+(11, 'student03',    'student03@qlphonghoc.edu.vn',    '$2y$10$demo_student03',    'Bui Thanh Ngan',         'STUDENT',  TRUE),
+(12, 'student04',    'student04@qlphonghoc.edu.vn',    '$2y$10$demo_student04',    'Hoang Quoc Viet',        'STUDENT',  TRUE),
+(13, 'student05',    'student05@qlphonghoc.edu.vn',    '$2y$10$demo_student05',    'Nguyen Phuong Linh',     'STUDENT',  TRUE),
+(14, 'student06',    'student06@qlphonghoc.edu.vn',    '$2y$10$demo_student06',    'Tran Duc Huy',           'STUDENT',  TRUE);
+
+INSERT INTO buildings (id, name, code) VALUES
+(1, 'Toa A - Giang duong chinh', 'A'),
+(2, 'Toa B - Phong may', 'B'),
+(3, 'Toa C - Hoi truong', 'C');
+
+INSERT INTO facility_staff (id, user_id, staff_code, building_id, note) VALUES
+(1, 3, 'CSVC001', 1, 'Phu trach mo cua va kiem tra thiet bi toa A'),
+(2, 4, 'CSVC002', 2, 'Phu trach phong may toa B');
+
+INSERT INTO classrooms (id, building_id, floor_number, room_number, room_name, room_type, capacity, has_projector, has_ac, is_active) VALUES
+(1, 1, 1, 'A101', 'Phong hoc A101',      'LECTURE',    80,  TRUE, TRUE, TRUE),
+(2, 1, 1, 'A102', 'Phong hoc A102',      'LECTURE',    70,  TRUE, TRUE, TRUE),
+(3, 1, 2, 'A201', 'Phong seminar A201',  'SEMINAR',    35,  TRUE, TRUE, TRUE),
+(4, 1, 2, 'A202', 'Phong seminar A202',  'SEMINAR',    45,  TRUE, TRUE, TRUE),
+(5, 2, 1, 'B101', 'Phong may B101',      'LAB',        40,  TRUE, TRUE, TRUE),
+(6, 2, 1, 'B102', 'Phong may B102',      'LAB',        45,  TRUE, TRUE, TRUE),
+(7, 2, 2, 'B201', 'Phong hoc B201',      'LECTURE',    60,  TRUE, TRUE, TRUE),
+(8, 3, 1, 'C101', 'Hoi truong C101',     'AUDITORIUM', 200, TRUE, TRUE, TRUE);
+
+INSERT INTO courses (id, department_id, course_code, course_name, credits, required_room_type, description) VALUES
+(1, 1, 'CS101',  'Nhap mon Lap trinh',       3, 'LECTURE',    'Mon co so ve tu duy lap trinh'),
+(2, 1, 'CS102L', 'Cau truc Du lieu - Lab',   3, 'LAB',        'Thuc hanh cau truc du lieu tren may tinh'),
+(3, 3, 'DB201L', 'Co so Du lieu - Lab',      3, 'LAB',        'Thuc hanh SQL va thiet ke CSDL'),
+(4, 2, 'SE301',  'Cong nghe Phan mem',       3, 'SEMINAR',    'Quy trinh phat trien phan mem'),
+(5, 3, 'IS210',  'He thong Thong tin',       3, 'LECTURE',    'Phan tich va thiet ke he thong thong tin'),
+(6, 4, 'BA101',  'Nhap mon Phan tich KD',    3, 'AUDITORIUM', 'Tong quan phan tich kinh doanh'),
+(7, 5, 'ENG101', 'Tieng Anh Hoc thuat',      2, 'LECTURE',    'Ky nang tieng Anh trong moi truong dai hoc');
+
+INSERT INTO lecturers (id, user_id, department_id, staff_code, full_name, email, phone) VALUES
+(1, 5, 1, 'GV001', 'TS Nguyen Minh Quan', 'lecturer01@qlphonghoc.edu.vn', '0901000001'),
+(2, 6, 1, 'GV002', 'ThS Tran Thu Ha',     'lecturer02@qlphonghoc.edu.vn', '0901000002'),
+(3, 7, 2, 'GV003', 'TS Le Hoang Nam',     'lecturer03@qlphonghoc.edu.vn', '0901000003'),
+(4, 8, 3, 'GV004', 'ThS Pham Ngoc Anh',   'lecturer04@qlphonghoc.edu.vn', '0901000004');
+
+INSERT INTO students (id, user_id, faculty_id, student_code, class_name, course_year, phone) VALUES
+(1, 9,  1, 'SV001', 'D21CQCN01', 2021, '0912000001'),
+(2, 10, 1, 'SV002', 'D21CQCN01', 2021, '0912000002'),
+(3, 11, 1, 'SV003', 'D22CQCN02', 2022, '0912000003'),
+(4, 12, 2, 'SV004', 'D22CQKT01', 2022, '0912000004'),
+(5, 13, 3, 'SV005', 'D23CQNN01', 2023, '0912000005'),
+(6, 14, 1, 'SV006', 'D23CQCN03', 2023, '0912000006');
+
+INSERT INTO clubs (id, club_code, club_name, faculty_id, advisor_user_id, status) VALUES
+(1, 'ITC', 'CLB Tin hoc', 1, 5, 'ACTIVE'),
+(2, 'ENGC', 'CLB Tieng Anh', 3, 8, 'ACTIVE');
+
+INSERT INTO club_memberships (id, club_id, student_id, position_name, is_representative, is_active) VALUES
+(1, 1, 1, 'Chu nhiem', TRUE, TRUE),
+(2, 1, 2, 'Thanh vien', FALSE, TRUE),
+(3, 2, 5, 'Chu nhiem', TRUE, TRUE),
+(4, 2, 3, 'Thanh vien', FALSE, TRUE);
+
+INSERT INTO class_sections (id, semester_id, course_id, lecturer_id, section_code, enrolled_count, max_capacity, status) VALUES
+(1, 2, 1, 1, '01', 60, 80,  'ACTIVE'),
+(2, 2, 2, 2, '01', 35, 40,  'ACTIVE'),
+(3, 2, 3, 4, '01', 40, 45,  'ACTIVE'),
+(4, 2, 4, 3, '01', 32, 35,  'ACTIVE'),
+(5, 2, 5, 4, '01', 55, 60,  'ACTIVE'),
+(6, 2, 6, 1, '01', 120, 150, 'ACTIVE'),
+(7, 2, 7, 4, '01', 45, 50,  'ACTIVE');
+
+INSERT INTO section_schedules (id, section_id, day_of_week, time_slot_id) VALUES
+(1, 1, 'MON', 1),
+(2, 2, 'TUE', 2),
+(3, 3, 'WED', 3),
+(4, 4, 'THU', 1),
+(5, 5, 'FRI', 2),
+(6, 6, 'MON', 3),
+(7, 7, 'SAT', 1);
+
+INSERT INTO student_section_enrollments (id, student_id, section_id, status) VALUES
+(1, 1, 1, 'ENROLLED'),
+(2, 1, 2, 'ENROLLED'),
+(3, 2, 1, 'ENROLLED'),
+(4, 2, 3, 'ENROLLED'),
+(5, 3, 2, 'ENROLLED'),
+(6, 3, 4, 'ENROLLED'),
+(7, 4, 6, 'ENROLLED'),
+(8, 5, 7, 'ENROLLED'),
+(9, 6, 3, 'ENROLLED'),
+(10, 6, 5, 'ENROLLED');
+
+INSERT INTO room_allocations (id, schedule_id, classroom_id, assigned_by, note) VALUES
+(1, 1, 1, 2, 'Phan phong theo TKB hoc ky 2'),
+(2, 2, 5, 2, 'Phong may phu hop lop thuc hanh'),
+(3, 3, 6, 2, 'Phong may phu hop lop CSDL'),
+(4, 4, 3, 2, 'Phong seminar cho mon Cong nghe Phan mem'),
+(5, 5, 7, 2, 'Phong hoc ly thuyet suc chua 60'),
+(6, 6, 8, 2, 'Lop dong sinh vien hoc tai hoi truong'),
+(7, 7, 2, 2, 'Phong hoc ly thuyet cho tieng Anh');
+
+INSERT INTO room_borrow_requests (
+    id, request_title, request_type, booking_scope, semester_id, booking_date,
+    time_slot_id, requested_by, club_id, expected_attendees,
+    preferred_building_id, preferred_classroom_id, requested_room_type,
+    purpose_note, status, approved_classroom_id, approved_by, approved_at,
+    processing_note, reject_reason
+) VALUES
+(1, 'Day bu mon Nhap mon Lap trinh', 'MAKEUP_CLASS', 'PERSONAL', 2, '2026-04-07', 4, 5, NULL, 50, 1, 2, 'LECTURE', 'Giang vien dang ky day bu do nghi le', 'APPROVED', 2, 2, '2026-04-01 09:00:00', 'Da kiem tra phong trong va du suc chua', NULL),
+(2, 'Hop CLB Tin hoc thang 4', 'CLUB_ACTIVITY', 'CLUB', 2, '2026-04-10', 4, 9, 1, 25, 1, 3, 'SEMINAR', 'Sinh hoat chuyen de ve lap trinh web', 'APPROVED', 3, 2, '2026-04-02 14:30:00', 'Chap thuan cho CLB su dung phong seminar', NULL),
+(3, 'Hoi thao huong nghiep nganh CNTT', 'SEMINAR', 'PERSONAL', 2, '2026-04-15', 5, 6, NULL, 80, 3, 8, 'AUDITORIUM', 'Moi doanh nghiep chia se co hoi nghe nghiep', 'PENDING', NULL, NULL, NULL, NULL, NULL),
+(4, 'Muon phong tu hoc nhom', 'MEETING', 'PERSONAL', 2, '2026-04-16', 2, 10, NULL, 12, 1, 4, 'SEMINAR', 'Nhom sinh vien on tap truoc kiem tra', 'REJECTED', NULL, 2, '2026-04-05 10:15:00', 'Khong phu hop quy dinh muon phong theo nhom nho', 'Yeu cau chua co giang vien phu trach');
+
+INSERT INTO classroom_issue_reports (
+    id, room_allocation_id, reporter_user_id, issue_title, issue_category,
+    severity_level, description, image_url, status, handled_by, handled_at, resolution_note
+) VALUES
+(1, 1, 5, 'May chieu phong A101 bi mo hinh', 'PROJECTOR', 'MEDIUM', 'May chieu hien thi khong ro trong buoi hoc sang thu Hai.', NULL, 'PENDING', NULL, NULL, NULL),
+(2, 2, 6, 'May tinh B101 so 12 khong khoi dong', 'ELECTRICAL', 'HIGH', 'Sinh vien khong the su dung may so 12 trong gio thuc hanh.', NULL, 'IN_PROGRESS', 3, '2026-03-12 15:20:00', 'Nhan vien co so vat chat dang kiem tra nguon dien'),
+(3, 3, 8, 'Mang phong B102 chap chon', 'NETWORK', 'MEDIUM', 'Ket noi mang bi mat trong khoang 10 phut dau tiet hoc.', NULL, 'RESOLVED', 4, '2026-03-20 16:45:00', 'Da khoi dong lai switch va kiem tra ket noi on dinh');
+
+INSERT INTO audit_logs (id, user_id, action, table_name, record_id, old_values, new_values, ip_address) VALUES
+(1, 2, 'INSERT',  'room_allocations',      1, NULL, JSON_OBJECT('schedule_id', 1, 'classroom_id', 1), '127.0.0.1'),
+(2, 2, 'APPROVE', 'room_borrow_requests',  1, JSON_OBJECT('status', 'PENDING'), JSON_OBJECT('status', 'APPROVED', 'approved_classroom_id', 2), '127.0.0.1'),
+(3, 3, 'UPDATE',  'classroom_issue_reports', 2, JSON_OBJECT('status', 'PENDING'), JSON_OBJECT('status', 'IN_PROGRESS'), '127.0.0.1');

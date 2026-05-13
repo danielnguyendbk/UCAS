@@ -46,14 +46,14 @@ const AuthProvider = ({ children }) => {
     setUser(null);
     localStorage.removeItem("csms_user");
   };
-  return /* @__PURE__ */ jsx(AuthContext.Provider, { value: { user, login, logout, isAuthenticated: !!user }, children });
+  return /* @__PURE__ */ jsx(AuthContext.Provider, {
+    value: { user, login, logout, isAuthenticated: !!user },
+    children,
+  });
 };
 const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) throw new Error("useAuth must be used within AuthProvider");
   return context;
 };
-export {
-  AuthProvider,
-  useAuth
-};
+export { AuthProvider, useAuth };

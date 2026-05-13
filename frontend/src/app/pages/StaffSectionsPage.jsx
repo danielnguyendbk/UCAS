@@ -1,187 +1,889 @@
-import { jsx, jsxs } from "react/jsx-runtime";
-import { useState } from "react";
-import { Search, Plus, Download, Filter, CheckCircle, Clock, XCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useAuth } from "@/features/auth/hooks/useAuth";
+import {
+  Search,
+  Plus,
+  Download,
+  Filter,
+  CheckCircle,
+  Clock,
+  XCircle,
+  ChevronLeft,
+  ChevronRight,
+  Edit,
+  MapPin,
+  Trash2,
+} from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Badge } from "../components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
-const sections = [
-  { id: "CS101.L11", name: "L\u1EADp tr\xECnh h\u01B0\u1EDBng \u0111\u1ED1i t\u01B0\u1EE3ng", faculty: "CNTT", credits: 3, students: 45, lecturer: "TS. Nguy\u1EC5n V\u0103n An", day: "Th\u1EE9 2", slot: "Ti\u1EBFt 1-3", room: "A-301", status: "assigned" },
-  { id: "MATH201.L02", name: "To\xE1n cao c\u1EA5p 2", faculty: "TO\xC1N", credits: 4, students: 60, lecturer: "GS.TS. Tr\u1EA7n Th\u1ECB B\xECnh", day: "Th\u1EE9 3", slot: "Ti\u1EBFt 4-6", room: "B-105", status: "assigned" },
-  { id: "NET301.L05", name: "M\u1EA1ng m\xE1y t\xEDnh", faculty: "CNTT", credits: 3, students: 38, lecturer: "ThS. L\xEA Minh T\xFA", day: "Th\u1EE9 4", slot: "Ti\u1EBFt 1-3", room: "", status: "pending" },
-  { id: "DB202.L08", name: "C\u01A1 s\u1EDF d\u1EEF li\u1EC7u", faculty: "CNTT", credits: 3, students: 52, lecturer: "TS. Ph\u1EA1m Quang H\u01B0ng", day: "Th\u1EE9 4", slot: "Ti\u1EBFt 7-9", room: "C-201", status: "assigned" },
-  { id: "AI401.L01", name: "Tr\xED tu\u1EC7 nh\xE2n t\u1EA1o", faculty: "CNTT", credits: 3, students: 35, lecturer: "PGS.TS. Ho\xE0ng V\u0103n Nam", day: "Th\u1EE9 5", slot: "Ti\u1EBFt 1-3", room: "A-301", status: "conflict" },
-  { id: "SE302.L03", name: "C\xF4ng ngh\u1EC7 ph\u1EA7n m\u1EC1m", faculty: "CNTT", credits: 3, students: 48, lecturer: "TS. V\u0169 Th\u1ECB Lan", day: "Th\u1EE9 6", slot: "Ti\u1EBFt 4-6", room: "D-102", status: "assigned" },
-  { id: "PHY101.L04", name: "V\u1EADt l\xFD \u0111\u1EA1i c\u01B0\u01A1ng", faculty: "V\u1EACT L\xDD", credits: 4, students: 72, lecturer: "GS. \u0110inh V\u0103n Kh\xE1nh", day: "Th\u1EE9 2", slot: "Ti\u1EBFt 7-9", room: "B-201", status: "assigned" },
-  { id: "ENG102.L06", name: "Ti\u1EBFng Anh k\u1EF9 thu\u1EADt", faculty: "NGO\u1EA0I NG\u1EEE", credits: 2, students: 40, lecturer: "ThS. Ng\xF4 Th\u1ECB Mai", day: "Th\u1EE9 5", slot: "Ti\u1EBFt 4-6", room: "", status: "pending" },
-  { id: "CHEM301.L02", name: "H\xF3a \u0111\u1EA1i c\u01B0\u01A1ng", faculty: "H\xD3A", credits: 3, students: 55, lecturer: "PGS. L\xFD V\u0103n \u0110\u1EE9c", day: "Th\u1EE9 6", slot: "Ti\u1EBFt 1-3", room: "E-101", status: "assigned" },
-  { id: "STAT201.L01", name: "Th\u1ED1ng k\xEA \u1EE9ng d\u1EE5ng", faculty: "TO\xC1N", credits: 3, students: 43, lecturer: "TS. Tr\u01B0\u01A1ng Th\u1ECB H\u1EA3i", day: "Th\u1EE9 3", slot: "Ti\u1EBFt 1-3", room: "", status: "pending" }
-];
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../components/ui/table";
+import { httpClient } from "../../services/httpClient";
+
 const statusConfig = {
-  assigned: { label: "\u0110\xE3 ph\xE2n ph\xF2ng", className: "bg-green-100 text-green-700", icon: CheckCircle },
-  pending: { label: "Ch\u01B0a ph\xE2n ph\xF2ng", className: "bg-orange-100 text-orange-700", icon: Clock },
-  conflict: { label: "Xung \u0111\u1ED9t l\u1ECBch", className: "bg-red-100 text-red-700", icon: XCircle }
+  assigned: {
+    label: "Đã phân phòng",
+    className: "bg-green-100 text-green-700",
+    icon: CheckCircle,
+  },
+  pending: {
+    label: "Chưa phân phòng",
+    className: "bg-orange-100 text-orange-700",
+    icon: Clock,
+  },
+  conflict: {
+    label: "Xung đột lịch",
+    className: "bg-red-100 text-red-700",
+    icon: XCircle,
+  },
 };
-const StaffSectionsPage = () => {
+
+export const StaffSectionsPage = () => {
+  const { user } = useAuth();
+
+  // --- STATE QUẢN LÝ DỮ LIỆU & BẢNG ---
+  const [sections, setSections] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedSection, setSelectedSection] = useState(null);
+
+  // --- STATE QUẢN LÝ DANH MỤC (Lấy từ Database) ---
+  const [facultiesList, setFacultiesList] = useState([]);
+  const [departmentsList, setDepartmentsList] = useState([]);
+  const [semestersList, setSemestersList] = useState([]);
+  const [coursesList, setCoursesList] = useState([]);
+  const [lecturersList, setLecturersList] = useState([]);
+
+  // --- BỘ LỌC BẢNG ---
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterFaculty, setFilterFaculty] = useState("all");
+  const [filterDepartment, setFilterDepartment] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 8;
+
+  // --- STATE CHO MODAL THÊM / SỬA ---
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState("add"); // "add" hoặc "edit"
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Dữ liệu Form
+  const [formData, setFormData] = useState({
+    semesterId: "",
+    facultyCode: "all", // Dùng để lọc UI trong modal
+    departmentCode: "all", // Dùng để lọc UI trong modal
+    courseId: "",
+    lecturerId: "",
+    sectionCode: "",
+    maxCapacity: "",
+    day: "MON",
+    slot: "1",
+  });
+
+  // Khởi tạo
+  useEffect(() => {
+    fetchCategories();
+    fetchSections();
+  }, []);
+
+  // Gọi API lấy danh mục
+  const fetchCategories = async () => {
+    try {
+      const [facRes, depRes, semRes, couRes, lecRes] = await Promise.all([
+        httpClient.get("/api/categories/faculties"),
+        httpClient.get("/api/categories/departments"),
+        httpClient.get("/api/categories/semesters"),
+        httpClient.get("/api/categories/courses"),
+        httpClient.get("/api/categories/lecturers"),
+      ]);
+
+      setFacultiesList(facRes.data.data || []);
+      setDepartmentsList(depRes.data.data || []);
+      setSemestersList(semRes.data.data || []);
+      setCoursesList(couRes.data.data || []);
+      setLecturersList(lecRes.data.data || []);
+    } catch (error) {
+      console.error("Lỗi lấy danh mục:", error);
+    }
+  };
+
+  // Gọi API lấy danh sách Lớp học phần
+  const fetchSections = async () => {
+    setIsLoading(true);
+    try {
+      const response = await httpClient.get("/api/staff/class-sections");
+      const rawData = Array.isArray(response.data)
+        ? response.data
+        : response.data.data || [];
+
+      const formattedData = rawData.map((item) => {
+        let mappedStatus = "pending";
+        if (item.allocationStatus === "ASSIGNED") mappedStatus = "assigned";
+        if (item.allocationStatus === "CONFLICT") mappedStatus = "conflict";
+
+        return {
+          dbId: item.id,
+          id: item.classCode,
+          name: item.courseName,
+          department: item.departmentCode,
+          faculty: item.facultyCode,
+          credits: item.credits,
+          students: item.studentCount,
+          lecturer: item.lecturerName,
+          day: item.day,
+          slot: item.schedule,
+          room: item.room,
+          status: mappedStatus,
+
+          // DỮ LIỆU ẨN DÙNG CHO FORM SỬA (Lấy từ backend)
+          semesterId: item.semesterId,
+          courseId: item.courseId,
+          lecturerId: item.lecturerId,
+          maxCapacity: item.maxCapacity,
+          dayCode: item.dayCode,
+          slotNumber: item.slot,
+        };
+      });
+
+      setSections(formattedData);
+      setSelectedSection(null);
+    } catch (error) {
+      console.error("Lỗi kết nối API:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // --- MỞ MODAL THÊM / SỬA ---
+  const handleOpenModal = (mode) => {
+    if (mode === "add") {
+      setFormData({
+        semesterId:
+          semestersList.length > 0 ? semestersList[0].id.toString() : "",
+        facultyCode: "all",
+        departmentCode: "all",
+        courseId: "",
+        lecturerId: "",
+        sectionCode: "",
+        maxCapacity: "",
+        day: "MON",
+        slot: "1",
+      });
+    } else if (mode === "edit" && selectedSection) {
+      // Tách chữ 'CS101.L01' ra để lấy mã '01'
+      const rawSectionCode = selectedSection.id.includes(".L")
+        ? selectedSection.id.split(".L")[1]
+        : "";
+
+      setFormData({
+        semesterId: selectedSection.semesterId?.toString() || "",
+        facultyCode: selectedSection.faculty || "all",
+        departmentCode: selectedSection.department || "all",
+        courseId: selectedSection.courseId?.toString() || "",
+        lecturerId: selectedSection.lecturerId?.toString() || "",
+        sectionCode: rawSectionCode,
+        maxCapacity: selectedSection.maxCapacity?.toString() || "",
+        day: selectedSection.dayCode || "MON",
+        slot: selectedSection.slotNumber?.toString() || "1",
+      });
+    }
+    setModalMode(mode);
+    setIsModalOpen(true);
+  };
+
+  // --- SUBMIT DỮ LIỆU ---
+  const handleSubmitForm = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      // Đóng gói JSON theo đúng chuẩn Backend
+      const payload = {
+        semesterId: Number(formData.semesterId),
+        courseId: Number(formData.courseId),
+        lecturerId: Number(formData.lecturerId),
+        sectionCode: formData.sectionCode,
+        enrolledCount: modalMode === "edit" ? selectedSection.students : 0,
+        maxCapacity: Number(formData.maxCapacity),
+        status: "ACTIVE",
+        day: formData.day,
+        slot: Number(formData.slot),
+      };
+
+      if (modalMode === "add") {
+        await httpClient.post("/api/staff/class-sections", payload);
+        alert("Đã thêm lớp học phần mới thành công!");
+      } else {
+        await httpClient.put(
+          `/api/staff/class-sections/${selectedSection.dbId}`,
+          payload,
+        );
+        alert("Đã cập nhật lớp học phần thành công!");
+      }
+
+      setIsModalOpen(false);
+      fetchSections();
+    } catch (error) {
+      console.error("Lỗi:", error);
+      alert(
+        error.response?.data?.message ||
+          "Có lỗi xảy ra, vui lòng kiểm tra lại!",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // --- XÓA LỚP ---
+  const handleDeleteSection = async () => {
+    if (
+      !window.confirm(
+        "Bạn có chắc chắn muốn hủy (xóa) lớp học phần này? Lịch học và phòng sẽ bị giải phóng!",
+      )
+    ) {
+      return;
+    }
+    try {
+      await httpClient.delete(
+        `/api/staff/class-sections/${selectedSection.dbId}`,
+      );
+      alert("Đã hủy lớp học phần thành công!");
+      setIsModalOpen(false);
+      fetchSections();
+    } catch (error) {
+      alert("Lỗi khi xóa lớp!");
+    }
+  };
+
+  // --- BỘ LỌC CHO BẢNG ---
   const filtered = sections.filter((s) => {
-    const matchSearch = s.id.toLowerCase().includes(search.toLowerCase()) || s.name.toLowerCase().includes(search.toLowerCase()) || s.lecturer.toLowerCase().includes(search.toLowerCase());
+    const matchSearch =
+      s.id.toLowerCase().includes(search.toLowerCase()) ||
+      s.name.toLowerCase().includes(search.toLowerCase()) ||
+      s.lecturer.toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === "all" || s.status === filterStatus;
     const matchFaculty = filterFaculty === "all" || s.faculty === filterFaculty;
-    return matchSearch && matchStatus && matchFaculty;
+    const matchDepartment =
+      filterDepartment === "all" || s.department === filterDepartment;
+
+    return matchSearch && matchStatus && matchFaculty && matchDepartment;
   });
-  const totalPages = Math.ceil(filtered.length / pageSize);
-  const paginated = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  return /* @__PURE__ */ jsxs("div", { className: "p-5 md:p-6 space-y-5", children: [
-    /* @__PURE__ */ jsxs("div", { className: "flex items-center justify-between", children: [
-      /* @__PURE__ */ jsxs("div", { children: [
-        /* @__PURE__ */ jsx("h1", { className: "text-xl font-bold text-gray-900", children: "Qu\u1EA3n l\xFD L\u1EDBp h\u1ECDc ph\u1EA7n" }),
-        /* @__PURE__ */ jsx("p", { className: "text-sm text-gray-500 mt-0.5", children: "H\u1ECDc k\u1EF3 1, N\u0103m h\u1ECDc 2024-2025" })
-      ] }),
-      /* @__PURE__ */ jsxs("div", { className: "flex gap-2", children: [
-        /* @__PURE__ */ jsxs(Button, { variant: "outline", size: "sm", className: "gap-1.5 text-sm", children: [
-          /* @__PURE__ */ jsx(Download, { className: "w-3.5 h-3.5" }),
-          " Xu\u1EA5t Excel"
-        ] }),
-        /* @__PURE__ */ jsxs(Button, { size: "sm", className: "bg-blue-600 hover:bg-blue-700 gap-1.5 text-sm", children: [
-          /* @__PURE__ */ jsx(Plus, { className: "w-3.5 h-3.5" }),
-          " Th\xEAm l\u1EDBp HP"
-        ] })
-      ] })
-    ] }),
-    /* @__PURE__ */ jsx("div", { className: "flex flex-wrap gap-2", children: [
-      { label: "T\u1ED5ng c\u1ED9ng", value: sections.length, color: "bg-gray-100 text-gray-700" },
-      { label: "\u0110\xE3 ph\xE2n ph\xF2ng", value: sections.filter((s) => s.status === "assigned").length, color: "bg-green-100 text-green-700" },
-      { label: "Ch\u01B0a ph\xE2n", value: sections.filter((s) => s.status === "pending").length, color: "bg-orange-100 text-orange-700" },
-      { label: "Xung \u0111\u1ED9t", value: sections.filter((s) => s.status === "conflict").length, color: "bg-red-100 text-red-700" }
-    ].map((p) => /* @__PURE__ */ jsxs("span", { className: `text-xs font-semibold px-3 py-1.5 rounded-full ${p.color}`, children: [
-      p.label,
-      ": ",
-      p.value
-    ] }, p.label)) }),
-    /* @__PURE__ */ jsx("div", { className: "bg-white rounded-xl border border-gray-200 p-4 shadow-sm", children: /* @__PURE__ */ jsxs("div", { className: "flex flex-col md:flex-row gap-3", children: [
-      /* @__PURE__ */ jsxs("div", { className: "flex-1 relative", children: [
-        /* @__PURE__ */ jsx(Search, { className: "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" }),
-        /* @__PURE__ */ jsx(
-          Input,
-          {
-            placeholder: "T\xECm theo m\xE3 l\u1EDBp, t\xEAn m\xF4n, gi\u1EA3ng vi\xEAn...",
-            value: search,
-            onChange: (e) => {
+
+  const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+  const paginated = filtered.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
+  // ĐẶT Ở ĐÂY: Logic này sẽ chạy lại mỗi khi formData.semesterId thay đổi
+  const currentSemester = semestersList.find(
+    (s) => s.id.toString() === formData.semesterId,
+  );
+
+  // Kiểm tra trạng thái học kỳ (Dựa theo enum COMPLETED trong file SQL của bạn)
+  const isSemesterClosed = currentSemester?.status === "COMPLETED";
+  if (isLoading) {
+    return (
+      <div className="p-5 flex flex-col justify-center items-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
+        <p className="text-gray-500 font-medium text-sm">
+          Đang đồng bộ dữ liệu lớp học phần...
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-5 md:p-6 space-y-5">
+      {/* HEADER TÍNH NĂNG */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">
+            Quản lý Lớp học phần
+          </h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            Dữ liệu thời gian thực từ Database
+          </p>
+        </div>
+        <div className="flex gap-2">
+          {/* NÚT SỬA */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 text-sm border-blue-600 text-blue-600 hover:bg-blue-50 disabled:border-gray-200 disabled:text-gray-400"
+            disabled={!selectedSection}
+            onClick={() => handleOpenModal("edit")}
+          >
+            <Edit className="w-3.5 h-3.5" /> Sửa
+          </Button>
+
+          {/* NÚT PHÂN CÔNG */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 text-sm border-green-600 text-green-600 hover:bg-green-50 disabled:border-gray-200 disabled:text-gray-400"
+            disabled={!selectedSection || selectedSection.status === "assigned"}
+          >
+            <MapPin className="w-3.5 h-3.5" /> Phân công
+          </Button>
+
+          {/* NÚT THÊM */}
+          <Button
+            size="sm"
+            className="bg-blue-600 hover:bg-blue-700 gap-1.5 text-sm"
+            onClick={() => handleOpenModal("add")}
+          >
+            <Plus className="w-3.5 h-3.5" /> Thêm lớp HP
+          </Button>
+        </div>
+      </div>
+
+      {/* THỐNG KÊ */}
+      <div className="flex flex-wrap gap-2">
+        <span className="text-xs font-semibold px-3 py-1.5 rounded-full bg-gray-100 text-gray-700">
+          Tổng số: {sections.length}
+        </span>
+        <span className="text-xs font-semibold px-3 py-1.5 rounded-full bg-green-100 text-green-700">
+          Đã phân: {sections.filter((s) => s.status === "assigned").length}
+        </span>
+        <span className="text-xs font-semibold px-3 py-1.5 rounded-full bg-orange-100 text-orange-700">
+          Chưa phân: {sections.filter((s) => s.status === "pending").length}
+        </span>
+        <span className="text-xs font-semibold px-3 py-1.5 rounded-full bg-red-100 text-red-700">
+          Xung đột: {sections.filter((s) => s.status === "conflict").length}
+        </span>
+      </div>
+
+      {/* BỘ LỌC BẢNG CHÍNH */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex flex-col md:flex-row gap-3">
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Input
+            placeholder="Tìm theo mã lớp, tên môn, giảng viên..."
+            value={search}
+            onChange={(e) => {
               setSearch(e.target.value);
               setCurrentPage(1);
-            },
-            className: "pl-9 h-9 text-sm"
-          }
-        )
-      ] }),
-      /* @__PURE__ */ jsxs(Select, { value: filterStatus, onValueChange: (v) => {
-        setFilterStatus(v);
-        setCurrentPage(1);
-      }, children: [
-        /* @__PURE__ */ jsxs(SelectTrigger, { className: "w-full md:w-44 h-9 text-sm", children: [
-          /* @__PURE__ */ jsx(Filter, { className: "w-3.5 h-3.5 mr-1.5 text-gray-400" }),
-          /* @__PURE__ */ jsx(SelectValue, { placeholder: "Tr\u1EA1ng th\xE1i" })
-        ] }),
-        /* @__PURE__ */ jsxs(SelectContent, { children: [
-          /* @__PURE__ */ jsx(SelectItem, { value: "all", children: "T\u1EA5t c\u1EA3 tr\u1EA1ng th\xE1i" }),
-          /* @__PURE__ */ jsx(SelectItem, { value: "assigned", children: "\u0110\xE3 ph\xE2n ph\xF2ng" }),
-          /* @__PURE__ */ jsx(SelectItem, { value: "pending", children: "Ch\u01B0a ph\xE2n ph\xF2ng" }),
-          /* @__PURE__ */ jsx(SelectItem, { value: "conflict", children: "Xung \u0111\u1ED9t l\u1ECBch" })
-        ] })
-      ] }),
-      /* @__PURE__ */ jsxs(Select, { value: filterFaculty, onValueChange: (v) => {
-        setFilterFaculty(v);
-        setCurrentPage(1);
-      }, children: [
-        /* @__PURE__ */ jsx(SelectTrigger, { className: "w-full md:w-40 h-9 text-sm", children: /* @__PURE__ */ jsx(SelectValue, { placeholder: "Khoa/B\u1ED9 m\xF4n" }) }),
-        /* @__PURE__ */ jsxs(SelectContent, { children: [
-          /* @__PURE__ */ jsx(SelectItem, { value: "all", children: "T\u1EA5t c\u1EA3 khoa" }),
-          /* @__PURE__ */ jsx(SelectItem, { value: "CNTT", children: "CNTT" }),
-          /* @__PURE__ */ jsx(SelectItem, { value: "TO\xC1N", children: "To\xE1n" }),
-          /* @__PURE__ */ jsx(SelectItem, { value: "V\u1EACT L\xDD", children: "V\u1EADt l\xFD" }),
-          /* @__PURE__ */ jsx(SelectItem, { value: "H\xD3A", children: "H\xF3a h\u1ECDc" }),
-          /* @__PURE__ */ jsx(SelectItem, { value: "NGO\u1EA0I NG\u1EEE", children: "Ngo\u1EA1i ng\u1EEF" })
-        ] })
-      ] })
-    ] }) }),
-    /* @__PURE__ */ jsxs("div", { className: "bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden", children: [
-      paginated.length === 0 ? /* @__PURE__ */ jsxs("div", { className: "flex flex-col items-center justify-center py-16 text-center", children: [
-        /* @__PURE__ */ jsx("div", { className: "w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center mb-4", children: /* @__PURE__ */ jsx(Search, { className: "w-6 h-6 text-gray-400" }) }),
-        /* @__PURE__ */ jsx("p", { className: "text-sm font-semibold text-gray-700", children: "Kh\xF4ng t\xECm th\u1EA5y l\u1EDBp h\u1ECDc ph\u1EA7n" }),
-        /* @__PURE__ */ jsx("p", { className: "text-xs text-gray-400 mt-1", children: "Th\u1EED thay \u0111\u1ED5i b\u1ED9 l\u1ECDc ho\u1EB7c t\u1EEB kh\xF3a t\xECm ki\u1EBFm" })
-      ] }) : /* @__PURE__ */ jsx("div", { className: "overflow-x-auto", children: /* @__PURE__ */ jsxs(Table, { children: [
-        /* @__PURE__ */ jsx(TableHeader, { children: /* @__PURE__ */ jsxs(TableRow, { className: "bg-gray-50 border-b border-gray-200", children: [
-          /* @__PURE__ */ jsx(TableHead, { className: "text-xs font-semibold text-gray-600", children: "M\xE3 l\u1EDBp HP" }),
-          /* @__PURE__ */ jsx(TableHead, { className: "text-xs font-semibold text-gray-600", children: "T\xEAn m\xF4n h\u1ECDc" }),
-          /* @__PURE__ */ jsx(TableHead, { className: "text-xs font-semibold text-gray-600", children: "Khoa" }),
-          /* @__PURE__ */ jsx(TableHead, { className: "text-xs font-semibold text-gray-600 text-center", children: "TC" }),
-          /* @__PURE__ */ jsx(TableHead, { className: "text-xs font-semibold text-gray-600 text-center", children: "SV" }),
-          /* @__PURE__ */ jsx(TableHead, { className: "text-xs font-semibold text-gray-600", children: "Gi\u1EA3ng vi\xEAn" }),
-          /* @__PURE__ */ jsx(TableHead, { className: "text-xs font-semibold text-gray-600", children: "L\u1ECBch h\u1ECDc" }),
-          /* @__PURE__ */ jsx(TableHead, { className: "text-xs font-semibold text-gray-600", children: "Ph\xF2ng" }),
-          /* @__PURE__ */ jsx(TableHead, { className: "text-xs font-semibold text-gray-600 text-center", children: "Tr\u1EA1ng th\xE1i" }),
-          /* @__PURE__ */ jsx(TableHead, { className: "text-xs font-semibold text-gray-600 text-center", children: "Thao t\xE1c" })
-        ] }) }),
-        /* @__PURE__ */ jsx(TableBody, { children: paginated.map((s) => {
-          const cfg = statusConfig[s.status];
-          const StatusIcon = cfg.icon;
-          return /* @__PURE__ */ jsxs(TableRow, { className: "hover:bg-blue-50/30 border-b border-gray-100", children: [
-            /* @__PURE__ */ jsx(TableCell, { className: "font-mono text-xs font-bold text-blue-700", children: s.id }),
-            /* @__PURE__ */ jsx(TableCell, { className: "text-xs font-medium text-gray-800 max-w-[170px]", children: /* @__PURE__ */ jsx("div", { className: "truncate", title: s.name, children: s.name }) }),
-            /* @__PURE__ */ jsx(TableCell, { children: /* @__PURE__ */ jsx("span", { className: "text-[11px] font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded", children: s.faculty }) }),
-            /* @__PURE__ */ jsx(TableCell, { className: "text-xs text-center font-medium", children: s.credits }),
-            /* @__PURE__ */ jsx(TableCell, { className: "text-xs text-center", children: s.students }),
-            /* @__PURE__ */ jsx(TableCell, { className: "text-xs text-gray-600 max-w-[150px]", children: /* @__PURE__ */ jsx("div", { className: "truncate", title: s.lecturer, children: s.lecturer }) }),
-            /* @__PURE__ */ jsxs(TableCell, { className: "text-xs text-gray-600 whitespace-nowrap", children: [
-              s.day,
-              " \xB7 ",
-              s.slot
-            ] }),
-            /* @__PURE__ */ jsx(TableCell, { className: "text-xs font-medium text-gray-800", children: s.room || /* @__PURE__ */ jsx("span", { className: "text-gray-300 italic", children: "Ch\u01B0a ph\xE2n" }) }),
-            /* @__PURE__ */ jsx(TableCell, { className: "text-center", children: /* @__PURE__ */ jsxs(Badge, { className: `${cfg.className} hover:${cfg.className} gap-1 text-[11px]`, children: [
-              /* @__PURE__ */ jsx(StatusIcon, { className: "w-3 h-3" }),
-              cfg.label
-            ] }) }),
-            /* @__PURE__ */ jsx(TableCell, { className: "text-center", children: /* @__PURE__ */ jsxs("div", { className: "flex items-center justify-center gap-1", children: [
-              /* @__PURE__ */ jsx("button", { className: "text-xs text-blue-600 hover:text-blue-800 font-medium px-2 py-1 rounded hover:bg-blue-50", children: "S\u1EEDa" }),
-              s.status !== "assigned" && /* @__PURE__ */ jsx("button", { className: "text-xs text-green-600 hover:text-green-800 font-medium px-2 py-1 rounded hover:bg-green-50", children: "Ph\xE2n ph\xF2ng" })
-            ] }) })
-          ] }, s.id);
-        }) })
-      ] }) }),
-      /* @__PURE__ */ jsxs("div", { className: "flex items-center justify-between px-4 py-3 border-t border-gray-100", children: [
-        /* @__PURE__ */ jsxs("p", { className: "text-xs text-gray-500", children: [
-          "Hi\u1EC3n th\u1ECB ",
-          paginated.length,
-          " / ",
-          filtered.length,
-          " l\u1EDBp h\u1ECDc ph\u1EA7n"
-        ] }),
-        /* @__PURE__ */ jsxs("div", { className: "flex items-center gap-1", children: [
-          /* @__PURE__ */ jsx(Button, { variant: "outline", size: "sm", onClick: () => setCurrentPage((p) => Math.max(1, p - 1)), disabled: currentPage === 1, className: "h-7 w-7 p-0", children: /* @__PURE__ */ jsx(ChevronLeft, { className: "w-3.5 h-3.5" }) }),
-          Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => /* @__PURE__ */ jsx(
-            Button,
-            {
-              variant: currentPage === page ? "default" : "outline",
-              size: "sm",
-              onClick: () => setCurrentPage(page),
-              className: `h-7 w-7 p-0 text-xs ${currentPage === page ? "bg-blue-600 hover:bg-blue-700" : ""}`,
-              children: page
-            },
-            page
-          )),
-          /* @__PURE__ */ jsx(Button, { variant: "outline", size: "sm", onClick: () => setCurrentPage((p) => Math.min(totalPages, p + 1)), disabled: currentPage === totalPages, className: "h-7 w-7 p-0", children: /* @__PURE__ */ jsx(ChevronRight, { className: "w-3.5 h-3.5" }) })
-        ] })
-      ] })
-    ] })
-  ] });
-};
-export {
-  StaffSectionsPage
+              setSelectedSection(null);
+            }}
+            className="pl-9 h-9 text-sm"
+          />
+        </div>
+        <Select
+          value={filterStatus}
+          onValueChange={(v) => {
+            setFilterStatus(v);
+            setCurrentPage(1);
+            setSelectedSection(null);
+          }}
+        >
+          <SelectTrigger className="w-full md:w-44 h-9 text-sm">
+            <SelectValue placeholder="Trạng thái" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tất cả trạng thái</SelectItem>
+            <SelectItem value="assigned">Đã phân phòng</SelectItem>
+            <SelectItem value="pending">Chưa phân phòng</SelectItem>
+            <SelectItem value="conflict">Xung đột lịch</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select
+          value={filterFaculty}
+          onValueChange={(v) => {
+            setFilterFaculty(v);
+            setFilterDepartment("all");
+            setCurrentPage(1);
+            setSelectedSection(null);
+          }}
+        >
+          <SelectTrigger className="w-full md:w-32 h-9 text-sm">
+            <SelectValue placeholder="Khoa" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tất cả khoa</SelectItem>
+            {facultiesList.map((f) => (
+              <SelectItem key={f.code} value={f.code}>
+                {f.code}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={filterDepartment}
+          onValueChange={(v) => {
+            setFilterDepartment(v);
+            setCurrentPage(1);
+            setSelectedSection(null);
+          }}
+        >
+          <SelectTrigger className="w-full md:w-36 h-9 text-sm">
+            <SelectValue placeholder="Bộ môn" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tất cả bộ môn</SelectItem>
+            {departmentsList
+              .filter(
+                (d) =>
+                  filterFaculty === "all" || d.facultyCode === filterFaculty,
+              )
+              .map((d) => (
+                <SelectItem key={d.code} value={d.code}>
+                  {d.code}
+                </SelectItem>
+              ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* BẢNG DỮ LIỆU */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-gray-50 border-b border-gray-200">
+              <TableHead className="text-xs font-semibold text-gray-600">
+                Mã lớp
+              </TableHead>
+              <TableHead className="text-xs font-semibold text-gray-600">
+                Môn học
+              </TableHead>
+              <TableHead className="text-xs font-semibold text-gray-600">
+                Bộ môn
+              </TableHead>
+              <TableHead className="text-xs font-semibold text-gray-600 text-center">
+                TC
+              </TableHead>
+              <TableHead className="text-xs font-semibold text-gray-600 text-center">
+                SV
+              </TableHead>
+              <TableHead className="text-xs font-semibold text-gray-600">
+                Giảng viên
+              </TableHead>
+              <TableHead className="text-xs font-semibold text-gray-600">
+                Lịch
+              </TableHead>
+              <TableHead className="text-xs font-semibold text-gray-600">
+                Phòng
+              </TableHead>
+              <TableHead className="text-center text-xs font-semibold text-gray-600">
+                Trạng thái
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {paginated.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={9}
+                  className="text-center py-10 text-gray-500"
+                >
+                  Không tìm thấy dữ liệu.
+                </TableCell>
+              </TableRow>
+            ) : (
+              paginated.map((s) => {
+                const cfg = statusConfig[s.status] || statusConfig.pending;
+                const StatusIcon = cfg.icon;
+                const isSelected = selectedSection?.dbId === s.dbId;
+
+                return (
+                  <TableRow
+                    key={s.dbId}
+                    onClick={() => setSelectedSection(s)}
+                    className={`cursor-pointer transition-colors ${isSelected ? "bg-blue-100 hover:bg-blue-100" : "hover:bg-blue-50/30"}`}
+                  >
+                    <TableCell className="font-mono text-xs font-bold text-blue-700">
+                      {s.id}
+                    </TableCell>
+                    <TableCell className="text-xs font-medium text-gray-800">
+                      {s.name}
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-[11px] text-gray-600">
+                        {s.department || "---"}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-xs text-center">
+                      {s.credits}
+                    </TableCell>
+                    <TableCell className="text-xs text-center">
+                      {s.students}
+                    </TableCell>
+                    <TableCell className="text-xs text-gray-600">
+                      {s.lecturer}
+                    </TableCell>
+                    <TableCell className="text-xs text-gray-600 whitespace-nowrap">
+                      {s.slot}
+                    </TableCell>
+                    <TableCell className="text-xs font-medium text-gray-800">
+                      {s.room || "---"}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge className={`${cfg.className} text-[11px]`}>
+                        <StatusIcon className="w-3 h-3 mr-1" />
+                        {cfg.label}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* PHÂN TRANG */}
+      <div className="flex items-center justify-between px-4 py-3 text-xs text-gray-500">
+        Hiển thị {paginated.length} / {filtered.length} lớp học phần
+        <div className="flex items-center gap-1">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+            className="h-7 w-7 p-0"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+            className="h-7 w-7 p-0"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* ================= MODAL THÊM / SỬA ================= */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl overflow-hidden">
+            <div className="bg-blue-600 px-5 py-4 flex justify-between items-center">
+              <h3 className="text-white font-bold">
+                {modalMode === "add"
+                  ? "Thêm Lớp học phần mới"
+                  : `Sửa lớp: ${selectedSection?.id}`}
+              </h3>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="text-blue-200 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form
+              onSubmit={handleSubmitForm}
+              className="p-5 space-y-5 bg-gray-50/30"
+            >
+              {/* CỤM 1: CÁC BỘ LỌC HỖ TRỢ */}
+              <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm space-y-3">
+                <p className="text-[11px] font-bold text-gray-500 uppercase">
+                  Bộ lọc hỗ trợ tìm kiếm
+                </p>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-700">
+                      Lọc theo Khoa
+                    </label>
+                    <Select
+                      value={formData.facultyCode}
+                      onValueChange={(v) =>
+                        setFormData({
+                          ...formData,
+                          facultyCode: v,
+                          departmentCode: "all",
+                          courseId: "",
+                          lecturerId: "",
+                        })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Tất cả Khoa" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tất cả Khoa</SelectItem>
+                        {facultiesList.map((f) => (
+                          <SelectItem key={f.code} value={f.code}>
+                            {f.code}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-700">
+                      Lọc theo Bộ môn
+                    </label>
+                    <Select
+                      value={formData.departmentCode}
+                      onValueChange={(v) =>
+                        setFormData({
+                          ...formData,
+                          departmentCode: v,
+                          courseId: "",
+                          lecturerId: "",
+                        })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Tất cả Bộ môn" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tất cả Bộ môn</SelectItem>
+                        {departmentsList
+                          .filter(
+                            (d) =>
+                              formData.facultyCode === "all" ||
+                              d.facultyCode === formData.facultyCode,
+                          )
+                          .map((d) => (
+                            <SelectItem key={d.code} value={d.code}>
+                              {d.code}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-700">
+                      Học kỳ <span className="text-red-500">*</span>
+                    </label>
+                    <Select
+                      required
+                      value={formData.semesterId}
+                      onValueChange={(v) =>
+                        setFormData({ ...formData, semesterId: v })
+                      }
+                      // Nếu đang ở chế độ Sửa, có thể disable luôn không cho đổi học kỳ
+                      disabled={modalMode === "edit"}
+                    >
+                      <SelectTrigger className="border-blue-300">
+                        <SelectValue placeholder="Chọn Học kỳ" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {semestersList
+                          .filter((sem) => sem.status !== "FINISHED") // CHỈ HIỆN HỌC KỲ CHƯA HOÀN THÀNH
+                          .map((sem) => (
+                            <SelectItem key={sem.id} value={sem.id.toString()}>
+                              {sem.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    {modalMode === "edit" && (
+                      <p className="text-[10px] text-orange-600 italic">
+                        * Không được đổi học kỳ khi sửa lớp
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* CỤM 2: DỮ LIỆU LỚP HỌC PHẦN CHÍNH */}
+              <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm space-y-4">
+                <p className="text-[11px] font-bold text-gray-500 uppercase">
+                  Thông tin Lớp học phần
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-700">
+                      Môn học <span className="text-red-500">*</span>
+                    </label>
+                    <Select
+                      required
+                      value={formData.courseId}
+                      onValueChange={(v) =>
+                        setFormData({ ...formData, courseId: v })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="-- Chọn môn học --" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {coursesList
+                          .filter(
+                            (c) =>
+                              formData.departmentCode === "all" ||
+                              c.departmentCode === formData.departmentCode,
+                          )
+                          .map((c) => (
+                            <SelectItem key={c.id} value={c.id.toString()}>
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-700">
+                      Giảng viên phụ trách{" "}
+                      <span className="text-red-500">*</span>
+                    </label>
+                    <Select
+                      required
+                      value={formData.lecturerId}
+                      onValueChange={(v) =>
+                        setFormData({ ...formData, lecturerId: v })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="-- Chọn giảng viên --" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {lecturersList
+                          .filter(
+                            (l) =>
+                              formData.departmentCode === "all" ||
+                              l.departmentCode === formData.departmentCode,
+                          )
+                          .map((l) => (
+                            <SelectItem key={l.id} value={l.id.toString()}>
+                              {l.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-700">
+                      Mã Lớp (VD: 01) <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      required
+                      placeholder="Nhập mã phụ..."
+                      value={formData.sectionCode}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          sectionCode: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-700">
+                      Sức chứa <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      required
+                      type="number"
+                      placeholder="Số lượng..."
+                      value={formData.maxCapacity}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          maxCapacity: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-700">
+                      Thứ <span className="text-red-500">*</span>
+                    </label>
+                    <Select
+                      required
+                      value={formData.day}
+                      onValueChange={(v) =>
+                        setFormData({ ...formData, day: v })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="MON">Thứ 2</SelectItem>
+                        <SelectItem value="TUE">Thứ 3</SelectItem>
+                        <SelectItem value="WED">Thứ 4</SelectItem>
+                        <SelectItem value="THU">Thứ 5</SelectItem>
+                        <SelectItem value="FRI">Thứ 6</SelectItem>
+                        <SelectItem value="SAT">Thứ 7</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-700">
+                      Tiết học <span className="text-red-500">*</span>
+                    </label>
+                    <Select
+                      required
+                      value={formData.slot}
+                      onValueChange={(v) =>
+                        setFormData({ ...formData, slot: v })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">Tiết 1-3</SelectItem>
+                        <SelectItem value="2">Tiết 4-6</SelectItem>
+                        <SelectItem value="3">Tiết 7-9</SelectItem>
+                        <SelectItem value="4">Tiết 10-12</SelectItem>
+                        <SelectItem value="5">Tiết 13-15</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              {/* ACTION BUTTONS */}
+              <div className="flex items-center justify-between pt-4">
+                {modalMode === "edit" ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                    onClick={handleDeleteSection}
+                  >
+                    <Trash2 className="w-4 h-4 mr-1.5" /> Hủy Lớp Học Phần
+                  </Button>
+                ) : (
+                  <div />
+                )}
+
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsModalOpen(false)}
+                  >
+                    Hủy
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="bg-blue-600 hover:bg-blue-700"
+                    disabled={isSubmitting || isSemesterClosed}
+                  >
+                    {isSemesterClosed
+                      ? "Học kỳ đã đóng"
+                      : isSubmitting
+                        ? "Đang xử lý..."
+                        : "Xác nhận"}
+                  </Button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
