@@ -295,15 +295,14 @@ public class StaffEmergencyRoomBookingService {
         }
 
         return "Đối tượng: " + request.getTargetType().trim().toUpperCase(Locale.ROOT)
-                + "\nNgười/đơn vị được cấp phòng: " + request.getRecipientName().trim()
-                + "\nMã sinh viên/giảng viên/lớp/đơn vị: " + recipientCode
-                + "\nMục đích sử dụng: " + request.getPurpose().trim();
+                + "\nTên: " + request.getRecipientName().trim()
+                + "\nMã số: " + recipientCode
+                + "\nMục đích: " + request.getPurpose().trim();
     }
 
     private String buildProcessingNote(CreateEmergencyRoomBookingRequest request) {
         return "ĐẶT PHÒNG KHẨN CẤP"
-                + "\nLý do khẩn cấp: " + request.getEmergencyReason().trim()
-                + "\nStaff xử lý trực tiếp, yêu cầu được duyệt tự động.";
+                + "\nLý do khẩn cấp: " + request.getEmergencyReason().trim();
     }
 
     private AvailableRoomResponse toAvailableRoomResponse(

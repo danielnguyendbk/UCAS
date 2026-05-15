@@ -21,7 +21,6 @@ import {
   Wrench,
   History,
   ArrowLeftRight,
-  Zap,
   Key
 } from "lucide-react";
 import { APP_ROUTES } from "./routes";
@@ -58,9 +57,8 @@ const NAVIGATION_BY_ROLE = {
     { icon: Calendar, label: "Th\u1EDDi kh\xF3a bi\u1EC3u", path: APP_ROUTES.staffSchedule },
     { icon: Building2, label: "Ph\xE2n ph\xF2ng & Xung \u0111\u1ED9t", path: APP_ROUTES.staffAllocation },
     { icon: Search, label: "Tra c\u1EE9u l\u1ECBch", path: APP_ROUTES.staffLookup },
-    { icon: PlusSquare, label: "\u0110\u1EB7t ph\xF2ng kh\u1EA9n c\u1EA5p", path: APP_ROUTES.staffBookings, badge: "M\u1EDBi" },
+    { icon: PlusSquare, label: "\u0110\u1EB7t/\u0110\u1ED5i ph\xF2ng kh\u1EA9n c\u1EA5p", path: APP_ROUTES.staffBookings, badge: "G\u1EA5p" },
     { icon: ClipboardCheck, label: "Danh s\xE1ch \u0111\u1EB7t ph\xF2ng", path: APP_ROUTES.staffBookingList },
-    { icon: Zap, label: "\u0110\u1ED5i ph\xF2ng kh\u1EA9n c\u1EA5p", path: APP_ROUTES.staffEmergencyRoomChange, badge: "G\u1EA5p" },
     { icon: Building2, label: "Danh s\xE1ch \u0111\u1ED5i ph\xF2ng", path: APP_ROUTES.staffRoomChangeList },
     { type: "divider", label: "Qu\u1EA3n l\xFD CSVC" },
     { icon: Wrench, label: "Qu\u1EA3n l\xFD s\u1EEDa ch\u1EEFa", path: APP_ROUTES.staffMaintenanceList, badge: "M\u1EDBi" }

@@ -44,7 +44,12 @@ public class CategoryController {
     // Lấy danh sách Học kỳ
     @GetMapping("/semesters")
     public ApiResponse<List<Map<String, Object>>> getSemesters() {
-        String sql = "SELECT id, semester_name as name FROM semesters WHERE is_deleted = FALSE";
+        String sql = """
+            SELECT id, semester_name AS name, semester_type AS type, status
+            FROM semesters
+            WHERE is_deleted = FALSE
+            ORDER BY start_date
+            """;
         return ApiResponse.success("OK", jdbcTemplate.queryForList(sql));
     }
 

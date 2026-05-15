@@ -300,6 +300,64 @@ CREATE TABLE room_allocations (
 );
 
 -- -----------------------------
+-- 6.1) DOI PHONG TAM THOI / YEU CAU DOI PHONG
+-- -----------------------------
+CREATE TABLE temporary_room_changes (
+    id                       INT AUTO_INCREMENT PRIMARY KEY,
+    section_schedule_id      INT NOT NULL,
+    semester_id              INT NOT NULL,
+    change_scope             ENUM('SESSION','WEEK_RANGE','REST_OF_SEMESTER') NOT NULL DEFAULT 'SESSION',
+    target_date              DATE NULL,
+    from_week                SMALLINT NULL,
+    to_week                  SMALLINT NULL,
+    old_classroom_id         INT NOT NULL,
+    requested_classroom_id   INT NULL,
+    new_classroom_id         INT NULL,
+    reason                   TEXT NOT NULL,
+    requested_by             INT NOT NULL,
+    created_by               INT NOT NULL,
+    status                   ENUM('PENDING','APPROVED','REJECTED','CANCELLED') NOT NULL DEFAULT 'PENDING',
+    reviewed_by              INT NULL,
+    reviewed_at              DATETIME NULL,
+    review_note              TEXT NULL,
+    reject_reason            TEXT NULL,
+    is_active                BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at               DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at               DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CHECK (from_week IS NULL OR from_week > 0),
+    CHECK (to_week IS NULL OR (from_week IS NOT NULL AND to_week >= from_week)),
+    CHECK (
+        (change_scope = 'SESSION' AND target_date IS NOT NULL AND from_week IS NULL AND to_week IS NULL)
+        OR (change_scope = 'WEEK_RANGE' AND target_date IS NULL AND from_week IS NOT NULL AND to_week IS NOT NULL)
+        OR (change_scope = 'REST_OF_SEMESTER' AND target_date IS NULL AND from_week IS NOT NULL)
+    ),
+    CHECK (
+        status <> 'APPROVED'
+        OR (new_classroom_id IS NOT NULL AND reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL)
+    ),
+    CHECK (
+        status <> 'REJECTED'
+        OR (reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL AND reject_reason IS NOT NULL)
+    ),
+    CONSTRAINT fk_temporary_room_changes_schedule
+        FOREIGN KEY (section_schedule_id) REFERENCES section_schedules(id),
+    CONSTRAINT fk_temporary_room_changes_semester
+        FOREIGN KEY (semester_id) REFERENCES semesters(id),
+    CONSTRAINT fk_temporary_room_changes_old_classroom
+        FOREIGN KEY (old_classroom_id) REFERENCES classrooms(id),
+    CONSTRAINT fk_temporary_room_changes_requested_classroom
+        FOREIGN KEY (requested_classroom_id) REFERENCES classrooms(id),
+    CONSTRAINT fk_temporary_room_changes_new_classroom
+        FOREIGN KEY (new_classroom_id) REFERENCES classrooms(id),
+    CONSTRAINT fk_temporary_room_changes_requested_by
+        FOREIGN KEY (requested_by) REFERENCES users(id),
+    CONSTRAINT fk_temporary_room_changes_created_by
+        FOREIGN KEY (created_by) REFERENCES users(id),
+    CONSTRAINT fk_temporary_room_changes_reviewed_by
+        FOREIGN KEY (reviewed_by) REFERENCES users(id)
+);
+
+-- -----------------------------
 -- 7) XIN MƯỢN PHÒNG / DUYỆT YÊU CẦU
 -- -----------------------------
 CREATE TABLE room_borrow_requests (
@@ -401,6 +459,11 @@ CREATE INDEX idx_class_sections_lecturer ON class_sections(lecturer_id);
 CREATE INDEX idx_section_schedules_day_slot ON section_schedules(day_of_week, time_slot_id);
 CREATE INDEX idx_classrooms_building_active_type ON classrooms(building_id, is_active, room_type);
 CREATE INDEX idx_room_allocations_classroom_active ON room_allocations(classroom_id, is_active);
+CREATE INDEX idx_temporary_room_changes_status ON temporary_room_changes(status, is_active, created_at);
+CREATE INDEX idx_temporary_room_changes_requester ON temporary_room_changes(requested_by, status, created_at);
+CREATE INDEX idx_temporary_room_changes_schedule_scope ON temporary_room_changes(section_schedule_id, semester_id, change_scope, status, is_active);
+CREATE INDEX idx_temporary_room_changes_room_date ON temporary_room_changes(new_classroom_id, target_date, status, is_active);
+CREATE INDEX idx_temporary_room_changes_room_weeks ON temporary_room_changes(new_classroom_id, semester_id, from_week, to_week, status, is_active);
 CREATE INDEX idx_room_borrow_requests_status_date ON room_borrow_requests(status, booking_date);
 CREATE INDEX idx_room_borrow_requests_requester ON room_borrow_requests(requested_by, status);
 CREATE INDEX idx_room_borrow_requests_room_date_slot ON room_borrow_requests(approved_classroom_id, booking_date, time_slot_id, status);
