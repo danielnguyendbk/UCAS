@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/features/auth/hooks/useAuth";
+import { useNavigate } from "react-router";
+import { APP_ROUTES } from "@/constants/routes";
 import {
   Search,
   Plus,
@@ -52,8 +54,16 @@ const statusConfig = {
   },
 };
 
+const getActiveSemesterId = (semesters) => {
+  const activeSemester = semesters.find(
+    (semester) => semester.status?.toUpperCase() === "ACTIVE",
+  );
+  return (activeSemester || semesters[0])?.id?.toString() || "";
+};
+
 export const StaffSectionsPage = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   // --- STATE QUẢN LÝ DỮ LIỆU & BẢNG ---
   const [sections, setSections] = useState([]);
@@ -69,6 +79,7 @@ export const StaffSectionsPage = () => {
 
   // --- BỘ LỌC BẢNG ---
   const [search, setSearch] = useState("");
+  const [filterSemester, setFilterSemester] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterFaculty, setFilterFaculty] = useState("all");
   const [filterDepartment, setFilterDepartment] = useState("all");
@@ -112,7 +123,12 @@ export const StaffSectionsPage = () => {
 
       setFacultiesList(facRes.data.data || []);
       setDepartmentsList(depRes.data.data || []);
-      setSemestersList(semRes.data.data || []);
+      const semesters = semRes.data.data || [];
+      setSemestersList(semesters);
+      const activeSemesterId = getActiveSemesterId(semesters);
+      if (activeSemesterId) {
+        setFilterSemester(activeSemesterId);
+      }
       setCoursesList(couRes.data.data || []);
       setLecturersList(lecRes.data.data || []);
     } catch (error) {
@@ -147,6 +163,7 @@ export const StaffSectionsPage = () => {
           slot: item.schedule,
           room: item.room,
           status: mappedStatus,
+          allocationStatus: item.allocationStatus,
 
           // DỮ LIỆU ẨN DÙNG CHO FORM SỬA (Lấy từ backend)
           semesterId: item.semesterId,
@@ -171,8 +188,7 @@ export const StaffSectionsPage = () => {
   const handleOpenModal = (mode) => {
     if (mode === "add") {
       setFormData({
-        semesterId:
-          semestersList.length > 0 ? semestersList[0].id.toString() : "",
+        semesterId: getActiveSemesterId(semestersList),
         facultyCode: "all",
         departmentCode: "all",
         courseId: "",
@@ -268,17 +284,42 @@ export const StaffSectionsPage = () => {
   };
 
   // --- BỘ LỌC CHO BẢNG ---
+  const handleAssignSection = () => {
+    if (!selectedSection) return;
+
+    navigate(APP_ROUTES.staffAllocation, {
+      state: {
+        openRoomSearch: true,
+        semesterId: selectedSection.semesterId?.toString(),
+        sectionId: selectedSection.dbId,
+        sectionCode: selectedSection.id,
+        courseName: selectedSection.name,
+        dayCode: selectedSection.dayCode,
+        slotNumber: selectedSection.slotNumber,
+        maxCapacity: selectedSection.maxCapacity,
+      },
+    });
+  };
+
   const filtered = sections.filter((s) => {
     const matchSearch =
       s.id.toLowerCase().includes(search.toLowerCase()) ||
       s.name.toLowerCase().includes(search.toLowerCase()) ||
       s.lecturer.toLowerCase().includes(search.toLowerCase());
+    const matchSemester =
+      filterSemester === "all" || s.semesterId?.toString() === filterSemester;
     const matchStatus = filterStatus === "all" || s.status === filterStatus;
     const matchFaculty = filterFaculty === "all" || s.faculty === filterFaculty;
     const matchDepartment =
       filterDepartment === "all" || s.department === filterDepartment;
 
-    return matchSearch && matchStatus && matchFaculty && matchDepartment;
+    return (
+      matchSearch &&
+      matchSemester &&
+      matchStatus &&
+      matchFaculty &&
+      matchDepartment
+    );
   });
 
   const totalPages = Math.ceil(filtered.length / pageSize) || 1;
@@ -333,7 +374,8 @@ export const StaffSectionsPage = () => {
             variant="outline"
             size="sm"
             className="gap-1.5 text-sm border-green-600 text-green-600 hover:bg-green-50 disabled:border-gray-200 disabled:text-gray-400"
-            disabled={!selectedSection || selectedSection.status === "assigned"}
+            disabled={!selectedSection || selectedSection.allocationStatus !== "UNASSIGNED"}
+            onClick={handleAssignSection}
           >
             <MapPin className="w-3.5 h-3.5" /> Phân công
           </Button>
@@ -366,8 +408,8 @@ export const StaffSectionsPage = () => {
       </div>
 
       {/* BỘ LỌC BẢNG CHÍNH */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex flex-col md:flex-row gap-3">
-        <div className="flex-1 relative">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex flex-col md:flex-row md:flex-wrap gap-3">
+        <div className="flex-1 md:min-w-[260px] relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
             placeholder="Tìm theo mã lớp, tên môn, giảng viên..."
@@ -380,6 +422,26 @@ export const StaffSectionsPage = () => {
             className="pl-9 h-9 text-sm"
           />
         </div>
+        <Select
+          value={filterSemester}
+          onValueChange={(v) => {
+            setFilterSemester(v);
+            setCurrentPage(1);
+            setSelectedSection(null);
+          }}
+        >
+          <SelectTrigger className="w-full md:w-48 h-9 text-sm">
+            <SelectValue placeholder="Học kỳ" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tất cả học kỳ</SelectItem>
+            {semestersList.map((sem) => (
+              <SelectItem key={sem.id} value={sem.id.toString()}>
+                {sem.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Select
           value={filterStatus}
           onValueChange={(v) => {

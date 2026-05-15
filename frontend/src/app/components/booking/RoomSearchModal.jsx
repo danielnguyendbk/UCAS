@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "../ui/dialog";
 import {
   Table,
@@ -16,6 +16,14 @@ import {
 } from "../ui/table";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
+import { Filter } from "lucide-react";
 import { httpClient } from "../../../services/httpClient";
 
 export default function RoomSearchModal({
@@ -26,10 +34,19 @@ export default function RoomSearchModal({
   date,
   slot,
   expectedAttendees,
+  isAllocationMode = false,
+  dayOfWeek = "",
+  isEmergencyChangeMode = false,
+  scheduleId,
+  changeScope = "SESSION",
+  targetDate,
+  fromWeek,
+  toWeek,
 }) {
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [roomType, setRoomType] = useState("all");
 
   useEffect(() => {
     if (open) {
@@ -37,13 +54,49 @@ export default function RoomSearchModal({
     } else {
       setRooms([]);
       setError("");
+      setRoomType("all");
     }
-  }, [open]);
+  }, [
+    open,
+    roomType,
+    semesterId,
+    date,
+    slot,
+    expectedAttendees,
+    isAllocationMode,
+    dayOfWeek,
+    isEmergencyChangeMode,
+    scheduleId,
+    changeScope,
+    targetDate,
+    fromWeek,
+    toWeek,
+  ]);
 
   const fetchAvailableRooms = async () => {
-    if (!semesterId || !date || !slot || !expectedAttendees) {
+    const effectiveTargetDate = targetDate || date;
+    const normalizedChangeScope = (changeScope || "SESSION").toUpperCase();
+    const missingChangeScope =
+      isEmergencyChangeMode &&
+      (!scheduleId ||
+        (normalizedChangeScope === "SESSION" && !effectiveTargetDate) ||
+        (normalizedChangeScope === "WEEK_RANGE" && (!fromWeek || !toWeek)) ||
+        (normalizedChangeScope === "REST_OF_SEMESTER" && !fromWeek));
+
+    if (
+      !semesterId ||
+      (!isEmergencyChangeMode && !slot) ||
+      expectedAttendees === null ||
+      expectedAttendees === undefined ||
+      expectedAttendees === "" ||
+      (isAllocationMode && !dayOfWeek) ||
+      (!isAllocationMode && !isEmergencyChangeMode && !date) ||
+      missingChangeScope
+    ) {
       setError(
-        "Vui lòng nhập đủ: Học kỳ, Ngày, Ca học và Số người dự kiến ở form bên ngoài trước khi tìm phòng.",
+        `Không thể tìm phòng vì dữ liệu đang bị trống. Ca học: ${
+          slot || "chưa có"
+        }, số người: ${expectedAttendees ?? "chưa có"}.`,
       );
       return;
     }
@@ -52,23 +105,41 @@ export default function RoomSearchModal({
     setError("");
 
     try {
-      const res = await httpClient.get(
-        "/api/staff/emergency-room-bookings/available-rooms",
-        {
-          params: {
-            semesterId,
-            bookingDate: date,
-            slot,
-            expectedAttendees,
-          },
-        },
-      );
+      let endpoint = "/api/staff/emergency-room-bookings/available-rooms";
+      const params = {
+        semesterId,
+        slot,
+        expectedAttendees,
+        roomType: roomType === "all" ? "" : roomType,
+      };
 
-      setRooms(res.data || []);
+      if (isAllocationMode) {
+        endpoint = "/api/staff/allocations/available-rooms";
+        params.dayOfWeek = dayOfWeek;
+      } else if (isEmergencyChangeMode) {
+        endpoint = "/api/staff/emergency-room-changes/available-rooms";
+        params.scheduleId = scheduleId;
+        params.scope = normalizedChangeScope;
+
+        if (normalizedChangeScope === "SESSION") {
+          params.targetDate = effectiveTargetDate;
+        } else {
+          params.fromWeek = fromWeek;
+          if (normalizedChangeScope === "WEEK_RANGE") {
+            params.toWeek = toWeek;
+          }
+        }
+      } else {
+        params.bookingDate = date;
+      }
+
+      const res = await httpClient.get(endpoint, { params });
+      const roomData = res.data?.data || res.data || [];
+      setRooms(roomData);
     } catch (err) {
       setError(
         err.response?.data?.message ||
-          "Phòng không khả dụng hoặc Ngày không nằm trong Học kỳ đã chọn.",
+          "Không tìm thấy phòng khả dụng cho dữ liệu đã chọn.",
       );
     } finally {
       setLoading(false);
@@ -80,11 +151,28 @@ export default function RoomSearchModal({
       <DialogContent className="!w-[95vw] !max-w-[800px] sm:!max-w-[750px] overflow-hidden">
         <DialogHeader>
           <DialogTitle>Danh sách phòng khả dụng</DialogTitle>
-
           <DialogDescription className="hidden">
-            Tìm kiếm phòng trống để cấp phát khẩn cấp
+            Tìm kiếm phòng trống phù hợp với yêu cầu
           </DialogDescription>
         </DialogHeader>
+
+        <div className="flex items-center px-1">
+          <div className="relative w-56">
+            <Select value={roomType} onValueChange={setRoomType}>
+              <SelectTrigger className="h-9 text-sm border-gray-300 bg-white">
+                <Filter className="w-3.5 h-3.5 mr-2 text-gray-500" />
+                <SelectValue placeholder="Lọc theo loại phòng" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả loại phòng</SelectItem>
+                <SelectItem value="LECTURE">Phòng học</SelectItem>
+                <SelectItem value="LAB">Phòng máy</SelectItem>
+                <SelectItem value="SEMINAR">Phòng seminar</SelectItem>
+                <SelectItem value="AUDITORIUM">Hội trường nhỏ</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
 
         <div className="py-2">
           {error ? (
@@ -102,18 +190,14 @@ export default function RoomSearchModal({
           ) : (
             <div className="max-h-[400px] overflow-y-auto overflow-x-hidden border rounded-lg shadow-sm">
               <Table className="w-full table-fixed">
-                <TableHeader className="bg-gray-50">
+                <TableHeader className="bg-gray-50 sticky top-0 z-10 shadow-sm">
                   <TableRow>
                     <TableHead className="w-[120px]">Mã phòng</TableHead>
-
                     <TableHead className="w-[130px]">Loại phòng</TableHead>
-
                     <TableHead className="w-[100px] text-center">
                       Sức chứa
                     </TableHead>
-
                     <TableHead>Thiết bị</TableHead>
-
                     <TableHead className="w-[130px] text-center">
                       Thao tác
                     </TableHead>
@@ -121,34 +205,32 @@ export default function RoomSearchModal({
                 </TableHeader>
 
                 <TableBody>
-                  {rooms.map((r) => (
-                    <TableRow key={r.classroomId}>
+                  {rooms.map((room) => (
+                    <TableRow key={room.classroomId}>
                       <TableCell className="font-bold text-blue-700 whitespace-normal break-words">
-                        {r.roomCode}
+                        {room.roomCode}
                       </TableCell>
-
                       <TableCell>
                         <Badge
                           variant="outline"
                           className="text-[11px] whitespace-normal break-words"
                         >
-                          {r.roomTypeText}
+                          {room.roomTypeText}
                         </Badge>
                       </TableCell>
-
                       <TableCell className="text-center font-medium">
-                        {r.capacity}
+                        {room.capacity}
                       </TableCell>
-
                       <TableCell className="text-xs text-gray-600 whitespace-normal break-words leading-relaxed">
-                        {r.mainEquipment}
+                        {room.mainEquipment}
                       </TableCell>
-
                       <TableCell className="text-center">
                         <Button
                           size="sm"
                           className="whitespace-nowrap"
-                          onClick={() => onSelect(r.classroomId, r.roomCode)}
+                          onClick={() =>
+                            onSelect(room.classroomId, room.roomCode, room)
+                          }
                         >
                           Chọn phòng
                         </Button>
