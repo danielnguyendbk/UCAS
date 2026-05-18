@@ -37,6 +37,9 @@ export default function RoomSearchModal({
   isAllocationMode = false,
   dayOfWeek = "",
   isEmergencyChangeMode = false,
+  isLecturerChangeMode = false,
+  isStudentBorrowMode = false,
+  isLecturerBorrowMode = false,
   scheduleId,
   changeScope = "SESSION",
   targetDate,
@@ -66,6 +69,9 @@ export default function RoomSearchModal({
     isAllocationMode,
     dayOfWeek,
     isEmergencyChangeMode,
+    isLecturerChangeMode,
+    isStudentBorrowMode,
+    isLecturerBorrowMode,
     scheduleId,
     changeScope,
     targetDate,
@@ -117,7 +123,9 @@ export default function RoomSearchModal({
         endpoint = "/api/staff/allocations/available-rooms";
         params.dayOfWeek = dayOfWeek;
       } else if (isEmergencyChangeMode) {
-        endpoint = "/api/staff/emergency-room-changes/available-rooms";
+        endpoint = isLecturerChangeMode
+          ? "/api/lecturer/room-change-requests/available-rooms"
+          : "/api/staff/emergency-room-changes/available-rooms";
         params.scheduleId = scheduleId;
         params.scope = normalizedChangeScope;
 
@@ -129,6 +137,11 @@ export default function RoomSearchModal({
             params.toWeek = toWeek;
           }
         }
+      } else if (isStudentBorrowMode || isLecturerBorrowMode) {
+        endpoint = isLecturerBorrowMode
+          ? "/api/lecturer/room-borrow-requests/available-rooms"
+          : "/api/student/room-borrow-requests/available-rooms";
+        params.bookingDate = date;
       } else {
         params.bookingDate = date;
       }

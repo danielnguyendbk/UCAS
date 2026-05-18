@@ -40,6 +40,14 @@ public class StaffEmergencyRoomChangeService {
     }
 
     @Transactional(readOnly = true)
+    public List<EmergencyRoomChangeResponse> getChangeRequests(String status) {
+        return repository.findChangeRequests(normalizeStatus(status))
+                .stream()
+                .map(this::toChangeResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
     public List<AvailableRoomResponse> findAvailableRooms(
             Integer semesterId,
             Integer scheduleId,
@@ -150,6 +158,91 @@ public class StaffEmergencyRoomChangeService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.INTERNAL_SERVER_ERROR,
                         "Tao doi phong khan cap that bai."
+                ));
+    }
+
+    @Transactional
+    public EmergencyRoomChangeResponse approve(Integer id, Integer staffUserId) {
+        validateStaff(staffUserId);
+
+        StaffEmergencyRoomChangeRepository.ChangeProjection change = findChange(id);
+        if (!"PENDING".equals(change.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chi duoc duyet don dang cho.");
+        }
+        if (change.getRequestedClassroomId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Don chua co phong de xuat.");
+        }
+
+        StaffEmergencyRoomChangeRepository.ScheduleProjection schedule =
+                findAndValidateSchedule(change.getSemesterId(), change.getSectionScheduleId());
+        ScopeWindow window = validateScope(
+                change.getChangeScope(),
+                change.getTargetDate(),
+                change.getFromWeek(),
+                change.getToWeek(),
+                schedule
+        );
+
+        int availableCount = repository.countAvailableRoomForChange(
+                schedule.getSemesterId(),
+                schedule.getScheduleId(),
+                schedule.getCurrentClassroomId(),
+                schedule.getDayOfWeekCode(),
+                schedule.getTimeSlotId(),
+                change.getRequestedClassroomId(),
+                schedule.getMaxCapacity(),
+                "",
+                window.scope(),
+                window.targetDate(),
+                window.targetWeek(),
+                window.fromWeek(),
+                window.toWeekForConflict()
+        );
+
+        if (availableCount == 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Phong de xuat khong con kha dung trong pham vi doi phong."
+            );
+        }
+
+        int updated = repository.approvePendingChange(
+                id,
+                staffUserId,
+                "Giao vu da duyet yeu cau doi phong."
+        );
+        if (updated == 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Duyet yeu cau that bai.");
+        }
+
+        return toChangeResponse(findChange(id));
+    }
+
+    @Transactional
+    public EmergencyRoomChangeResponse reject(Integer id, Integer staffUserId, String rejectReason) {
+        validateStaff(staffUserId);
+
+        StaffEmergencyRoomChangeRepository.ChangeProjection change = findChange(id);
+        if (!"PENDING".equals(change.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chi duoc tu choi don dang cho.");
+        }
+        if (rejectReason == null || rejectReason.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "rejectReason khong duoc de trong.");
+        }
+
+        int updated = repository.rejectPendingChange(id, staffUserId, rejectReason.trim());
+        if (updated == 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tu choi yeu cau that bai.");
+        }
+
+        return toChangeResponse(findChange(id));
+    }
+
+    private StaffEmergencyRoomChangeRepository.ChangeProjection findChange(Integer id) {
+        return repository.findChangeById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Khong tim thay yeu cau doi phong."
                 ));
     }
 
@@ -278,6 +371,13 @@ public class StaffEmergencyRoomChangeService {
         return value == null ? "" : value.trim();
     }
 
+    private String normalizeStatus(String status) {
+        if (status == null || status.isBlank() || "ALL".equalsIgnoreCase(status)) {
+            return "";
+        }
+        return status.trim().toUpperCase(Locale.ROOT);
+    }
+
     private EmergencyRoomChangeScheduleResponse toScheduleResponse(
             StaffEmergencyRoomChangeRepository.ScheduleProjection projection
     ) {
@@ -330,12 +430,22 @@ public class StaffEmergencyRoomChangeService {
         response.setToWeek(projection.getToWeek());
         response.setOldClassroomId(projection.getOldClassroomId());
         response.setOldRoomCode(projection.getOldRoomCode());
+        response.setRequestedClassroomId(projection.getRequestedClassroomId());
+        response.setRequestedRoomCode(projection.getRequestedRoomCode());
         response.setNewClassroomId(projection.getNewClassroomId());
         response.setNewRoomCode(projection.getNewRoomCode());
         response.setReason(projection.getReason());
+        response.setRequestedBy(projection.getRequestedBy());
+        response.setRequesterName(projection.getRequesterName());
+        response.setRequesterUsername(projection.getRequesterUsername());
         response.setStatus(projection.getStatus());
         response.setActive(projection.getActive());
         response.setReviewedBy(projection.getReviewedBy());
+        response.setReviewedByName(projection.getReviewedByName());
+        response.setReviewedAt(projection.getReviewedAt());
+        response.setReviewNote(projection.getReviewNote());
+        response.setRejectReason(projection.getRejectReason());
+        response.setCreatedAt(projection.getCreatedAt());
         return response;
     }
 

@@ -12,6 +12,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from "@/app/components/ui/dropdown-menu";
+import { httpClient } from "@/services/httpClient";
+
+const getActiveSemesterName = (semesters) => {
+  const activeSemester = semesters.find(
+    (semester) => String(semester.status || "").toUpperCase() === "ACTIVE",
+  );
+  return (activeSemester || semesters[0])?.name || "";
+};
 
 const defaultRootPaths = new Set([
   APP_ROUTES.home,
@@ -35,6 +43,7 @@ const AppLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [activeSemesterName, setActiveSemesterName] = useState("");
   
   // Mock Notifications
   const [notifications, setNotifications] = useState([
@@ -47,6 +56,35 @@ const AppLayout = () => {
       navigate(APP_ROUTES.login);
     }
   }, [isAuthenticated, navigate]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return undefined;
+
+    let isMounted = true;
+
+    const fetchActiveSemester = async () => {
+      try {
+        const response = await httpClient.get("/api/categories/semesters");
+        const semesters = Array.isArray(response.data)
+          ? response.data
+          : response.data?.data || [];
+        if (isMounted) {
+          setActiveSemesterName(getActiveSemesterName(semesters));
+        }
+      } catch (error) {
+        console.error("Không tải được học kỳ active:", error);
+        if (isMounted) {
+          setActiveSemesterName("Chưa xác định học kỳ active");
+        }
+      }
+    };
+
+    void fetchActiveSemester();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (!isAuthenticated || !user?.backendRole) return;
@@ -63,13 +101,25 @@ const AppLayout = () => {
   }
 
   const menuItems = NAVIGATION_BY_ROLE[user.role] || [];
-  
-  const isItemActive = (path) => {
-    if (defaultRootPaths.has(path)) {
-      return location.pathname === path;
-    }
-    return location.pathname === path || location.pathname.startsWith(`${path}/`);
-  };
+
+  const activeMenuPath = useMemo(() => {
+    const matches = menuItems
+      .filter((item) => item.path)
+      .filter((item) => {
+        if (defaultRootPaths.has(item.path)) {
+          return location.pathname === item.path;
+        }
+        return (
+          location.pathname === item.path ||
+          location.pathname.startsWith(`${item.path}/`)
+        );
+      })
+      .sort((a, b) => b.path.length - a.path.length);
+
+    return matches[0]?.path ?? null;
+  }, [location.pathname, menuItems]);
+
+  const isItemActive = (path) => activeMenuPath === path;
 
   const handleLogout = () => {
     logout();
@@ -192,7 +242,9 @@ const AppLayout = () => {
               </h2>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                <p className="text-[11px] text-gray-500 font-medium">Học kỳ 2 — 2024-2025</p>
+                <p className="text-[11px] text-gray-500 font-medium">
+                  {activeSemesterName || "Đang tải học kỳ"}
+                </p>
               </div>
             </div>
           </div>

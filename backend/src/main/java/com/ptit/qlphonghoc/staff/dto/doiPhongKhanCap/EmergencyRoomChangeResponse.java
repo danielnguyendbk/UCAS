@@ -1,6 +1,7 @@
 package com.ptit.qlphonghoc.staff.dto.doiPhongKhanCap;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 public class EmergencyRoomChangeResponse {
 
@@ -18,12 +19,22 @@ public class EmergencyRoomChangeResponse {
     private Integer toWeek;
     private Integer oldClassroomId;
     private String oldRoomCode;
+    private Integer requestedClassroomId;
+    private String requestedRoomCode;
     private Integer newClassroomId;
     private String newRoomCode;
     private String reason;
+    private Integer requestedBy;
+    private String requesterName;
+    private String requesterUsername;
     private String status;
     private Boolean active;
     private Integer reviewedBy;
+    private String reviewedByName;
+    private LocalDateTime reviewedAt;
+    private String reviewNote;
+    private String rejectReason;
+    private LocalDateTime createdAt;
 
     public Integer getId() {
         return id;
@@ -137,6 +148,22 @@ public class EmergencyRoomChangeResponse {
         this.oldRoomCode = oldRoomCode;
     }
 
+    public Integer getRequestedClassroomId() {
+        return requestedClassroomId;
+    }
+
+    public void setRequestedClassroomId(Integer requestedClassroomId) {
+        this.requestedClassroomId = requestedClassroomId;
+    }
+
+    public String getRequestedRoomCode() {
+        return requestedRoomCode;
+    }
+
+    public void setRequestedRoomCode(String requestedRoomCode) {
+        this.requestedRoomCode = requestedRoomCode;
+    }
+
     public Integer getNewClassroomId() {
         return newClassroomId;
     }
@@ -161,6 +188,30 @@ public class EmergencyRoomChangeResponse {
         this.reason = reason;
     }
 
+    public Integer getRequestedBy() {
+        return requestedBy;
+    }
+
+    public void setRequestedBy(Integer requestedBy) {
+        this.requestedBy = requestedBy;
+    }
+
+    public String getRequesterName() {
+        return requesterName;
+    }
+
+    public void setRequesterName(String requesterName) {
+        this.requesterName = requesterName;
+    }
+
+    public String getRequesterUsername() {
+        return requesterUsername;
+    }
+
+    public void setRequesterUsername(String requesterUsername) {
+        this.requesterUsername = requesterUsername;
+    }
+
     public String getStatus() {
         return status;
     }
@@ -183,5 +234,45 @@ public class EmergencyRoomChangeResponse {
 
     public void setReviewedBy(Integer reviewedBy) {
         this.reviewedBy = reviewedBy;
+    }
+
+    public String getReviewedByName() {
+        return reviewedByName;
+    }
+
+    public void setReviewedByName(String reviewedByName) {
+        this.reviewedByName = reviewedByName;
+    }
+
+    public LocalDateTime getReviewedAt() {
+        return reviewedAt;
+    }
+
+    public void setReviewedAt(LocalDateTime reviewedAt) {
+        this.reviewedAt = reviewedAt;
+    }
+
+    public String getReviewNote() {
+        return reviewNote;
+    }
+
+    public void setReviewNote(String reviewNote) {
+        this.reviewNote = reviewNote;
+    }
+
+    public String getRejectReason() {
+        return rejectReason;
+    }
+
+    public void setRejectReason(String rejectReason) {
+        this.rejectReason = rejectReason;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
     }
 }

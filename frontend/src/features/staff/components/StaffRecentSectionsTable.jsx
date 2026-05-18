@@ -13,6 +13,13 @@ import {
 import { APP_ROUTES } from "@/constants/routes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/common/Card";
 import { STATUS_CONFIG } from "../constants/dashboard";
+
+const formatStudentCapacity = (section) => {
+  const enrolledCount = section.students ?? 0;
+  const maxCapacity = section.maxCapacity ?? "-";
+  return `${enrolledCount}/${maxCapacity}`;
+};
+
 const StaffRecentSectionsTable = ({ sections }) => {
   return /* @__PURE__ */ jsxs(Card, { className: "shadow-sm border-0 ring-1 ring-gray-200 lg:col-span-2", children: [
     /* @__PURE__ */ jsxs(CardHeader, { className: "pb-3 flex flex-row items-center justify-between", children: [
@@ -31,13 +38,13 @@ const StaffRecentSectionsTable = ({ sections }) => {
         /* @__PURE__ */ jsx(TableHead, { className: "text-xs", children: "L\u1ECBch" }),
         /* @__PURE__ */ jsx(TableHead, { className: "text-xs text-center", children: "Tr\u1EA1ng th\xE1i" })
       ] }) }),
-      /* @__PURE__ */ jsx(TableBody, { children: sections.map((section) => {
-        const statusInfo = STATUS_CONFIG[section.status];
+      /* @__PURE__ */ jsx(TableBody, { children: sections.length ? sections.map((section) => {
+        const statusInfo = STATUS_CONFIG[section.status] || STATUS_CONFIG.pending;
         const StatusIcon = statusInfo.icon;
         return /* @__PURE__ */ jsxs(TableRow, { className: "hover:bg-gray-50", children: [
           /* @__PURE__ */ jsx(TableCell, { className: "font-mono text-xs font-semibold text-blue-700", children: section.id }),
           /* @__PURE__ */ jsx(TableCell, { className: "text-xs max-w-[160px] truncate", children: section.name }),
-          /* @__PURE__ */ jsx(TableCell, { className: "text-xs text-center", children: section.students }),
+          /* @__PURE__ */ jsx(TableCell, { className: "text-xs text-center", children: formatStudentCapacity(section) }),
           /* @__PURE__ */ jsx(TableCell, { className: "text-xs", children: section.room ? /* @__PURE__ */ jsx("span", { className: "font-medium text-gray-800", children: section.room }) : /* @__PURE__ */ jsx("span", { className: "text-gray-400 italic", children: "\u2014" }) }),
           /* @__PURE__ */ jsxs(TableCell, { className: "text-xs text-gray-600", children: [
             section.day,
@@ -49,7 +56,7 @@ const StaffRecentSectionsTable = ({ sections }) => {
             statusInfo.label
           ] }) })
         ] }, section.id);
-      }) })
+      }) : /* @__PURE__ */ jsx(TableRow, { children: /* @__PURE__ */ jsx(TableCell, { colSpan: 6, className: "py-8 text-center text-sm text-gray-500", children: "Chưa có lớp học phần trong học kỳ active." }) }) })
     ] }) }) })
   ] });
 };

@@ -48,7 +48,14 @@ public class CategoryController {
             SELECT id, semester_name AS name, semester_type AS type, status
             FROM semesters
             WHERE is_deleted = FALSE
-            ORDER BY start_date
+            ORDER BY
+                CASE status
+                    WHEN 'ACTIVE' THEN 0
+                    WHEN 'UPCOMING' THEN 1
+                    WHEN 'COMPLETED' THEN 2
+                    ELSE 3
+                END,
+                start_date
             """;
         return ApiResponse.success("OK", jdbcTemplate.queryForList(sql));
     }

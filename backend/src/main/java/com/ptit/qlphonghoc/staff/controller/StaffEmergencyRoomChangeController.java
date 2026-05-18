@@ -1,12 +1,15 @@
 package com.ptit.qlphonghoc.staff.controller;
 
+import com.ptit.qlphonghoc.auth.security.CustomUserDetails;
 import com.ptit.qlphonghoc.staff.dto.datPhongKhanCap.AvailableRoomResponse;
 import com.ptit.qlphonghoc.staff.dto.doiPhongKhanCap.CreateEmergencyRoomChangeRequest;
 import com.ptit.qlphonghoc.staff.dto.doiPhongKhanCap.EmergencyRoomChangeResponse;
 import com.ptit.qlphonghoc.staff.dto.doiPhongKhanCap.EmergencyRoomChangeScheduleResponse;
+import com.ptit.qlphonghoc.staff.dto.doiPhongKhanCap.RejectEmergencyRoomChangeRequest;
 import com.ptit.qlphonghoc.staff.service.StaffEmergencyRoomChangeService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
@@ -21,6 +24,13 @@ public class StaffEmergencyRoomChangeController {
 
     public StaffEmergencyRoomChangeController(StaffEmergencyRoomChangeService service) {
         this.service = service;
+    }
+
+    @GetMapping
+    public ResponseEntity<List<EmergencyRoomChangeResponse>> getChangeRequests(
+            @RequestParam(required = false) String status
+    ) {
+        return ResponseEntity.ok(service.getChangeRequests(status));
     }
 
     @GetMapping("/schedules")
@@ -65,5 +75,22 @@ public class StaffEmergencyRoomChangeController {
         return ResponseEntity
                 .created(URI.create("/api/staff/emergency-room-changes/" + response.getId()))
                 .body(response);
+    }
+
+    @PatchMapping("/{id}/approve")
+    public ResponseEntity<EmergencyRoomChangeResponse> approve(
+            @PathVariable Integer id,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        return ResponseEntity.ok(service.approve(id, userDetails.getUserId()));
+    }
+
+    @PatchMapping("/{id}/reject")
+    public ResponseEntity<EmergencyRoomChangeResponse> reject(
+            @PathVariable Integer id,
+            @Valid @RequestBody RejectEmergencyRoomChangeRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        return ResponseEntity.ok(service.reject(id, userDetails.getUserId(), request.getRejectReason()));
     }
 }
