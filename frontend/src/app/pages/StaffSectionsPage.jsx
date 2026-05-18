@@ -61,6 +61,12 @@ const getActiveSemesterId = (semesters) => {
   return (activeSemester || semesters[0])?.id?.toString() || "";
 };
 
+const formatStudentCapacity = (section) => {
+  const enrolledCount = section.students ?? 0;
+  const maxCapacity = section.maxCapacity ?? "-";
+  return `${enrolledCount}/${maxCapacity}`;
+};
+
 export const StaffSectionsPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -579,7 +585,7 @@ export const StaffSectionsPage = () => {
                       {s.credits}
                     </TableCell>
                     <TableCell className="text-xs text-center">
-                      {s.students}
+                      {formatStudentCapacity(s)}
                     </TableCell>
                     <TableCell className="text-xs text-gray-600">
                       {s.lecturer}

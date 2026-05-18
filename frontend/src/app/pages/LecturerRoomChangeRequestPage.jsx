@@ -1,28 +1,16 @@
-import { useMemo, useState } from "react";
-import {
-  CheckCircle,
-  AlertCircle,
-  Search,
-  Calendar,
-  Layers,
-  Clock,
-  Info,
-  Check,
-  ArrowRight,
-  Building2,
-  Users,
-  Monitor,
-} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowLeftRight, CheckCircle, Search } from "lucide-react";
 import { useNavigate } from "react-router";
+import RoomSearchModal from "../components/booking/RoomSearchModal";
 import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
-import { Label } from "../components/ui/label";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from "../components/ui/card";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
 import {
   Select,
   SelectContent,
@@ -30,517 +18,652 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { Badge } from "../components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../components/ui/table";
 import { APP_ROUTES } from "@/constants/routes";
-import {
-  buildRoomChangeRequest,
-  loadRoomChangeRequests,
-  saveRoomChangeRequests,
-} from "@/utils/roomChangeRequests";
+import { httpClient } from "@/services/httpClient";
 
-const CURRENT_LECTURER = {
-  name: "Nguyễn Văn Giang",
-  code: "GV001",
+const weekOptions = Array.from({ length: 20 }, (_, index) => {
+  const value = String(index + 1);
+  return { value, label: `Tuần ${value}` };
+});
+
+const dayCodeToJsDay = {
+  SUN: 0,
+  MON: 1,
+  TUE: 2,
+  WED: 3,
+  THU: 4,
+  FRI: 5,
+  SAT: 6,
 };
 
-const mockRooms = [];
+const normalizeText = (value) => (value || "").toString().trim().toLowerCase();
+const normalizeCode = (value) => normalizeText(value).replace(/\s+/g, "");
+
+const toDateInputValue = (date) => {
+  const localDate = new Date(
+    date.getTime() - date.getTimezoneOffset() * 60 * 1000,
+  );
+  return localDate.toISOString().slice(0, 10);
+};
+
+const getNextDateForDay = (dayCode) => {
+  const targetDay = dayCodeToJsDay[dayCode];
+  if (targetDay === undefined) return "";
+
+  const date = new Date();
+  const offset = (targetDay - date.getDay() + 7) % 7;
+  date.setDate(date.getDate() + offset);
+  return toDateInputValue(date);
+};
+
+const isDateMatchingDayCode = (dateValue, dayCode) => {
+  const targetDay = dayCodeToJsDay[dayCode];
+  if (!dateValue || targetDay === undefined) return false;
+
+  const [year, month, day] = dateValue.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getDay() === targetDay;
+};
+
+const getSemesterId = (semester) =>
+  semester?.id ?? semester?.ID ?? semester?.semesterId ?? semester?.SEMESTER_ID;
+
+const getSemesterName = (semester) =>
+  semester?.name ??
+  semester?.NAME ??
+  semester?.semesterName ??
+  semester?.SEMESTER_NAME;
+
+const getSemesterStatus = (semester) =>
+  semester?.status ??
+  semester?.STATUS ??
+  semester?.semesterStatus ??
+  semester?.SEMESTER_STATUS;
+
+const getActiveSemesterId = (semesters) => {
+  const activeSemester = semesters.find(
+    (semester) => String(getSemesterStatus(semester) || "").toUpperCase() === "ACTIVE",
+  );
+  return String(getSemesterId(activeSemester || semesters[0]) || "");
+};
+
+const getResponseList = (response) => {
+  const payload = response.data;
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  return [];
+};
+
+const initialForm = {
+  semesterId: "",
+  sectionCode: "",
+  scope: "SESSION",
+  targetDate: "",
+  fromWeek: "",
+  toWeek: "",
+  roomId: "",
+  roomCode: "",
+  reason: "",
+};
 
 const LecturerRoomChangeRequestPage = () => {
   const navigate = useNavigate();
-  const [form, setForm] = useState({
-    sectionCode: "",
-    courseName: "",
-    currentRoom: "",
-    reason: "",
-    scope: "session", // session, weeks, semester
-    date: "",
-    startSlot: "",
-    endSlot: "",
-    fromWeek: "",
-    toWeek: "",
-    requestedRoom: null, // room object
-  });
-
-  const [isSearching, setIsSearching] = useState(false);
-  const [showResults, setShowResults] = useState(false);
+  const [form, setForm] = useState(initialForm);
+  const [semesters, setSemesters] = useState([]);
+  const [schedules, setSchedules] = useState([]);
+  const [loadingSchedules, setLoadingSchedules] = useState(false);
+  const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [submittedRequest, setSubmittedRequest] = useState(null);
+  const [isRoomSearchOpen, setIsRoomSearchOpen] = useState(false);
 
-  const handleSearch = () => {
-    setIsSearching(true);
-    // Simulate search delay
-    setTimeout(() => {
-      setIsSearching(false);
-      setShowResults(true);
-    }, 800);
+  const applySemesters = (list) => {
+    setSemesters(list);
+    const activeSemesterId = getActiveSemesterId(list);
+    if (activeSemesterId) {
+      setForm((prev) => ({ ...prev, semesterId: activeSemesterId }));
+    }
   };
 
-  const handleSelectRoom = (room) => {
-    setForm((prev) => ({ ...prev, requestedRoom: room }));
+  const matchedSchedules = useMemo(() => {
+    const code = normalizeCode(form.sectionCode);
+    if (!code) return [];
+
+    return schedules.filter((schedule) =>
+      normalizeCode(schedule.classCode).includes(code),
+    );
+  }, [form.sectionCode, schedules]);
+
+  const selectedSchedule = useMemo(() => {
+    const code = normalizeCode(form.sectionCode);
+    if (!code) return null;
+
+    const exactCodeMatch = matchedSchedules.find(
+      (schedule) => normalizeCode(schedule.classCode) === code,
+    );
+    if (exactCodeMatch) return exactCodeMatch;
+
+    return matchedSchedules.length === 1 ? matchedSchedules[0] : null;
+  }, [form.sectionCode, matchedSchedules]);
+
+  useEffect(() => {
+    const fetchSemesters = async () => {
+      try {
+        const response = await httpClient.get("/api/categories/semesters");
+        applySemesters(getResponseList(response));
+      } catch (error) {
+        console.error("Không tải được danh sách học kỳ:", error);
+      }
+    };
+
+    fetchSemesters();
+  }, []);
+
+  useEffect(() => {
+    if (form.semesterId || semesters.length === 0) return;
+
+    const activeSemesterId = getActiveSemesterId(semesters);
+    if (activeSemesterId) {
+      setForm((prev) => ({ ...prev, semesterId: activeSemesterId }));
+    }
+  }, [form.semesterId, semesters]);
+
+  useEffect(() => {
+    if (!form.semesterId) {
+      setSchedules([]);
+      return;
+    }
+
+    const fetchSchedules = async () => {
+      setLoadingSchedules(true);
+      try {
+        const response = await httpClient.get(
+          "/api/lecturer/room-change-requests/schedules",
+          { params: { semesterId: form.semesterId } },
+        );
+        setSchedules(getResponseList(response));
+      } catch (error) {
+        setSchedules([]);
+        console.error("Không tải được lịch lớp của giảng viên:", error);
+      } finally {
+        setLoadingSchedules(false);
+      }
+    };
+
+    fetchSchedules();
+  }, [form.semesterId]);
+
+  useEffect(() => {
+    if (!selectedSchedule || form.scope !== "SESSION") return;
+
+    if (!isDateMatchingDayCode(form.targetDate, selectedSchedule.dayOfWeekCode)) {
+      setForm((prev) => ({
+        ...prev,
+        targetDate: getNextDateForDay(selectedSchedule.dayOfWeekCode),
+        roomId: "",
+        roomCode: "",
+      }));
+    }
+  }, [selectedSchedule?.scheduleId, form.scope]);
+
+  const updateForm = (patch) => {
+    setForm((prev) => ({ ...prev, ...patch }));
+    setSubmittedRequest(null);
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const resetRoom = (patch) => {
+    updateForm({
+      ...patch,
+      roomId: "",
+      roomCode: "",
+    });
+  };
+
+  const handleRoomSelect = (classroomId, roomCode) => {
+    setForm((prev) => ({
+      ...prev,
+      roomId: String(classroomId),
+      roomCode,
+    }));
+    setIsRoomSearchOpen(false);
+  };
+
+  const validate = () => {
+    const nextErrors = {};
+
+    if (!form.semesterId) nextErrors.semesterId = "Vui lòng chọn học kỳ.";
+
+    if (!form.sectionCode.trim()) {
+      nextErrors.sectionInfo = "Vui lòng nhập mã lớp học phần.";
+    } else if (!selectedSchedule) {
+      nextErrors.sectionInfo =
+        matchedSchedules.length > 1
+          ? "Có nhiều lớp phù hợp, vui lòng nhập mã lớp chính xác hơn."
+          : "Không tìm thấy lớp học phần đã phân phòng trong học kỳ này.";
+    }
+
+    if (form.scope === "SESSION" && !form.targetDate) {
+      nextErrors.targetDate = "Vui lòng chọn ngày đổi phòng.";
+    } else if (
+      form.scope === "SESSION" &&
+      selectedSchedule &&
+      !isDateMatchingDayCode(form.targetDate, selectedSchedule.dayOfWeekCode)
+    ) {
+      nextErrors.targetDate = `Ngày đổi phòng phải trùng ${selectedSchedule.dayOfWeekText}.`;
+    }
+
+    if (form.scope === "WEEK_RANGE") {
+      if (!form.fromWeek) nextErrors.fromWeek = "Vui lòng chọn tuần bắt đầu.";
+      if (!form.toWeek) nextErrors.toWeek = "Vui lòng chọn tuần kết thúc.";
+      if (
+        form.fromWeek &&
+        form.toWeek &&
+        Number(form.toWeek) < Number(form.fromWeek)
+      ) {
+        nextErrors.toWeek = "Tuần kết thúc phải sau tuần bắt đầu.";
+      }
+    }
+
+    if (form.scope === "REST_OF_SEMESTER" && !form.fromWeek) {
+      nextErrors.fromWeek = "Vui lòng chọn tuần bắt đầu.";
+    }
+
+    if (!form.roomId) nextErrors.roomId = "Vui lòng chọn phòng mới.";
+    if (!form.reason.trim()) nextErrors.reason = "Vui lòng nhập lý do đổi phòng.";
+
+    return nextErrors;
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    const nextErrors = validate();
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
+
     setSubmitting(true);
-    setTimeout(() => {
-      // In a real app, we'd save to DB
+    try {
+      const payload = {
+        semesterId: Number(form.semesterId),
+        sectionScheduleId: Number(selectedSchedule.scheduleId),
+        changeScope: form.scope,
+        targetDate: form.scope === "SESSION" ? form.targetDate : null,
+        fromWeek: form.scope !== "SESSION" ? Number(form.fromWeek) : null,
+        toWeek: form.scope === "WEEK_RANGE" ? Number(form.toWeek) : null,
+        newClassroomId: Number(form.roomId),
+        reason: form.reason.trim(),
+      };
+
+      const response = await httpClient.post(
+        "/api/lecturer/room-change-requests",
+        payload,
+      );
+      setSubmittedRequest(response.data);
+      setForm({
+        ...initialForm,
+        semesterId: form.semesterId,
+      });
+      setErrors({});
+    } catch (error) {
+      alert(
+        error.response?.data?.message ||
+          "Có lỗi xảy ra khi gửi yêu cầu đổi phòng.",
+      );
+    } finally {
       setSubmitting(false);
-      setSubmitted(true);
-    }, 1200);
+    }
   };
 
-  const isSearchDisabled =
-    !form.sectionCode ||
-    !form.currentRoom ||
-    (form.scope === "session" &&
-      (!form.date || !form.startSlot || !form.endSlot)) ||
-    (form.scope === "weeks" && (!form.fromWeek || !form.toWeek)) ||
-    (form.scope === "semester" && !form.fromWeek);
+  const isSessionDateValid =
+    form.scope !== "SESSION" ||
+    (selectedSchedule &&
+      isDateMatchingDayCode(form.targetDate, selectedSchedule.dayOfWeekCode));
+
+  const canOpenRoomSearch =
+    form.semesterId &&
+    selectedSchedule &&
+    ((form.scope === "SESSION" && form.targetDate && isSessionDateValid) ||
+      (form.scope === "WEEK_RANGE" && form.fromWeek && form.toWeek) ||
+      (form.scope === "REST_OF_SEMESTER" && form.fromWeek));
+
+  const showNoMatch =
+    form.sectionCode.trim() &&
+    !loadingSchedules &&
+    matchedSchedules.length === 0;
+
+  const showMultipleMatches =
+    form.sectionCode.trim() &&
+    !loadingSchedules &&
+    matchedSchedules.length > 1 &&
+    !selectedSchedule;
 
   return (
-    <div className="p-5 md:p-6 space-y-6 max-w-5xl mx-auto">
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Layers className="w-6 h-6 text-blue-600" />
-            Yêu cầu đổi phòng học
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Giảng viên gửi yêu cầu thay đổi phòng cho lớp học phần theo phạm vi
-            thời gian.
-          </p>
-        </div>
-      </div>
+    <div className="p-5 md:p-6 space-y-5">
+      <Card className="border border-gray-200 shadow-sm">
+        <CardHeader className="space-y-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2">
+              <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-orange-50">
+                <ArrowLeftRight className="w-4 h-4 text-orange-500" />
+              </span>
+              Yêu cầu đổi phòng
+            </CardTitle>
 
-      {submitted ? (
-        <Card className="rounded-xl border border-green-200 bg-green-50 p-10 text-center shadow-lg animate-in zoom-in-95">
-          <div className="flex flex-col items-center">
-            <CheckCircle className="w-12 h-12 text-green-600 mb-4" />
-            <h2 className="text-xl font-bold text-green-900">
-              Gửi yêu cầu thành công!
-            </h2>
-            <p className="text-green-700 mt-2 max-w-md mx-auto">
-              Yêu cầu đổi phòng đã được gửi và đang chờ phê duyệt từ bộ phận
-              Giáo vụ.
-            </p>
-            <div className="mt-8 flex gap-3">
-              <Button
-                onClick={() => navigate(APP_ROUTES.lecturerRoomChangeList)}
-                className="bg-blue-600 hover:bg-blue-700 shadow-lg"
-              >
-                Xem danh sách yêu cầu
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSubmitted(false);
-                  setShowResults(false);
-                  setForm({ ...form, requestedRoom: null });
-                }}
-              >
-                Tạo yêu cầu mới
-              </Button>
-            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => navigate(APP_ROUTES.lecturerRoomChangeList)}
+            >
+              DS yêu cầu đổi phòng
+            </Button>
           </div>
-        </Card>
-      ) : (
-        <div className="space-y-6">
-          <Card className="border-0 shadow-sm ring-1 ring-gray-200 overflow-hidden">
-            <CardHeader className="bg-gray-50/50 border-b border-gray-100">
-              <CardTitle className="text-base font-bold text-gray-800">
-                1. Thông tin lớp học và lý do
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold text-gray-700 uppercase">
-                    Mã lớp học phần & Tên môn
-                  </Label>
-                  <div className="grid grid-cols-3 gap-2">
-                    <Input
-                      placeholder="Mã lớp"
-                      className="col-span-1"
-                      value={form.sectionCode}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, sectionCode: e.target.value }))
-                      }
-                    />
-                    <Input
-                      placeholder="Tên môn học"
-                      className="col-span-2"
-                      value={form.courseName}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, courseName: e.target.value }))
-                      }
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold text-gray-700 uppercase">
-                    Phòng hiện tại
-                  </Label>
-                  <Input
-                    placeholder="VD: A-201"
-                    value={form.currentRoom}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, currentRoom: e.target.value }))
-                    }
-                  />
-                </div>
-                <div className="md:col-span-2 space-y-2">
-                  <Label className="text-xs font-bold text-gray-700 uppercase">
-                    Lý do đổi phòng
-                  </Label>
-                  <textarea
-                    placeholder="Mô tả lý do cần đổi phòng (VD: Phòng hiện tại hỏng điều hòa, cần phòng máy...)"
-                    className="w-full min-h-[80px] p-3 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                    value={form.reason}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, reason: e.target.value }))
-                    }
-                  />
+        </CardHeader>
+
+        <CardContent>
+          {submittedRequest && (
+            <div className="rounded-xl border border-green-200 bg-green-50 p-4 mb-5">
+              <div className="flex items-start gap-3">
+                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-green-800">
+                    Gửi yêu cầu đổi phòng thành công.
+                  </p>
+                  <p className="text-xs text-green-700 mt-1">
+                    Mã yêu cầu #{submittedRequest.id} đang chờ giáo vụ duyệt.
+                  </p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          )}
 
-          <Card className="border-0 shadow-sm ring-1 ring-gray-200 overflow-hidden">
-            <CardHeader className="bg-gray-50/50 border-b border-gray-100">
-              <CardTitle className="text-base font-bold text-gray-800">
-                2. Phạm vi áp dụng đổi phòng
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-6 space-y-6">
-              <div className="flex flex-wrap gap-4">
-                {[
-                  { id: "session", label: "1 buổi", icon: Clock },
-                  { id: "weeks", label: "Khoảng tuần", icon: Calendar },
-                  {
-                    id: "semester",
-                    label: "Phần còn lại học kỳ",
-                    icon: Layers,
-                  },
-                ].map((opt) => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => {
-                      setForm((f) => ({ ...f, scope: opt.id }));
-                      setShowResults(false);
-                    }}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 transition-all font-semibold text-sm ${
-                      form.scope === opt.id
-                        ? "border-blue-600 bg-blue-50 text-blue-700"
-                        : "border-gray-100 bg-white text-gray-500 hover:border-gray-200"
-                    }`}
-                  >
-                    <opt.icon className="w-4 h-4" />
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-
-              <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 animate-in fade-in slide-in-from-top-2 duration-300">
-                {form.scope === "session" && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-bold text-gray-600">
-                        Ngày học
-                      </Label>
-                      <Input
-                        type="date"
-                        className="bg-white"
-                        value={form.date}
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, date: e.target.value }))
-                        }
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-bold text-gray-600">
-                        Tiết bắt đầu
-                      </Label>
-                      <Select
-                        value={form.startSlot}
-                        onValueChange={(v) =>
-                          setForm((f) => ({ ...f, startSlot: v }))
-                        }
-                      >
-                        <SelectTrigger className="bg-white">
-                          <SelectValue placeholder="Chọn tiết" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((s) => (
-                            <SelectItem key={s} value={s.toString()}>
-                              Tiết {s}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-bold text-gray-600">
-                        Tiết kết thúc
-                      </Label>
-                      <Select
-                        value={form.endSlot}
-                        onValueChange={(v) =>
-                          setForm((f) => ({ ...f, endSlot: v }))
-                        }
-                      >
-                        <SelectTrigger className="bg-white">
-                          <SelectValue placeholder="Chọn tiết" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((s) => (
-                            <SelectItem key={s} value={s.toString()}>
-                              Tiết {s}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                )}
-
-                {form.scope === "weeks" && (
-                  <div className="grid grid-cols-2 gap-4 max-w-sm">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-bold text-gray-600">
-                        Từ tuần
-                      </Label>
-                      <Select
-                        value={form.fromWeek}
-                        onValueChange={(v) =>
-                          setForm((f) => ({ ...f, fromWeek: v }))
-                        }
-                      >
-                        <SelectTrigger className="bg-white">
-                          <SelectValue placeholder="Tuần" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {[...Array(20)].map((_, i) => (
-                            <SelectItem key={i + 1} value={(i + 1).toString()}>
-                              Tuần {i + 1}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-bold text-gray-600">
-                        Đến tuần
-                      </Label>
-                      <Select
-                        value={form.toWeek}
-                        onValueChange={(v) =>
-                          setForm((f) => ({ ...f, toWeek: v }))
-                        }
-                      >
-                        <SelectTrigger className="bg-white">
-                          <SelectValue placeholder="Tuần" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {[...Array(20)].map((_, i) => (
-                            <SelectItem key={i + 1} value={(i + 1).toString()}>
-                              Tuần {i + 1}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                )}
-
-                {form.scope === "semester" && (
-                  <div className="flex items-center gap-6">
-                    <div className="space-y-1.5 w-40">
-                      <Label className="text-xs font-bold text-gray-600">
-                        Từ tuần
-                      </Label>
-                      <Select
-                        value={form.fromWeek}
-                        onValueChange={(v) =>
-                          setForm((f) => ({ ...f, fromWeek: v }))
-                        }
-                      >
-                        <SelectTrigger className="bg-white">
-                          <SelectValue placeholder="Tuần" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {[...Array(20)].map((_, i) => (
-                            <SelectItem key={i + 1} value={(i + 1).toString()}>
-                              Tuần {i + 1}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex items-center gap-2 text-blue-600 mt-5">
-                      <Info className="w-4 h-4" />
-                      <p className="text-xs font-bold">
-                        Áp dụng cho toàn bộ các tuần còn lại của học kỳ hiện
-                        tại.
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex justify-center pt-2">
-                <Button
-                  onClick={handleSearch}
-                  disabled={isSearchDisabled || isSearching}
-                  className="bg-blue-600 hover:bg-blue-700 h-11 px-10 gap-2 shadow-lg shadow-blue-100"
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>
+                  Học kỳ <span className="text-red-500">*</span>
+                </Label>
+                <Select
+                  key={form.semesterId || "empty-semester"}
+                  value={form.semesterId}
+                  onValueChange={(value) =>
+                    resetRoom({
+                      semesterId: value,
+                      sectionCode: "",
+                      targetDate: "",
+                      fromWeek: "",
+                      toWeek: "",
+                    })
+                  }
                 >
-                  {isSearching ? (
-                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                  ) : (
-                    <Search className="w-4 h-4" />
-                  )}
-                  Xem phòng phù hợp
-                </Button>
+                  <SelectTrigger className="h-10">
+                    <SelectValue placeholder="Chọn học kỳ" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {semesters.map((semester) => (
+                      <SelectItem
+                        key={String(getSemesterId(semester))}
+                        value={String(getSemesterId(semester))}
+                      >
+                        {getSemesterName(semester)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.semesterId && (
+                  <p className="text-xs text-red-600">{errors.semesterId}</p>
+                )}
               </div>
-            </CardContent>
-          </Card>
 
-          {showResults && (
-            <Card className="border-0 shadow-sm ring-1 ring-gray-200 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <CardHeader className="bg-gray-50/50 border-b border-gray-100 flex flex-row items-center justify-between py-3">
-                <CardTitle className="text-base font-bold text-gray-800">
-                  3. Danh sách phòng phù hợp
-                </CardTitle>
-                <Badge className="bg-blue-100 text-blue-700 border-blue-200">
-                  Tìm thấy {mockRooms.length} phương án
-                </Badge>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-gray-50/30">
-                        <TableHead className="font-bold text-xs uppercase tracking-wider">
-                          Mã phòng
-                        </TableHead>
-                        <TableHead className="font-bold text-xs uppercase tracking-wider text-center">
-                          Sức chứa
-                        </TableHead>
-                        <TableHead className="font-bold text-xs uppercase tracking-wider">
-                          Loại phòng
-                        </TableHead>
-                        <TableHead className="font-bold text-xs uppercase tracking-wider">
-                          Thiết bị
-                        </TableHead>
-                        <TableHead className="font-bold text-xs uppercase tracking-wider text-center">
-                          Trạng thái
-                        </TableHead>
-                        <TableHead className="text-right font-bold text-xs uppercase tracking-wider">
-                          Chọn
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {mockRooms.map((room) => (
-                        <TableRow
-                          key={room.id}
-                          className={`hover:bg-blue-50/20 transition-colors cursor-pointer ${form.requestedRoom?.id === room.id ? "bg-blue-50/50" : ""}`}
-                          onClick={() => handleSelectRoom(room)}
-                        >
-                          <TableCell className="font-bold text-blue-700 flex items-center gap-2">
-                            <Building2 className="w-3.5 h-3.5 text-blue-400" />
-                            {room.id}
-                          </TableCell>
-                          <TableCell className="text-center font-medium text-gray-600">
-                            <div className="flex items-center justify-center gap-1">
-                              <Users className="w-3.5 h-3.5" />
-                              {room.capacity}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-sm text-gray-600">
-                            {room.type}
-                          </TableCell>
-                          <TableCell className="text-xs text-gray-500">
-                            <div className="flex items-center gap-1.5">
-                              <Monitor className="w-3 h-3" />
-                              {room.equipment}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Badge className="bg-green-50 text-green-700 border-green-100 text-[10px] px-2 py-0.5 shadow-none font-bold">
-                              Khả dụng theo dữ liệu hiện tại
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div
-                              className={`w-6 h-6 rounded-full border-2 mx-auto flex items-center justify-center transition-all ${
-                                form.requestedRoom?.id === room.id
-                                  ? "bg-blue-600 border-blue-600 text-white"
-                                  : "border-gray-200"
-                              }`}
-                            >
-                              {form.requestedRoom?.id === room.id && (
-                                <Check className="w-3.5 h-3.5" />
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+              <div className="space-y-2">
+                <Label>
+                  Mã lớp học phần & tên môn{" "}
+                  <span className="text-red-500">*</span>
+                </Label>
+                <div className="grid grid-cols-3 gap-2">
+                  <Input
+                    value={form.sectionCode}
+                    onChange={(event) =>
+                      resetRoom({ sectionCode: event.target.value })
+                    }
+                    placeholder="Mã lớp"
+                    className="h-10"
+                  />
+                  <Input
+                    readOnly
+                    value={selectedSchedule?.courseName || ""}
+                    placeholder="Tên môn học"
+                    className="h-10 col-span-2 bg-gray-50"
+                  />
                 </div>
+                {loadingSchedules && (
+                  <p className="text-xs text-gray-500">
+                    Đang tải danh sách lớp học phần...
+                  </p>
+                )}
+                {showNoMatch && (
+                  <p className="text-xs text-red-600">
+                    Không tìm thấy lớp học phần đã phân phòng trong học kỳ này.
+                  </p>
+                )}
+                {showMultipleMatches && (
+                  <p className="text-xs text-amber-700">
+                    Có {matchedSchedules.length} lớp phù hợp, hãy nhập mã lớp
+                    chính xác hơn.
+                  </p>
+                )}
+                {errors.sectionInfo && (
+                  <p className="text-xs text-red-600">{errors.sectionInfo}</p>
+                )}
+              </div>
 
-                <div className="p-4 border-t border-gray-50 space-y-4">
-                  <div className="flex items-start gap-2 text-gray-500 bg-gray-50 p-3 rounded-lg">
-                    <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
-                    <p className="text-[11px] leading-relaxed italic">
-                      Phòng hiển thị là các phòng trống xuyên suốt phạm vi áp
-                      dụng đã chọn (không chắp vá). Hệ thống sẽ kiểm tra lại
-                      tính khả dụng cuối cùng trước khi lưu hoặc gửi duyệt yêu
-                      cầu đổi phòng.
+              <div className="space-y-2">
+                <Label>Phòng hiện tại</Label>
+                <Input
+                  readOnly
+                  value={selectedSchedule?.currentRoomCode || ""}
+                  placeholder="Phòng hiện tại"
+                  className="h-10 bg-gray-50 font-semibold text-gray-800"
+                />
+              </div>
+
+              {selectedSchedule && (
+                <div className="md:col-span-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                    <p>
+                      <span className="font-semibold">Lớp:</span>{" "}
+                      {selectedSchedule.classCode}
+                    </p>
+                    <p>
+                      <span className="font-semibold">Giảng viên:</span>{" "}
+                      {selectedSchedule.lecturerName}
+                    </p>
+                    <p>
+                      <span className="font-semibold">Lịch:</span>{" "}
+                      {selectedSchedule.dayOfWeekText}, ca{" "}
+                      {selectedSchedule.slotNumber}
+                    </p>
+                    <p>
+                      <span className="font-semibold">Sức chứa tối đa:</span>{" "}
+                      {selectedSchedule.maxCapacity}
                     </p>
                   </div>
+                </div>
+              )}
 
-                  {form.requestedRoom && (
-                    <div className="flex items-center justify-between p-4 bg-blue-600 text-white rounded-xl shadow-xl shadow-blue-100 animate-in fade-in zoom-in duration-300">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-                          <Check className="w-5 h-5 text-white" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-blue-100 uppercase tracking-widest">
-                            Đã chọn phòng mới
-                          </p>
-                          <p className="text-lg font-bold flex items-center gap-2">
-                            {form.currentRoom}{" "}
-                            <ArrowRight className="w-4 h-4 opacity-60" />{" "}
-                            {form.requestedRoom.id}
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        onClick={handleSubmit}
-                        disabled={submitting}
-                        className="bg-white text-blue-600 hover:bg-blue-50 h-11 px-8 font-bold shadow-lg"
-                      >
-                        {submitting ? "Đang gửi..." : "Gửi yêu cầu đổi phòng"}
-                      </Button>
-                    </div>
+              <div className="space-y-2">
+                <Label>Phạm vi đổi phòng</Label>
+                <Select
+                  value={form.scope}
+                  onValueChange={(value) =>
+                    resetRoom({
+                      scope: value,
+                      targetDate:
+                        value === "SESSION" && selectedSchedule
+                          ? getNextDateForDay(selectedSchedule.dayOfWeekCode)
+                          : "",
+                      fromWeek: "",
+                      toWeek: "",
+                    })
+                  }
+                >
+                  <SelectTrigger className="h-10">
+                    <SelectValue placeholder="Chọn phạm vi" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="SESSION">Một buổi</SelectItem>
+                    <SelectItem value="WEEK_RANGE">Khoảng tuần</SelectItem>
+                    <SelectItem value="REST_OF_SEMESTER">
+                      Từ tuần đến hết kỳ
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {form.scope === "SESSION" && (
+                <div className="space-y-2">
+                  <Label>
+                    Ngày đổi phòng <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    type="date"
+                    value={form.targetDate}
+                    onChange={(event) =>
+                      resetRoom({ targetDate: event.target.value })
+                    }
+                    className="h-10"
+                  />
+                  {errors.targetDate && (
+                    <p className="text-xs text-red-600">{errors.targetDate}</p>
+                  )}
+                  {!errors.targetDate && selectedSchedule && (
+                    <p className="text-xs text-gray-500">
+                      Chỉ chọn ngày trùng {selectedSchedule.dayOfWeekText}.
+                    </p>
                   )}
                 </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      )}
+              )}
+
+              {form.scope !== "SESSION" && (
+                <div className="space-y-2">
+                  <Label>
+                    Từ tuần <span className="text-red-500">*</span>
+                  </Label>
+                  <Select
+                    value={form.fromWeek}
+                    onValueChange={(value) => resetRoom({ fromWeek: value })}
+                  >
+                    <SelectTrigger className="h-10">
+                      <SelectValue placeholder="Chọn tuần" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {weekOptions.map((week) => (
+                        <SelectItem key={week.value} value={week.value}>
+                          {week.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.fromWeek && (
+                    <p className="text-xs text-red-600">{errors.fromWeek}</p>
+                  )}
+                </div>
+              )}
+
+              {form.scope === "WEEK_RANGE" && (
+                <div className="space-y-2">
+                  <Label>
+                    Đến tuần <span className="text-red-500">*</span>
+                  </Label>
+                  <Select
+                    value={form.toWeek}
+                    onValueChange={(value) => resetRoom({ toWeek: value })}
+                  >
+                    <SelectTrigger className="h-10">
+                      <SelectValue placeholder="Chọn tuần" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {weekOptions.map((week) => (
+                        <SelectItem key={week.value} value={week.value}>
+                          {week.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.toWeek && (
+                    <p className="text-xs text-red-600">{errors.toWeek}</p>
+                  )}
+                </div>
+              )}
+
+              <div className="space-y-2 md:col-span-2">
+                <Label className="flex justify-between items-center mb-1">
+                  <span>
+                    Phòng mới <span className="text-red-500">*</span>
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 bg-orange-50 text-orange-600 hover:text-orange-700 border border-orange-200 gap-1 px-3"
+                    disabled={!canOpenRoomSearch}
+                    onClick={() => setIsRoomSearchOpen(true)}
+                  >
+                    <Search className="w-3.5 h-3.5" />
+                    Tìm phòng
+                  </Button>
+                </Label>
+                <Input
+                  readOnly
+                  value={form.roomCode}
+                  placeholder="Chọn phòng mới khả dụng"
+                  className="h-10 bg-gray-50 text-orange-700 font-semibold"
+                />
+                {errors.roomId && (
+                  <p className="text-xs text-red-600">{errors.roomId}</p>
+                )}
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <Label>
+                  Lý do đổi phòng <span className="text-red-500">*</span>
+                </Label>
+                <textarea
+                  value={form.reason}
+                  onChange={(event) => updateForm({ reason: event.target.value })}
+                  rows={3}
+                  placeholder="Mô tả lý do cần đổi phòng"
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                />
+                {errors.reason && (
+                  <p className="text-xs text-red-600">{errors.reason}</p>
+                )}
+              </div>
+            </div>
+
+            <Button
+              type="submit"
+              disabled={submitting}
+              className="bg-orange-600 hover:bg-orange-700 text-sm"
+            >
+              {submitting ? "Đang gửi..." : "Gửi yêu cầu chờ duyệt"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <RoomSearchModal
+        open={isRoomSearchOpen}
+        onOpenChange={setIsRoomSearchOpen}
+        onSelect={handleRoomSelect}
+        semesterId={form.semesterId}
+        expectedAttendees={selectedSchedule?.maxCapacity || ""}
+        isEmergencyChangeMode
+        isLecturerChangeMode
+        scheduleId={selectedSchedule?.scheduleId}
+        changeScope={form.scope}
+        targetDate={form.targetDate}
+        fromWeek={form.fromWeek}
+        toWeek={form.toWeek}
+      />
     </div>
   );
 };

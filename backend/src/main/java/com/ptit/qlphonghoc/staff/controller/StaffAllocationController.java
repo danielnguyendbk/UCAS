@@ -1,13 +1,21 @@
 package com.ptit.qlphonghoc.staff.controller;
 
+import com.ptit.qlphonghoc.auth.security.CustomUserDetails;
 import com.ptit.qlphonghoc.staff.dto.allocation.AllocationResponse;
 import com.ptit.qlphonghoc.staff.dto.allocation.ConflictResponse;
 import com.ptit.qlphonghoc.staff.dto.allocation.ManualAssignRequest;
 import com.ptit.qlphonghoc.staff.service.StaffAllocationService;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @RestController
@@ -33,28 +41,28 @@ public class StaffAllocationController {
     }
 
     @PostMapping("/manual")
-    public ResponseEntity<Map<String, String>> manualAssign(@RequestBody ManualAssignRequest request) {
+    public ResponseEntity<Map<String, String>> manualAssign(@RequestBody ManualAssignRequest request,
+                                                            @AuthenticationPrincipal CustomUserDetails userDetails) {
         try {
-            // Tạm thời hardcode staffUserId = 2
-            service.manualAssign(request, 2);
+            service.manualAssign(request, userDetails.getUserId());
             return ResponseEntity.ok(Map.of("message", "Phân phòng thành công!"));
         } catch (Exception e) {
-            // Bóc tách Exception qua nhiều lớp của Spring để lấy dòng thông báo lỗi thật sự (Từ Trigger MySQL)
             Throwable rootCause = e;
             while (rootCause.getCause() != null) {
                 rootCause = rootCause.getCause();
             }
-            
-            // Trả về mã lỗi 400 kèm câu thông báo chuẩn
+
             return ResponseEntity.status(400).body(Map.of("message", rootCause.getMessage()));
         }
     }
 
     @PostMapping("/auto-assign")
-    public ResponseEntity<Map<String, String>> autoAssign(@RequestParam Integer semesterId) {
-        String resultMsg = service.autoAssign(semesterId, 2);
+    public ResponseEntity<Map<String, String>> autoAssign(@RequestParam Integer semesterId,
+                                                          @AuthenticationPrincipal CustomUserDetails userDetails) {
+        String resultMsg = service.autoAssign(semesterId, userDetails.getUserId());
         return ResponseEntity.ok(Map.of("message", resultMsg));
     }
+
     @GetMapping("/available-rooms")
     public ResponseEntity<?> getAvailableRooms(
             @RequestParam Integer semesterId,
@@ -63,15 +71,36 @@ public class StaffAllocationController {
             @RequestParam Integer expectedAttendees,
             @RequestParam(required = false, defaultValue = "") String roomType
     ) {
-        // Chuyển đổi từ "Thứ 2" của giao diện sang "MON" của Database
-        String dowCode = "SUN";
-        if (dayOfWeek.contains("2")) dowCode = "MON";
-        else if (dayOfWeek.contains("3")) dowCode = "TUE";
-        else if (dayOfWeek.contains("4")) dowCode = "WED";
-        else if (dayOfWeek.contains("5")) dowCode = "THU";
-        else if (dayOfWeek.contains("6")) dowCode = "FRI";
-        else if (dayOfWeek.contains("7")) dowCode = "SAT";
+        return ResponseEntity.ok(service.getAvailableRooms(
+                semesterId,
+                normalizeDayOfWeek(dayOfWeek),
+                slot,
+                expectedAttendees,
+                roomType
+        ));
+    }
 
-        return ResponseEntity.ok(service.getAvailableRooms(semesterId, dowCode, slot, expectedAttendees, roomType));
+    private String normalizeDayOfWeek(String dayOfWeek) {
+        String value = dayOfWeek == null ? "" : dayOfWeek.trim().toUpperCase(Locale.ROOT);
+
+        if (value.contains("MON") || value.contains("2")) {
+            return "MON";
+        }
+        if (value.contains("TUE") || value.contains("3")) {
+            return "TUE";
+        }
+        if (value.contains("WED") || value.contains("4")) {
+            return "WED";
+        }
+        if (value.contains("THU") || value.contains("5")) {
+            return "THU";
+        }
+        if (value.contains("FRI") || value.contains("6")) {
+            return "FRI";
+        }
+        if (value.contains("SAT") || value.contains("7")) {
+            return "SAT";
+        }
+        return "SUN";
     }
 }

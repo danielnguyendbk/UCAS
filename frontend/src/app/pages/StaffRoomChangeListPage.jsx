@@ -1,459 +1,523 @@
-import { useEffect, useMemo, useState } from "react";
-import { Eye, X, Calendar, Layers, Clock, Search, RefreshCw, ShieldCheck, AlertTriangle } from "lucide-react";
-import { Button } from "../components/ui/button";
-import { Label } from "../components/ui/label";
-import { Badge } from "../components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  getStatusConfig,
-  loadRoomChangeRequests,
-  saveRoomChangeRequests,
-  toDateTimeVN
-} from "@/utils/roomChangeRequests";
+  AlertCircle,
+  CheckCircle,
+  Clock,
+  Eye,
+  Loader2,
+  RefreshCw,
+  Search,
+  XCircle,
+} from "lucide-react";
+import { httpClient } from "@/services/httpClient";
+import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../components/ui/table";
+
+const STATUS_FILTERS = [
+  { value: "ALL", label: "Tất cả" },
+  { value: "PENDING", label: "Chờ duyệt" },
+  { value: "APPROVED", label: "Đã duyệt" },
+  { value: "REJECTED", label: "Từ chối" },
+];
+
+const STATUS_CONFIG = {
+  APPROVED: {
+    label: "Đã duyệt",
+    className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    icon: CheckCircle,
+  },
+  REJECTED: {
+    label: "Từ chối",
+    className: "bg-red-50 text-red-700 border-red-200",
+    icon: XCircle,
+  },
+  PENDING: {
+    label: "Chờ duyệt",
+    className: "bg-amber-50 text-amber-700 border-amber-200",
+    icon: Clock,
+  },
+};
+
+const SCOPE_LABELS = {
+  SESSION: "Một buổi",
+  WEEK_RANGE: "Khoảng tuần",
+  REST_OF_SEMESTER: "Còn lại học kỳ",
+};
+
+const normalize = (value) => String(value || "").trim().toUpperCase();
+
+const StatusBadge = ({ status }) => {
+  const config = STATUS_CONFIG[normalize(status)] || STATUS_CONFIG.PENDING;
+  const Icon = config.icon;
+  return (
+    <Badge className={`${config.className} gap-1 text-[11px]`}>
+      <Icon className="h-3 w-3" />
+      {config.label}
+    </Badge>
+  );
+};
+
+const formatDate = (value) => {
+  if (!value) return "";
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+};
+
+const formatDateTime = (value) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+};
+
+const scopeText = (item) => {
+  const scope = normalize(item.changeScope);
+  if (scope === "SESSION") return formatDate(item.targetDate) || "Một buổi";
+  if (scope === "WEEK_RANGE") return `Tuần ${item.fromWeek} - ${item.toWeek}`;
+  if (scope === "REST_OF_SEMESTER") return `Từ tuần ${item.fromWeek} đến hết học kỳ`;
+  return item.changeScope || "";
+};
+
+const getErrorMessage = (error, fallback) =>
+  error?.response?.data?.message ||
+  error?.response?.data?.error ||
+  fallback;
 
 const StaffRoomChangeListPage = () => {
-  const [activeTab, setActiveTab] = useState("list");
   const [requests, setRequests] = useState([]);
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [searchTerm, setSearchTerm] = useState("");
   const [selectedRequest, setSelectedRequest] = useState(null);
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [checkingConflict, setCheckingConflict] = useState(false);
-  const [conflictResult, setConflictResult] = useState(null); // null, 'valid', 'conflict'
-  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
-  const [rejectRequestId, setRejectRequestId] = useState(null);
+  const [actionError, setActionError] = useState("");
+  const [actionLoading, setActionLoading] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [pageError, setPageError] = useState("");
 
-  useEffect(() => {
-    setRequests(loadRoomChangeRequests());
+  const fetchRequests = useCallback(async () => {
+    setIsLoading(true);
+    setPageError("");
+    try {
+      const response = await httpClient.get("/api/staff/emergency-room-changes");
+      const payload = Array.isArray(response.data) ? response.data : response.data?.data;
+      setRequests(Array.isArray(payload) ? payload : []);
+    } catch (error) {
+      setPageError(getErrorMessage(error, "Không tải được danh sách đổi phòng."));
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    if (requests.length > 0) {
-      saveRoomChangeRequests(requests);
-    }
+    fetchRequests();
+  }, [fetchRequests]);
+
+  const counts = useMemo(() => {
+    const next = { ALL: requests.length, PENDING: 0, APPROVED: 0, REJECTED: 0 };
+    requests.forEach((request) => {
+      const status = normalize(request.status);
+      if (next[status] !== undefined) next[status] += 1;
+    });
+    return next;
   }, [requests]);
 
-  const pendingRequests = useMemo(
-    () => requests.filter((item) => item.status === "pending"),
-    [requests]
-  );
+  const visibleRequests = useMemo(() => {
+    const keyword = searchTerm.trim().toLowerCase();
+    return requests.filter((request) => {
+      const matchesStatus =
+        statusFilter === "ALL" || normalize(request.status) === statusFilter;
+      if (!matchesStatus) return false;
+      if (!keyword) return true;
+      return [
+        request.id,
+        request.requesterName,
+        request.requesterUsername,
+        request.classCode,
+        request.courseName,
+        request.oldRoomCode,
+        request.requestedRoomCode,
+        request.newRoomCode,
+        request.reason,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(keyword));
+    });
+  }, [requests, searchTerm, statusFilter]);
 
-  const closeDetailModal = () => {
-    setShowDetailModal(false);
+  const openDetails = (request) => {
+    setSelectedRequest(request);
+    setIsDetailOpen(true);
+    setIsRejecting(false);
+    setRejectReason("");
+    setRejectError("");
+    setActionError("");
+  };
+
+  const closeDetails = () => {
     setSelectedRequest(null);
-    setConflictResult(null);
-  };
-
-  const closeRejectModal = () => {
-    setShowRejectModal(false);
-    setRejectRequestId(null);
+    setIsDetailOpen(false);
+    setIsRejecting(false);
     setRejectReason("");
     setRejectError("");
+    setActionError("");
+    setActionLoading("");
   };
 
-  const handleApprove = (requestId) => {
+  const mergeUpdatedRequest = (updated) => {
     setRequests((prev) =>
-      prev.map((item) =>
-        item.id === requestId
-          ? {
-              ...item,
-              status: "approved",
-              rejectReason: "",
-              approver: "STAFF",
-              processedAt: toDateTimeVN()
-            }
-          : item
-      )
+      prev.map((request) => (request.id === updated.id ? updated : request)),
     );
-
-    closeRejectModal();
-    closeDetailModal();
+    setSelectedRequest(updated);
   };
 
-  const handleReject = (requestId) => {
-    setRejectRequestId(requestId);
-    setRejectReason("");
-    setRejectError("");
-    setShowRejectModal(true);
+  const handleApprove = async () => {
+    if (!selectedRequest) return;
+    setActionLoading("approve");
+    setActionError("");
+    try {
+      const response = await httpClient.patch(
+        `/api/staff/emergency-room-changes/${selectedRequest.id}/approve`,
+      );
+      mergeUpdatedRequest(response.data);
+      setIsRejecting(false);
+    } catch (error) {
+      setActionError(getErrorMessage(error, "Không thể duyệt yêu cầu đổi phòng."));
+    } finally {
+      setActionLoading("");
+    }
   };
 
-  const confirmReject = () => {
-    if (!rejectReason.trim()) {
-      setRejectError("Vui long nhap ly do tu choi");
+  const handleReject = async () => {
+    if (!selectedRequest) return;
+    const reason = rejectReason.trim();
+    if (!reason) {
+      setRejectError("Vui lòng nhập lý do từ chối.");
       return;
     }
 
-    setRequests((prev) =>
-      prev.map((item) =>
-        item.id === rejectRequestId
-          ? {
-              ...item,
-              status: "rejected",
-              rejectReason: rejectReason.trim(),
-              approver: "STAFF",
-              processedAt: toDateTimeVN()
-            }
-          : item
-      )
-    );
-
-    closeRejectModal();
-    closeDetailModal();
+    setActionLoading("reject");
+    setActionError("");
+    try {
+      const response = await httpClient.patch(
+        `/api/staff/emergency-room-changes/${selectedRequest.id}/reject`,
+        { rejectReason: reason },
+      );
+      mergeUpdatedRequest(response.data);
+      setIsRejecting(false);
+      setRejectReason("");
+    } catch (error) {
+      setActionError(getErrorMessage(error, "Không thể từ chối yêu cầu đổi phòng."));
+    } finally {
+      setActionLoading("");
+    }
   };
 
-  const showDetails = (item) => {
-    setSelectedRequest(item);
-    setShowDetailModal(true);
-    setConflictResult(null);
-  };
-
-  const handleCheckConflict = () => {
-    setCheckingConflict(true);
-    setConflictResult(null);
-    setTimeout(() => {
-      setCheckingConflict(false);
-      // Simulate conflict check across the scope
-      // Example: RCR-2026-001 has conflict
-      setConflictResult(selectedRequest.id === 'RCR-2026-001' ? 'conflict' : 'valid');
-    }, 1800);
-  };
+  const isPending = normalize(selectedRequest?.status) === "PENDING";
 
   return (
-    <div className="p-5 md:p-6 space-y-5">
-      <div className="flex items-center justify-between">
+    <div className="space-y-5 p-5 md:p-6">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Danh sach don xin doi phong</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Quan ly va phe duyet don xin doi phong cua giang vien</p>
+          <h1 className="text-xl font-bold text-gray-900">
+            Danh sách đổi phòng
+          </h1>
+          <p className="mt-0.5 text-sm text-gray-500">
+            Quản lý và phê duyệt yêu cầu đổi phòng do giảng viên gửi.
+          </p>
+        </div>
+        <Button variant="outline" onClick={fetchRequests} disabled={isLoading}>
+          {isLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4" />
+          )}
+          Làm mới
+        </Button>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-[240px_1fr]">
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="h-10 bg-white">
+            <SelectValue placeholder="Lọc trạng thái" />
+          </SelectTrigger>
+          <SelectContent>
+            {STATUS_FILTERS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label} ({counts[option.value] || 0})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <input
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Tìm theo giảng viên, lớp, môn, phòng hoặc lý do..."
+            className="h-10 w-full rounded-md border border-gray-200 bg-white pl-9 pr-3 text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+          />
         </div>
       </div>
 
-      <div className="flex border-b border-gray-200">
-        {[
-          { key: "list", label: `Danh sach don doi phong (${requests.length})` },
-          { key: "approve", label: `Duyet yeu cau (${pendingRequests.length})` }
-        ].map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === tab.key
-                ? "border-blue-600 text-blue-700"
-                : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      {pageError && (
+        <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <AlertCircle className="mt-0.5 h-4 w-4" />
+          <span>{pageError}</span>
+        </div>
+      )}
+
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        {isLoading && requests.length === 0 ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-sm text-gray-500">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            Đang tải danh sách đổi phòng...
+          </div>
+        ) : visibleRequests.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <Clock className="mb-3 h-10 w-10 text-gray-300" />
+            <p className="text-sm font-semibold text-gray-500">
+              Không có yêu cầu đổi phòng phù hợp
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-gray-50">
+                  <TableHead className="text-xs font-semibold text-gray-600">Mã</TableHead>
+                  <TableHead className="text-xs font-semibold text-gray-600">Người gửi</TableHead>
+                  <TableHead className="text-xs font-semibold text-gray-600">Lớp học phần</TableHead>
+                  <TableHead className="text-xs font-semibold text-gray-600">Đổi phòng</TableHead>
+                  <TableHead className="text-xs font-semibold text-gray-600">Phạm vi</TableHead>
+                  <TableHead className="text-xs font-semibold text-gray-600">Ca</TableHead>
+                  <TableHead className="text-center text-xs font-semibold text-gray-600">Trạng thái</TableHead>
+                  <TableHead className="text-center text-xs font-semibold text-gray-600">Thao tác</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visibleRequests.map((request) => (
+                  <TableRow key={request.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <TableCell className="text-xs font-bold text-blue-700">#{request.id}</TableCell>
+                    <TableCell className="min-w-[150px]">
+                      <div className="text-xs font-semibold text-gray-900">
+                        {request.requesterName || request.lecturerName}
+                      </div>
+                      <div className="mt-0.5 text-[11px] text-gray-500">
+                        {request.requesterUsername}
+                      </div>
+                    </TableCell>
+                    <TableCell className="min-w-[180px]">
+                      <div className="text-xs font-semibold text-gray-900">{request.classCode}</div>
+                      <div className="mt-0.5 text-[11px] text-gray-500">{request.courseName}</div>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-xs font-semibold text-gray-800">
+                      {request.oldRoomCode} {"->"} {request.newRoomCode || request.requestedRoomCode}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-xs text-gray-700">
+                      {SCOPE_LABELS[normalize(request.changeScope)] || request.changeScope}
+                      <div className="mt-0.5 text-[11px] text-gray-500">{scopeText(request)}</div>
+                    </TableCell>
+                    <TableCell className="text-xs text-gray-700">
+                      {request.dayOfWeek} - Ca {request.slot}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <StatusBadge status={request.status} />
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => openDetails(request)}
+                        className="h-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        Xem
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </div>
 
-      {activeTab === "list" && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          {requests.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <p className="text-sm font-semibold text-gray-500">Chua co don xin doi phong</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-gray-50">
-                    <TableHead className="text-xs font-semibold text-gray-600">Ma yeu cau</TableHead>
-                    <TableHead className="text-xs font-semibold text-gray-600">Nguoi gui</TableHead>
-                    <TableHead className="text-xs font-semibold text-gray-600">Vai tro</TableHead>
-                    <TableHead className="text-xs font-semibold text-gray-600">Ma GV</TableHead>
-                     <TableHead className="text-xs font-semibold text-gray-600">Lop HP</TableHead>
-                    <TableHead className="text-xs font-semibold text-gray-600">Phạm vi</TableHead>
-                    <TableHead className="text-xs font-semibold text-gray-600">Phong hien tai</TableHead>
-                    <TableHead className="text-xs font-semibold text-gray-600">Phong muon doi</TableHead>
-                    <TableHead className="text-xs font-semibold text-gray-600">Thời gian</TableHead>
-                    <TableHead className="text-xs font-semibold text-gray-600 text-center">Trang thai</TableHead>
-                    <TableHead className="text-xs font-semibold text-gray-600 text-center">Thao tac</TableHead>
-                  </TableRow>
-                </TableHeader>
-
-                <TableBody>
-                  {requests.map((item) => {
-                    const cfg = getStatusConfig(item.status);
-                    const StatusIcon = cfg.icon;
-
-                    return (
-                      <TableRow key={item.id} className="hover:bg-gray-50 border-b border-gray-100">
-                        <TableCell className="font-mono text-xs font-bold text-blue-700">{item.id}</TableCell>
-                        <TableCell className="text-xs text-gray-700">{item.requester}</TableCell>
-                        <TableCell className="text-xs text-gray-700 uppercase">{item.requesterRole}</TableCell>
-                        <TableCell className="text-xs text-gray-700">{item.lecturerId}</TableCell>
-                        <TableCell className="text-xs font-semibold text-gray-900">{item.sectionCode}</TableCell>
-                        <TableCell className="text-center">
-                          {item.scope === 'session' && <Badge variant="outline" className="text-[10px] gap-1"><Clock className="w-3 h-3" /> Buổi</Badge>}
-                          {item.scope === 'weeks' && <Badge variant="outline" className="text-[10px] gap-1 border-blue-200 text-blue-700 bg-blue-50"><Calendar className="w-3 h-3" /> Tuần</Badge>}
-                          {item.scope === 'semester' && <Badge variant="outline" className="text-[10px] gap-1 border-purple-200 text-purple-700 bg-purple-50"><Layers className="w-3 h-3" /> Kì</Badge>}
-                        </TableCell>
-                        <TableCell className="text-xs text-gray-700">{item.currentRoom}</TableCell>
-                        <TableCell className="text-xs text-gray-700">{item.requestedRoom}</TableCell>
-                        <TableCell className="text-xs text-gray-700 whitespace-nowrap">
-                          {item.scope === 'session' ? `${item.date} (${item.slot})` : `Tuần ${item.fromWeek} - ${item.toWeek || 'Hết học kỳ'}`}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge className={`${cfg.className} gap-1 text-[11px]`}>
-                            <StatusIcon className="w-3 h-3" />
-                            {cfg.label}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <button
-                            onClick={() => showDetails(item)}
-                            className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium px-2 py-1 rounded hover:bg-blue-50 mx-auto"
-                          >
-                            <Eye className="w-3 h-3" />
-                            Xem
-                          </button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </div>
-      )}
-
-      {activeTab === "approve" && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          {pendingRequests.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <p className="text-sm font-semibold text-gray-500">Khong co don cho duyet</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-gray-50">
-                    <TableHead className="text-xs font-semibold text-gray-600">Ma yeu cau</TableHead>
-                    <TableHead className="text-xs font-semibold text-gray-600">Nguoi gui</TableHead>
-                    <TableHead className="text-xs font-semibold text-gray-600">Lop HP</TableHead>
-                    <TableHead className="text-xs font-semibold text-gray-600">Phạm vi</TableHead>
-                    <TableHead className="text-xs font-semibold text-gray-600">Phong hien tai</TableHead>
-                    <TableHead className="text-xs font-semibold text-gray-600">Phong muon doi</TableHead>
-                    <TableHead className="text-xs font-semibold text-gray-600">Thời gian</TableHead>
-                    <TableHead className="text-xs font-semibold text-gray-600 text-center">Thao tac</TableHead>
-                  </TableRow>
-                </TableHeader>
-
-                <TableBody>
-                  {pendingRequests.map((item) => (
-                    <TableRow key={item.id} className="hover:bg-gray-50 border-b border-gray-100">
-                      <TableCell className="font-mono text-xs font-bold text-blue-700">{item.id}</TableCell>
-                      <TableCell className="text-xs text-gray-700">{item.requester}</TableCell>
-                      <TableCell className="text-xs font-semibold text-gray-900">{item.sectionCode}</TableCell>
-                      <TableCell className="text-center">
-                        {item.scope === 'session' && <Badge variant="outline" className="text-[10px] gap-1"><Clock className="w-3 h-3" /> Buổi</Badge>}
-                        {item.scope === 'weeks' && <Badge variant="outline" className="text-[10px] gap-1 border-blue-200 text-blue-700 bg-blue-50"><Calendar className="w-3 h-3" /> Tuần</Badge>}
-                        {item.scope === 'semester' && <Badge variant="outline" className="text-[10px] gap-1 border-purple-200 text-purple-700 bg-purple-50"><Layers className="w-3 h-3" /> Kì</Badge>}
-                      </TableCell>
-                      <TableCell className="text-xs text-gray-700">{item.currentRoom}</TableCell>
-                      <TableCell className="text-xs text-gray-700">{item.requestedRoom}</TableCell>
-                      <TableCell className="text-xs text-gray-700 whitespace-nowrap">
-                        {item.scope === 'session' ? `${item.date} (${item.slot})` : `Tuần ${item.fromWeek} - ${item.toWeek || 'Hết học kỳ'}`}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="flex items-center gap-2 justify-center">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 px-3 text-blue-600 border-blue-200 hover:bg-blue-50 text-xs flex items-center gap-1"
-                            onClick={() => showDetails(item)}
-                          >
-                            <Search className="w-3 h-3" /> Kiểm tra
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={() => handleApprove(item.id)}
-                            className="h-7 px-3 bg-green-600 hover:bg-green-700 text-xs"
-                          >
-                            Duyệt
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={() => handleReject(item.id)}
-                            variant="destructive"
-                            className="h-7 px-3 text-xs"
-                          >
-                            Tu choi
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </div>
-      )}
-
-      {showDetailModal && selectedRequest && (
-        <Dialog
-          open={showDetailModal}
-          onOpenChange={(open) => {
-            if (!open) closeDetailModal();
-          }}
-        >
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>
-                Chi tiet don <span className="text-blue-600">{selectedRequest.id}</span>
-              </DialogTitle>
-              <button
-                onClick={closeDetailModal}
-                className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </DialogHeader>
-
-            <div className="space-y-3 py-4">
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase">Nguoi gui</p>
-                <p className="text-sm text-gray-800">{selectedRequest.requester} ({selectedRequest.lecturerId})</p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase">Lop hoc phan / Mon hoc</p>
-                <p className="text-sm text-gray-800">{selectedRequest.sectionCode} - {selectedRequest.courseName}</p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase">Doi phong</p>
-                <p className="text-sm text-gray-800">{selectedRequest.currentRoom} {"->"} {selectedRequest.requestedRoom}</p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase">Ngay / Ca hoc</p>
-                <p className="text-sm text-gray-800">{selectedRequest.date} - {selectedRequest.slot}</p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase">Ly do</p>
-                <p className="text-sm text-gray-800">{selectedRequest.reason}</p>
-              </div>
-
-              {selectedRequest.status === "rejected" && selectedRequest.rejectReason && (
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase">Ly do tu choi</p>
-                  <p className="text-sm text-red-600">{selectedRequest.rejectReason}</p>
+      <Dialog
+        open={isDetailOpen && Boolean(selectedRequest)}
+        onOpenChange={(open) => {
+          if (!open) closeDetails();
+        }}
+      >
+        <DialogContent className="max-w-2xl">
+          {selectedRequest && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Chi tiết yêu cầu #{selectedRequest.id}</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  <StatusBadge status={selectedRequest.status} />
+                  <Badge variant="outline">
+                    {SCOPE_LABELS[normalize(selectedRequest.changeScope)] || selectedRequest.changeScope}
+                  </Badge>
                 </div>
-              )}
 
-              {selectedRequest.status === "approved" && (
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase">Thong tin duyet</p>
-                  <p className="text-sm text-green-700">
-                    {selectedRequest.approver || "-"}
-                    {selectedRequest.processedAt ? ` - ${selectedRequest.processedAt}` : ""}
-                  </p>
+                {actionError && (
+                  <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                    <AlertCircle className="mt-0.5 h-4 w-4" />
+                    <span>{actionError}</span>
+                  </div>
+                )}
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Detail label="Người gửi" value={`${selectedRequest.requesterName || selectedRequest.lecturerName} (${selectedRequest.requesterUsername || "-"})`} />
+                  <Detail label="Lớp học phần" value={`${selectedRequest.classCode} - ${selectedRequest.courseName}`} />
+                  <Detail label="Đổi phòng" value={`${selectedRequest.oldRoomCode} -> ${selectedRequest.newRoomCode || selectedRequest.requestedRoomCode}`} />
+                  <Detail label="Thời gian" value={`${selectedRequest.dayOfWeek} - Ca ${selectedRequest.slot} - ${scopeText(selectedRequest)}`} />
                 </div>
-              )}
 
-              <div className="pt-4 mt-2 border-t border-dashed border-gray-200">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="w-full flex items-center gap-2 h-9 border-blue-200 text-blue-700 hover:bg-blue-50"
-                  onClick={handleCheckConflict}
-                  disabled={checkingConflict}
-                >
-                  {checkingConflict ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
-                  {checkingConflict ? "Đang rà soát phòng trên toàn bộ phạm vi..." : "Kiểm tra xung đột lịch"}
-                </Button>
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                  <p className="text-xs font-semibold uppercase text-gray-500">Lý do</p>
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-gray-800">{selectedRequest.reason}</p>
+                </div>
 
-                {conflictResult && (
-                  <div className={`mt-3 p-3 rounded-lg flex items-center gap-3 animate-in fade-in slide-in-from-top-2 ${
-                    conflictResult === 'valid' ? "bg-green-50 border border-green-100" : "bg-red-50 border border-red-100"
-                  }`}>
-                    {conflictResult === 'valid' ? (
-                      <ShieldCheck className="w-5 h-5 text-green-600" />
-                    ) : (
-                      <AlertTriangle className="w-5 h-5 text-red-600" />
+                {selectedRequest.reviewedAt && (
+                  <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-700">
+                    <p className="text-xs font-semibold uppercase text-gray-500">Thông tin xử lý</p>
+                    <p className="mt-2">
+                      {selectedRequest.reviewedByName || "Giáo vụ"} - {formatDateTime(selectedRequest.reviewedAt)}
+                    </p>
+                    {selectedRequest.rejectReason && (
+                      <p className="mt-1 text-red-700">Lý do từ chối: {selectedRequest.rejectReason}</p>
                     )}
-                    <div>
-                      <p className={`text-xs font-bold ${conflictResult === 'valid' ? "text-green-800" : "text-red-800"}`}>
-                        {conflictResult === 'valid' ? "PHÒNG TRỐNG TOÀN THỜI GIAN" : "CÓ XUNG ĐỘT LỊCH"}
-                      </p>
-                      <p className="text-[10px] text-gray-500 mt-0.5">
-                        {conflictResult === 'valid' 
-                          ? "Yêu cầu hợp lệ. Phòng này trống trong tất cả các mốc thời gian thuộc phạm vi áp dụng."
-                          : "Phát hiện xung đột lịch tại một hoặc một số tuần trong phạm vi đã chọn."}
-                      </p>
+                    {selectedRequest.reviewNote && !selectedRequest.rejectReason && (
+                      <p className="mt-1">Ghi chú: {selectedRequest.reviewNote}</p>
+                    )}
+                  </div>
+                )}
+
+                {isPending && isRejecting && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+                    <p className="text-sm font-semibold text-red-900">Lý do từ chối</p>
+                    <textarea
+                      value={rejectReason}
+                      onChange={(event) => {
+                        setRejectReason(event.target.value);
+                        if (rejectError) setRejectError("");
+                      }}
+                      rows={4}
+                      placeholder="Nhập lý do từ chối yêu cầu này..."
+                      className="mt-2 w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                    />
+                    {rejectError && (
+                      <p className="mt-1 text-xs text-red-700">{rejectError}</p>
+                    )}
+                    <div className="mt-3 flex justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        disabled={Boolean(actionLoading)}
+                        onClick={() => {
+                          setIsRejecting(false);
+                          setRejectError("");
+                        }}
+                      >
+                        Hủy
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        disabled={actionLoading === "reject"}
+                        onClick={handleReject}
+                      >
+                        {actionLoading === "reject" && <Loader2 className="h-4 w-4 animate-spin" />}
+                        Xác nhận từ chối
+                      </Button>
                     </div>
                   </div>
                 )}
               </div>
-            </div>
 
-            {activeTab === "approve" && selectedRequest.status === "pending" && (
-              <div className="flex gap-2 pt-3 border-t">
-                <Button
-                  onClick={() => handleApprove(selectedRequest.id)}
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-sm"
-                >
-                  Phe duyet
+              <DialogFooter className="border-t pt-4">
+                <Button variant="outline" onClick={closeDetails}>
+                  Đóng
                 </Button>
-                <Button
-                  onClick={() => handleReject(selectedRequest.id)}
-                  variant="destructive"
-                  className="flex-1 text-sm"
-                >
-                  Tu choi
-                </Button>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {showRejectModal && (
-        <Dialog
-          open={showRejectModal}
-          onOpenChange={(open) => {
-            if (!open) closeRejectModal();
-          }}
-        >
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Nhap ly do tu choi</DialogTitle>
-            </DialogHeader>
-
-            <div className="space-y-3 py-2">
-              <div className="space-y-2">
-                <Label htmlFor="rejectReason">
-                  Ly do tu choi <span className="text-red-500">*</span>
-                </Label>
-                <textarea
-                  id="rejectReason"
-                  value={rejectReason}
-                  onChange={(e) => {
-                    setRejectReason(e.target.value);
-                    if (rejectError) setRejectError("");
-                  }}
-                  placeholder="Nhap ly do tu choi yeu cau nay..."
-                  rows={4}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-red-500"
-                />
-                {rejectError && <p className="text-xs text-red-600">{rejectError}</p>}
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <Button variant="outline" className="flex-1" onClick={closeRejectModal}>
-                  Huy
-                </Button>
-                <Button variant="destructive" className="flex-1" onClick={confirmReject}>
-                  Xac nhan tu choi
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+                {isPending && (
+                  <>
+                    <Button
+                      variant="destructive"
+                      disabled={Boolean(actionLoading)}
+                      onClick={() => {
+                        setIsRejecting(true);
+                        setActionError("");
+                      }}
+                    >
+                      <XCircle className="h-4 w-4" />
+                      Từ chối
+                    </Button>
+                    <Button
+                      disabled={actionLoading === "approve"}
+                      onClick={handleApprove}
+                      className="bg-emerald-600 hover:bg-emerald-700"
+                    >
+                      {actionLoading === "approve" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <CheckCircle className="h-4 w-4" />
+                      )}
+                      Duyệt
+                    </Button>
+                  </>
+                )}
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
 
+const Detail = ({ label, value }) => (
+  <div className="rounded-lg border border-gray-200 bg-white p-3">
+    <p className="text-xs font-semibold uppercase text-gray-500">{label}</p>
+    <p className="mt-1 text-sm font-medium text-gray-900">{value || "-"}</p>
+  </div>
+);
+
 export { StaffRoomChangeListPage };
+export default StaffRoomChangeListPage;

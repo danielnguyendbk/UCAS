@@ -363,9 +363,10 @@ CREATE TABLE temporary_room_changes (
 CREATE TABLE room_borrow_requests (
     id                     INT AUTO_INCREMENT PRIMARY KEY,
     request_title          VARCHAR(200) NOT NULL,
-    request_type           ENUM('MAKEUP_CLASS','SEMINAR','WORKSHOP','MEETING','CLUB_ACTIVITY','OTHER') NOT NULL,
+    request_type           ENUM('MAKEUP_CLASS','SEMINAR','WORKSHOP','MEETING','CLUB_ACTIVITY','EVENT','OTHER') NOT NULL,
     booking_scope          ENUM('PERSONAL','CLUB') NOT NULL DEFAULT 'PERSONAL',
     semester_id            INT NOT NULL,
+    section_id             INT NULL,
     booking_date           DATE NOT NULL,
     time_slot_id           INT NOT NULL,
     requested_by           INT NOT NULL,
@@ -386,6 +387,8 @@ CREATE TABLE room_borrow_requests (
     CHECK (expected_attendees > 0),
     CONSTRAINT fk_room_borrow_requests_semester
         FOREIGN KEY (semester_id) REFERENCES semesters(id),
+    CONSTRAINT fk_room_borrow_requests_section
+        FOREIGN KEY (section_id) REFERENCES class_sections(id),
     CONSTRAINT fk_room_borrow_requests_time_slot
         FOREIGN KEY (time_slot_id) REFERENCES time_slots(id),
     CONSTRAINT fk_room_borrow_requests_requested_by
@@ -408,7 +411,7 @@ CREATE TABLE room_borrow_requests (
 -- -----------------------------
 CREATE TABLE classroom_issue_reports (
     id                 INT AUTO_INCREMENT PRIMARY KEY,
-    room_allocation_id INT          NOT NULL,
+    classroom_id       INT          NOT NULL,
     reporter_user_id   INT          NOT NULL,
     issue_title        VARCHAR(200) NOT NULL,
     issue_category     ENUM('PROJECTOR','AIR_CONDITIONER','LIGHT','FAN','DOOR','DESK_CHAIR','ELECTRICAL','NETWORK','CLEANLINESS','OTHER') NOT NULL DEFAULT 'OTHER',
@@ -422,8 +425,8 @@ CREATE TABLE classroom_issue_reports (
     created_at         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     is_deleted         BOOLEAN      NOT NULL DEFAULT FALSE,
-    CONSTRAINT fk_classroom_issue_reports_room_allocation
-        FOREIGN KEY (room_allocation_id) REFERENCES room_allocations(id),
+    CONSTRAINT fk_classroom_issue_reports_classroom
+        FOREIGN KEY (classroom_id) REFERENCES classrooms(id),
     CONSTRAINT fk_classroom_issue_reports_reporter
         FOREIGN KEY (reporter_user_id) REFERENCES users(id),
     CONSTRAINT fk_classroom_issue_reports_handled_by
@@ -470,7 +473,7 @@ CREATE INDEX idx_room_borrow_requests_room_date_slot ON room_borrow_requests(app
 CREATE INDEX idx_student_section_enrollments_student ON student_section_enrollments(student_id, status);
 CREATE INDEX idx_club_memberships_club_rep ON club_memberships(club_id, is_representative, is_active);
 CREATE INDEX idx_classroom_issue_reports_reporter_status ON classroom_issue_reports(reporter_user_id, status, created_at);
-CREATE INDEX idx_classroom_issue_reports_room_status ON classroom_issue_reports(room_allocation_id, status, created_at);
+CREATE INDEX idx_classroom_issue_reports_room_status ON classroom_issue_reports(classroom_id, status, created_at);
 CREATE INDEX idx_classroom_issue_reports_handler_status ON classroom_issue_reports(handled_by, status);
 
 -- -----------------------------
@@ -601,6 +604,8 @@ BEGIN
     DECLARE v_sem_end DATE;
     DECLARE v_requester_role VARCHAR(20);
     DECLARE v_student_id INT;
+    DECLARE v_section_semester_id INT;
+    DECLARE v_section_status VARCHAR(20);
     DECLARE v_mysql_dow INT;
     DECLARE v_day_of_week VARCHAR(3);
     DECLARE v_room_capacity INT;
@@ -626,33 +631,63 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Người yêu cầu không hợp lệ hoặc đã bị vô hiệu hóa.';
     END IF;
 
+    IF NEW.section_id IS NOT NULL THEN
+        SELECT semester_id, status
+          INTO v_section_semester_id, v_section_status
+          FROM class_sections
+         WHERE id = NEW.section_id;
+
+        IF v_section_semester_id IS NULL THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Lop hoc phan khong hop le.';
+        END IF;
+
+        IF v_section_semester_id <> NEW.semester_id THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Lop hoc phan khong thuoc hoc ky da chon.';
+        END IF;
+
+        IF v_section_status <> 'ACTIVE' THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Lop hoc phan khong o trang thai ACTIVE.';
+        END IF;
+    END IF;
+
     IF NEW.booking_scope = 'CLUB' THEN
         IF NEW.club_id IS NULL THEN
             SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Yêu cầu theo CLB bắt buộc phải có club_id.';
         END IF;
 
-        IF v_requester_role <> 'STUDENT' THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Chỉ sinh viên đại diện CLB mới được tạo yêu cầu theo CLB.';
-        END IF;
+        IF v_requester_role = 'STUDENT' THEN
+            SELECT s.id INTO v_student_id
+              FROM students s
+             WHERE s.user_id = NEW.requested_by
+               AND s.is_deleted = FALSE;
 
-        SELECT s.id INTO v_student_id
-          FROM students s
-         WHERE s.user_id = NEW.requested_by
-           AND s.is_deleted = FALSE;
+            IF v_student_id IS NULL THEN
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Khong tim thay ho so sinh vien cua nguoi yeu cau.';
+            END IF;
 
-        IF v_student_id IS NULL THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Không tìm thấy hồ sơ sinh viên của người yêu cầu.';
-        END IF;
-
-        IF NOT EXISTS (
-            SELECT 1
-              FROM club_memberships cm
-             WHERE cm.club_id = NEW.club_id
-               AND cm.student_id = v_student_id
-               AND cm.is_representative = TRUE
-               AND cm.is_active = TRUE
-        ) THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Người yêu cầu không phải là đại diện CLB hợp lệ.';
+            IF NOT EXISTS (
+                SELECT 1
+                  FROM club_memberships cm
+                 WHERE cm.club_id = NEW.club_id
+                   AND cm.student_id = v_student_id
+                   AND cm.is_representative = TRUE
+                   AND cm.is_active = TRUE
+            ) THEN
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Nguoi yeu cau khong phai dai dien CLB hop le.';
+            END IF;
+        ELSEIF v_requester_role = 'LECTURER' THEN
+            IF NOT EXISTS (
+                SELECT 1
+                  FROM clubs c
+                 WHERE c.id = NEW.club_id
+                   AND c.advisor_user_id = NEW.requested_by
+                   AND c.status = 'ACTIVE'
+                   AND c.is_deleted = FALSE
+            ) THEN
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Giang vien khong phai co van cua CLB hop le.';
+            END IF;
+        ELSE
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Vai tro nguoi yeu cau khong duoc tao yeu cau theo CLB.';
         END IF;
     ELSE
         IF NEW.club_id IS NOT NULL THEN
@@ -728,6 +763,8 @@ BEGIN
     DECLARE v_sem_end DATE;
     DECLARE v_requester_role VARCHAR(20);
     DECLARE v_student_id INT;
+    DECLARE v_section_semester_id INT;
+    DECLARE v_section_status VARCHAR(20);
     DECLARE v_mysql_dow INT;
     DECLARE v_day_of_week VARCHAR(3);
     DECLARE v_room_capacity INT;
@@ -753,33 +790,63 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Người yêu cầu không hợp lệ hoặc đã bị vô hiệu hóa.';
     END IF;
 
+    IF NEW.section_id IS NOT NULL THEN
+        SELECT semester_id, status
+          INTO v_section_semester_id, v_section_status
+          FROM class_sections
+         WHERE id = NEW.section_id;
+
+        IF v_section_semester_id IS NULL THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Lop hoc phan khong hop le.';
+        END IF;
+
+        IF v_section_semester_id <> NEW.semester_id THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Lop hoc phan khong thuoc hoc ky da chon.';
+        END IF;
+
+        IF v_section_status <> 'ACTIVE' THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Lop hoc phan khong o trang thai ACTIVE.';
+        END IF;
+    END IF;
+
     IF NEW.booking_scope = 'CLUB' THEN
         IF NEW.club_id IS NULL THEN
             SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Yêu cầu theo CLB bắt buộc phải có club_id.';
         END IF;
 
-        IF v_requester_role <> 'STUDENT' THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Chỉ sinh viên đại diện CLB mới được tạo yêu cầu theo CLB.';
-        END IF;
+        IF v_requester_role = 'STUDENT' THEN
+            SELECT s.id INTO v_student_id
+              FROM students s
+             WHERE s.user_id = NEW.requested_by
+               AND s.is_deleted = FALSE;
 
-        SELECT s.id INTO v_student_id
-          FROM students s
-         WHERE s.user_id = NEW.requested_by
-           AND s.is_deleted = FALSE;
+            IF v_student_id IS NULL THEN
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Khong tim thay ho so sinh vien cua nguoi yeu cau.';
+            END IF;
 
-        IF v_student_id IS NULL THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Không tìm thấy hồ sơ sinh viên của người yêu cầu.';
-        END IF;
-
-        IF NOT EXISTS (
-            SELECT 1
-              FROM club_memberships cm
-             WHERE cm.club_id = NEW.club_id
-               AND cm.student_id = v_student_id
-               AND cm.is_representative = TRUE
-               AND cm.is_active = TRUE
-        ) THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Người yêu cầu không phải là đại diện CLB hợp lệ.';
+            IF NOT EXISTS (
+                SELECT 1
+                  FROM club_memberships cm
+                 WHERE cm.club_id = NEW.club_id
+                   AND cm.student_id = v_student_id
+                   AND cm.is_representative = TRUE
+                   AND cm.is_active = TRUE
+            ) THEN
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Nguoi yeu cau khong phai dai dien CLB hop le.';
+            END IF;
+        ELSEIF v_requester_role = 'LECTURER' THEN
+            IF NOT EXISTS (
+                SELECT 1
+                  FROM clubs c
+                 WHERE c.id = NEW.club_id
+                   AND c.advisor_user_id = NEW.requested_by
+                   AND c.status = 'ACTIVE'
+                   AND c.is_deleted = FALSE
+            ) THEN
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Giang vien khong phai co van cua CLB hop le.';
+            END IF;
+        ELSE
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Vai tro nguoi yeu cau khong duoc tao yeu cau theo CLB.';
         END IF;
     ELSE
         IF NEW.club_id IS NOT NULL THEN
@@ -854,56 +921,7 @@ BEFORE INSERT ON classroom_issue_reports
 FOR EACH ROW
 BEGIN
     DECLARE v_reporter_role VARCHAR(20);
-    DECLARE v_schedule_lecturer_user_id INT;
-    DECLARE v_room_allocation_active BOOLEAN;
-
-    SELECT role
-      INTO v_reporter_role
-      FROM users
-     WHERE id = NEW.reporter_user_id
-       AND is_active = TRUE
-       AND is_deleted = FALSE;
-
-    IF v_reporter_role IS NULL THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Người báo cáo không hợp lệ hoặc đã bị vô hiệu hóa.';
-    END IF;
-
-    IF v_reporter_role <> 'LECTURER' THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Chỉ giảng viên mới được tạo báo cáo sự cố phòng học.';
-    END IF;
-
-    SELECT l.user_id, ra.is_active
-      INTO v_schedule_lecturer_user_id, v_room_allocation_active
-      FROM room_allocations ra
-      JOIN section_schedules ss ON ss.id = ra.schedule_id
-      JOIN class_sections cs ON cs.id = ss.section_id
-      JOIN lecturers l ON l.id = cs.lecturer_id
-     WHERE ra.id = NEW.room_allocation_id;
-
-    IF v_schedule_lecturer_user_id IS NULL THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Không tìm thấy lịch phân phòng tương ứng để tạo báo cáo sự cố.';
-    END IF;
-
-    IF v_room_allocation_active = FALSE THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Không thể báo cáo trên phân phòng đã ngừng hiệu lực.';
-    END IF;
-
-    IF v_schedule_lecturer_user_id <> NEW.reporter_user_id THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Giảng viên chỉ được báo cáo sự cố cho phòng học thuộc lịch giảng dạy của mình.';
-    END IF;
-
-    IF NEW.status IN ('IN_PROGRESS','RESOLVED','REJECTED') AND NEW.handled_by IS NULL THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Báo cáo đã xử lý phải có người tiếp nhận/xử lý.';
-    END IF;
-END$$
-
-CREATE TRIGGER trg_classroom_issue_reports_before_update
-BEFORE UPDATE ON classroom_issue_reports
-FOR EACH ROW
-BEGIN
-    DECLARE v_reporter_role VARCHAR(20);
-    DECLARE v_schedule_lecturer_user_id INT;
-    DECLARE v_room_allocation_active BOOLEAN;
+    DECLARE v_classroom_active BOOLEAN;
     DECLARE v_handler_role VARCHAR(20);
 
     SELECT role
@@ -913,33 +931,80 @@ BEGIN
        AND is_active = TRUE
        AND is_deleted = FALSE;
 
-    IF v_reporter_role IS NULL OR v_reporter_role <> 'LECTURER' THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Người báo cáo phải là giảng viên hợp lệ.';
+    IF v_reporter_role IS NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Nguoi bao cao khong hop le hoac da bi vo hieu hoa.';
     END IF;
 
-    SELECT l.user_id, ra.is_active
-      INTO v_schedule_lecturer_user_id, v_room_allocation_active
-      FROM room_allocations ra
-      JOIN section_schedules ss ON ss.id = ra.schedule_id
-      JOIN class_sections cs ON cs.id = ss.section_id
-      JOIN lecturers l ON l.id = cs.lecturer_id
-     WHERE ra.id = NEW.room_allocation_id;
-
-    IF v_schedule_lecturer_user_id IS NULL THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Không tìm thấy lịch phân phòng tương ứng để cập nhật báo cáo sự cố.';
+    IF v_reporter_role NOT IN ('LECTURER','STUDENT','FACILITY') THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Chi giang vien, sinh vien hoac nhan vien thiet bi moi duoc tao yeu cau sua chua.';
     END IF;
 
-    IF v_room_allocation_active = FALSE THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Không thể cập nhật báo cáo trên phân phòng đã ngừng hiệu lực.';
+    SELECT is_active
+      INTO v_classroom_active
+      FROM classrooms
+     WHERE id = NEW.classroom_id;
+
+    IF v_classroom_active IS NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Khong tim thay phong hoc tuong ung de tao yeu cau sua chua.';
     END IF;
 
-    IF v_schedule_lecturer_user_id <> NEW.reporter_user_id THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Giảng viên chỉ được gắn với báo cáo thuộc lịch giảng dạy của mình.';
+    IF v_classroom_active = FALSE THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Khong the bao cao phong hoc da ngung hoat dong.';
+    END IF;
+
+    IF NEW.status IN ('IN_PROGRESS','RESOLVED','REJECTED') AND NEW.handled_by IS NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Yeu cau da xu ly phai co nguoi tiep nhan/xu ly.';
+    END IF;
+
+    IF NEW.handled_by IS NOT NULL THEN
+        SELECT role
+          INTO v_handler_role
+          FROM users
+         WHERE id = NEW.handled_by
+           AND is_active = TRUE
+           AND is_deleted = FALSE;
+
+        IF v_handler_role IS NULL OR v_handler_role NOT IN ('ADMIN','STAFF','FACILITY') THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Chi ADMIN / STAFF / FACILITY moi duoc xu ly yeu cau sua chua.';
+        END IF;
+    END IF;
+END$$
+
+CREATE TRIGGER trg_classroom_issue_reports_before_update
+BEFORE UPDATE ON classroom_issue_reports
+FOR EACH ROW
+BEGIN
+    DECLARE v_reporter_role VARCHAR(20);
+    DECLARE v_classroom_active BOOLEAN;
+    DECLARE v_handler_role VARCHAR(20);
+
+    SELECT role
+      INTO v_reporter_role
+      FROM users
+     WHERE id = NEW.reporter_user_id
+       AND is_active = TRUE
+       AND is_deleted = FALSE;
+
+    IF v_reporter_role IS NULL OR v_reporter_role NOT IN ('LECTURER','STUDENT','FACILITY') THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Nguoi bao cao phai la giang vien, sinh vien hoac nhan vien thiet bi hop le.';
+    END IF;
+
+    SELECT is_active
+      INTO v_classroom_active
+      FROM classrooms
+     WHERE id = NEW.classroom_id;
+
+    IF v_classroom_active IS NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Khong tim thay phong hoc tuong ung de cap nhat yeu cau sua chua.';
+    END IF;
+
+    IF v_classroom_active = FALSE THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Khong the cap nhat yeu cau tren phong hoc da ngung hoat dong.';
     END IF;
 
     IF NEW.status IN ('IN_PROGRESS','RESOLVED','REJECTED') THEN
         IF NEW.handled_by IS NULL THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Khi đã tiếp nhận/xử lý báo cáo, bắt buộc phải có handled_by.';
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Khi da tiep nhan/xu ly yeu cau, bat buoc phai co handled_by.';
         END IF;
 
         SELECT role
@@ -950,7 +1015,7 @@ BEGIN
            AND is_deleted = FALSE;
 
         IF v_handler_role IS NULL OR v_handler_role NOT IN ('ADMIN','STAFF','FACILITY') THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Chỉ ADMIN / STAFF / FACILITY mới được xử lý báo cáo sự cố.';
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Chi ADMIN / STAFF / FACILITY moi duoc xu ly yeu cau sua chua.';
         END IF;
 
         IF NEW.handled_at IS NULL THEN
@@ -1111,26 +1176,20 @@ SELECT
     b.code                    AS building_code,
     cr.room_number,
     cr.room_name,
-    sem.semester_name,
-    c.course_code,
-    c.course_name,
-    cs.section_code,
-    ss.day_of_week,
-    ts.slot_number,
-    ts.start_time,
-    ts.end_time,
+    NULL                      AS semester_name,
+    NULL                      AS course_code,
+    NULL                      AS course_name,
+    NULL                      AS section_code,
+    NULL                      AS day_of_week,
+    NULL                      AS slot_number,
+    NULL                      AS start_time,
+    NULL                      AS end_time,
     hu.full_name              AS handled_by_name
 FROM classroom_issue_reports cir
 JOIN users ru                 ON ru.id = cir.reporter_user_id
-JOIN room_allocations ra      ON ra.id = cir.room_allocation_id
-JOIN section_schedules ss     ON ss.id = ra.schedule_id
-JOIN class_sections cs        ON cs.id = ss.section_id
-JOIN semesters sem            ON sem.id = cs.semester_id
-JOIN courses c                ON c.id = cs.course_id
-JOIN lecturers l              ON l.id = cs.lecturer_id
-JOIN classrooms cr            ON cr.id = ra.classroom_id
+LEFT JOIN lecturers l         ON l.user_id = ru.id AND l.is_deleted = FALSE
+JOIN classrooms cr            ON cr.id = cir.classroom_id
 JOIN buildings b              ON b.id = cr.building_id
-JOIN time_slots ts            ON ts.id = ss.time_slot_id
 LEFT JOIN users hu            ON hu.id = cir.handled_by
 WHERE cir.is_deleted = FALSE;
 
@@ -1160,20 +1219,20 @@ INSERT INTO departments (id, faculty_id, name, code) VALUES
 (5, 3, 'Bo mon Tieng Anh', 'TA');
 
 INSERT INTO users (id, username, email, password_hash, full_name, role, is_active) VALUES
-(1,  'admin01',      'admin01@qlphonghoc.edu.vn',      '$2y$10$demo_admin01',      'Nguyen Van Admin',       'ADMIN',    TRUE),
-(2,  'staff01',      'staff01@qlphonghoc.edu.vn',      '$2y$10$demo_staff01',      'Tran Thi Dieu Phoi',     'STAFF',    TRUE),
-(3,  'facility01',   'facility01@qlphonghoc.edu.vn',   '$2y$10$demo_facility01',   'Le Van Co So',           'FACILITY', TRUE),
-(4,  'facility02',   'facility02@qlphonghoc.edu.vn',   '$2y$10$demo_facility02',   'Pham Thi Lao Cong',      'FACILITY', TRUE),
-(5,  'lecturer01',   'lecturer01@qlphonghoc.edu.vn',   '$2y$10$demo_lecturer01',   'TS Nguyen Minh Quan',    'LECTURER', TRUE),
-(6,  'lecturer02',   'lecturer02@qlphonghoc.edu.vn',   '$2y$10$demo_lecturer02',   'ThS Tran Thu Ha',        'LECTURER', TRUE),
-(7,  'lecturer03',   'lecturer03@qlphonghoc.edu.vn',   '$2y$10$demo_lecturer03',   'TS Le Hoang Nam',        'LECTURER', TRUE),
-(8,  'lecturer04',   'lecturer04@qlphonghoc.edu.vn',   '$2y$10$demo_lecturer04',   'ThS Pham Ngoc Anh',      'LECTURER', TRUE),
-(9,  'student01',    'student01@qlphonghoc.edu.vn',    '$2y$10$demo_student01',    'Vo Minh Khang',          'STUDENT',  TRUE),
-(10, 'student02',    'student02@qlphonghoc.edu.vn',    '$2y$10$demo_student02',    'Dang Hoai An',           'STUDENT',  TRUE),
-(11, 'student03',    'student03@qlphonghoc.edu.vn',    '$2y$10$demo_student03',    'Bui Thanh Ngan',         'STUDENT',  TRUE),
-(12, 'student04',    'student04@qlphonghoc.edu.vn',    '$2y$10$demo_student04',    'Hoang Quoc Viet',        'STUDENT',  TRUE),
-(13, 'student05',    'student05@qlphonghoc.edu.vn',    '$2y$10$demo_student05',    'Nguyen Phuong Linh',     'STUDENT',  TRUE),
-(14, 'student06',    'student06@qlphonghoc.edu.vn',    '$2y$10$demo_student06',    'Tran Duc Huy',           'STUDENT',  TRUE);
+(1,  'admin01',      'admin01@qlphonghoc.edu.vn',      '$2a$10$EFGftkG1vroeArjEy/7tLeDjp6o5qgfQno0WYzlmzM9T/2Z5eUOdm',      'Nguyen Van Admin',       'ADMIN',    TRUE),
+(2,  'staff01',      'staff01@qlphonghoc.edu.vn',      '$2a$10$EFGftkG1vroeArjEy/7tLeDjp6o5qgfQno0WYzlmzM9T/2Z5eUOdm',      'Tran Thi Dieu Phoi',     'STAFF',    TRUE),
+(3,  'facility01',   'facility01@qlphonghoc.edu.vn',   '$2a$10$EFGftkG1vroeArjEy/7tLeDjp6o5qgfQno0WYzlmzM9T/2Z5eUOdm',   'Le Van Co So',           'FACILITY', TRUE),
+(4,  'facility02',   'facility02@qlphonghoc.edu.vn',   '$2a$10$EFGftkG1vroeArjEy/7tLeDjp6o5qgfQno0WYzlmzM9T/2Z5eUOdm',   'Pham Thi Lao Cong',      'FACILITY', TRUE),
+(5,  'lecturer01',   'lecturer01@qlphonghoc.edu.vn',   '$2a$10$EFGftkG1vroeArjEy/7tLeDjp6o5qgfQno0WYzlmzM9T/2Z5eUOdm',   'TS Nguyen Minh Quan',    'LECTURER', TRUE),
+(6,  'lecturer02',   'lecturer02@qlphonghoc.edu.vn',   '$2a$10$EFGftkG1vroeArjEy/7tLeDjp6o5qgfQno0WYzlmzM9T/2Z5eUOdm',   'ThS Tran Thu Ha',        'LECTURER', TRUE),
+(7,  'lecturer03',   'lecturer03@qlphonghoc.edu.vn',   '$2a$10$EFGftkG1vroeArjEy/7tLeDjp6o5qgfQno0WYzlmzM9T/2Z5eUOdm',   'TS Le Hoang Nam',        'LECTURER', TRUE),
+(8,  'lecturer04',   'lecturer04@qlphonghoc.edu.vn',   '$2a$10$EFGftkG1vroeArjEy/7tLeDjp6o5qgfQno0WYzlmzM9T/2Z5eUOdm',   'ThS Pham Ngoc Anh',      'LECTURER', TRUE),
+(9,  'student01',    'student01@qlphonghoc.edu.vn',    '$2a$10$EFGftkG1vroeArjEy/7tLeDjp6o5qgfQno0WYzlmzM9T/2Z5eUOdm',    'Vo Minh Khang',          'STUDENT',  TRUE),
+(10, 'student02',    'student02@qlphonghoc.edu.vn',    '$2a$10$EFGftkG1vroeArjEy/7tLeDjp6o5qgfQno0WYzlmzM9T/2Z5eUOdm',    'Dang Hoai An',           'STUDENT',  TRUE),
+(11, 'student03',    'student03@qlphonghoc.edu.vn',    '$2a$10$EFGftkG1vroeArjEy/7tLeDjp6o5qgfQno0WYzlmzM9T/2Z5eUOdm',    'Bui Thanh Ngan',         'STUDENT',  TRUE),
+(12, 'student04',    'student04@qlphonghoc.edu.vn',    '$2a$10$EFGftkG1vroeArjEy/7tLeDjp6o5qgfQno0WYzlmzM9T/2Z5eUOdm',    'Hoang Quoc Viet',        'STUDENT',  TRUE),
+(13, 'student05',    'student05@qlphonghoc.edu.vn',    '$2a$10$EFGftkG1vroeArjEy/7tLeDjp6o5qgfQno0WYzlmzM9T/2Z5eUOdm',    'Nguyen Phuong Linh',     'STUDENT',  TRUE),
+(14, 'student06',    'student06@qlphonghoc.edu.vn',    '$2a$10$EFGftkG1vroeArjEy/7tLeDjp6o5qgfQno0WYzlmzM9T/2Z5eUOdm',    'Tran Duc Huy',           'STUDENT',  TRUE);
 
 INSERT INTO buildings (id, name, code) VALUES
 (1, 'Toa A - Giang duong chinh', 'A'),
@@ -1279,12 +1338,12 @@ INSERT INTO room_borrow_requests (
 (4, 'Muon phong tu hoc nhom', 'MEETING', 'PERSONAL', 2, '2026-04-16', 2, 10, NULL, 12, 1, 4, 'SEMINAR', 'Nhom sinh vien on tap truoc kiem tra', 'REJECTED', NULL, 2, '2026-04-05 10:15:00', 'Khong phu hop quy dinh muon phong theo nhom nho', 'Yeu cau chua co giang vien phu trach');
 
 INSERT INTO classroom_issue_reports (
-    id, room_allocation_id, reporter_user_id, issue_title, issue_category,
+    id, classroom_id, reporter_user_id, issue_title, issue_category,
     severity_level, description, image_url, status, handled_by, handled_at, resolution_note
 ) VALUES
 (1, 1, 5, 'May chieu phong A101 bi mo hinh', 'PROJECTOR', 'MEDIUM', 'May chieu hien thi khong ro trong buoi hoc sang thu Hai.', NULL, 'PENDING', NULL, NULL, NULL),
-(2, 2, 6, 'May tinh B101 so 12 khong khoi dong', 'ELECTRICAL', 'HIGH', 'Sinh vien khong the su dung may so 12 trong gio thuc hanh.', NULL, 'IN_PROGRESS', 3, '2026-03-12 15:20:00', 'Nhan vien co so vat chat dang kiem tra nguon dien'),
-(3, 3, 8, 'Mang phong B102 chap chon', 'NETWORK', 'MEDIUM', 'Ket noi mang bi mat trong khoang 10 phut dau tiet hoc.', NULL, 'RESOLVED', 4, '2026-03-20 16:45:00', 'Da khoi dong lai switch va kiem tra ket noi on dinh');
+(2, 5, 6, 'May tinh B101 so 12 khong khoi dong', 'ELECTRICAL', 'HIGH', 'Sinh vien khong the su dung may so 12 trong gio thuc hanh.', NULL, 'IN_PROGRESS', 3, '2026-03-12 15:20:00', 'Nhan vien co so vat chat dang kiem tra nguon dien'),
+(3, 6, 8, 'Mang phong B102 chap chon', 'NETWORK', 'MEDIUM', 'Ket noi mang bi mat trong khoang 10 phut dau tiet hoc.', NULL, 'RESOLVED', 4, '2026-03-20 16:45:00', 'Da khoi dong lai switch va kiem tra ket noi on dinh');
 
 INSERT INTO audit_logs (id, user_id, action, table_name, record_id, old_values, new_values, ip_address) VALUES
 (1, 2, 'INSERT',  'room_allocations',      1, NULL, JSON_OBJECT('schedule_id', 1, 'classroom_id', 1), '127.0.0.1'),
