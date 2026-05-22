@@ -1,19 +1,17 @@
 import { useState, useEffect } from "react";
-import { useAuth } from "@/features/auth/hooks/useAuth";
-import { useNavigate } from "react-router";
-import { APP_ROUTES } from "@/constants/routes";
 import {
   Search,
   Plus,
   Download,
   Filter,
+  Check,
   CheckCircle,
   Clock,
   XCircle,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Edit,
-  MapPin,
   Trash2,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
@@ -67,10 +65,35 @@ const formatStudentCapacity = (section) => {
   return `${enrolledCount}/${maxCapacity}`;
 };
 
-export const StaffSectionsPage = () => {
-  const { user } = useAuth();
-  const navigate = useNavigate();
+const getClassStudentCount = (classItem) =>
+  Number(classItem?.studentCount ?? classItem?.STUDENT_COUNT ?? 0);
 
+const getTimeSlotId = (slot) => Number(slot?.slotId ?? slot?.id ?? 0);
+
+const getTimeSlotNo = (slot) =>
+  Number(slot?.slotNo ?? slot?.slot_no ?? slot?.slotNumber ?? 0);
+
+const getTimeSlotLabel = (slot) => {
+  const slotNo = getTimeSlotNo(slot);
+  const startTime = String(slot?.startTime ?? "").slice(0, 5);
+  const endTime = String(slot?.endTime ?? "").slice(0, 5);
+  const timeLabel = startTime && endTime ? ` (${startTime}-${endTime})` : "";
+  return `Tiết ${slotNo}${timeLabel}`;
+};
+
+const getClassroomLabel = (room) => {
+  const buildingCode = room?.buildingCode ?? "";
+  const roomNumber = room?.roomNumber ?? "";
+  const roomName = room?.roomName ?? "";
+
+  if (buildingCode && roomNumber) {
+    return `${buildingCode}-${roomNumber}`;
+  }
+
+  return roomName || roomNumber || `Phòng ${room?.id ?? ""}`;
+};
+
+export const StaffSectionsPage = () => {
   // --- STATE QUẢN LÝ DỮ LIỆU & BẢNG ---
   const [sections, setSections] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -82,6 +105,9 @@ export const StaffSectionsPage = () => {
   const [semestersList, setSemestersList] = useState([]);
   const [coursesList, setCoursesList] = useState([]);
   const [lecturersList, setLecturersList] = useState([]);
+  const [classesList, setClassesList] = useState([]);
+  const [classroomsList, setClassroomsList] = useState([]);
+  const [timeSlotsList, setTimeSlotsList] = useState([]);
 
   // --- BỘ LỌC BẢNG ---
   const [search, setSearch] = useState("");
@@ -96,6 +122,7 @@ export const StaffSectionsPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState("add"); // "add" hoặc "edit"
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isClassDropdownOpen, setIsClassDropdownOpen] = useState(false);
 
   // Dữ liệu Form
   const [formData, setFormData] = useState({
@@ -104,10 +131,13 @@ export const StaffSectionsPage = () => {
     departmentCode: "all", // Dùng để lọc UI trong modal
     courseId: "",
     lecturerId: "",
+    classIds: [],
     sectionCode: "",
     maxCapacity: "",
+    classroomId: "",
     day: "MON",
-    slot: "1",
+    slotStartId: "",
+    slotEndId: "",
   });
 
   // Khởi tạo
@@ -119,12 +149,24 @@ export const StaffSectionsPage = () => {
   // Gọi API lấy danh mục
   const fetchCategories = async () => {
     try {
-      const [facRes, depRes, semRes, couRes, lecRes] = await Promise.all([
+      const [
+        facRes,
+        depRes,
+        semRes,
+        couRes,
+        lecRes,
+        classRes,
+        classroomRes,
+        slotRes,
+      ] = await Promise.all([
         httpClient.get("/api/categories/faculties"),
         httpClient.get("/api/categories/departments"),
         httpClient.get("/api/categories/semesters"),
         httpClient.get("/api/categories/courses"),
         httpClient.get("/api/categories/lecturers"),
+        httpClient.get("/api/categories/classes"),
+        httpClient.get("/api/categories/classrooms"),
+        httpClient.get("/api/categories/time-slots"),
       ]);
 
       setFacultiesList(facRes.data.data || []);
@@ -137,6 +179,9 @@ export const StaffSectionsPage = () => {
       }
       setCoursesList(couRes.data.data || []);
       setLecturersList(lecRes.data.data || []);
+      setClassesList(classRes.data.data || []);
+      setClassroomsList(classroomRes.data.data || []);
+      setTimeSlotsList(slotRes.data.data || []);
     } catch (error) {
       console.error("Lỗi lấy danh mục:", error);
     }
@@ -146,7 +191,7 @@ export const StaffSectionsPage = () => {
   const fetchSections = async () => {
     setIsLoading(true);
     try {
-      const response = await httpClient.get("/api/staff/class-sections");
+      const response = await httpClient.get("/api/admin/class-sections");
       const rawData = Array.isArray(response.data)
         ? response.data
         : response.data.data || [];
@@ -168,6 +213,9 @@ export const StaffSectionsPage = () => {
           day: item.day,
           slot: item.schedule,
           room: item.room,
+          classIds: item.classIds || [],
+          classCodes: item.classCodes || "",
+          classNames: item.classNames || "",
           status: mappedStatus,
           allocationStatus: item.allocationStatus,
 
@@ -177,7 +225,11 @@ export const StaffSectionsPage = () => {
           lecturerId: item.lecturerId,
           maxCapacity: item.maxCapacity,
           dayCode: item.dayCode,
-          slotNumber: item.slot,
+          classroomId: item.classroomId,
+          slotStartId: item.slotStartId,
+          slotEndId: item.slotEndId,
+          slotStart: item.slotStart,
+          slotEnd: item.slotEnd,
         };
       });
 
@@ -192,6 +244,10 @@ export const StaffSectionsPage = () => {
 
   // --- MỞ MODAL THÊM / SỬA ---
   const handleOpenModal = (mode) => {
+    const sortedSlots = [...timeSlotsList].sort(
+      (a, b) => getTimeSlotNo(a) - getTimeSlotNo(b),
+    );
+    const firstSlotId = sortedSlots[0] ? getTimeSlotId(sortedSlots[0]).toString() : "";
     if (mode === "add") {
       setFormData({
         semesterId: getActiveSemesterId(semestersList),
@@ -199,10 +255,13 @@ export const StaffSectionsPage = () => {
         departmentCode: "all",
         courseId: "",
         lecturerId: "",
+        classIds: [],
         sectionCode: "",
         maxCapacity: "",
+        classroomId: "",
         day: "MON",
-        slot: "1",
+        slotStartId: firstSlotId,
+        slotEndId: firstSlotId,
       });
     } else if (mode === "edit" && selectedSection) {
       // Tách chữ 'CS101.L01' ra để lấy mã '01'
@@ -216,12 +275,16 @@ export const StaffSectionsPage = () => {
         departmentCode: selectedSection.department || "all",
         courseId: selectedSection.courseId?.toString() || "",
         lecturerId: selectedSection.lecturerId?.toString() || "",
+        classIds: selectedSection.classIds || [],
         sectionCode: rawSectionCode,
         maxCapacity: selectedSection.maxCapacity?.toString() || "",
+        classroomId: selectedSection.classroomId?.toString() || "",
         day: selectedSection.dayCode || "MON",
-        slot: selectedSection.slotNumber?.toString() || "1",
+        slotStartId: selectedSection.slotStartId?.toString() || firstSlotId,
+        slotEndId: selectedSection.slotEndId?.toString() || firstSlotId,
       });
     }
+    setIsClassDropdownOpen(false);
     setModalMode(mode);
     setIsModalOpen(true);
   };
@@ -232,24 +295,68 @@ export const StaffSectionsPage = () => {
     setIsSubmitting(true);
     try {
       // Đóng gói JSON theo đúng chuẩn Backend
+      const selectedClassIds = formData.classIds.map(Number).filter(Boolean);
+      const selectedClasses = classesList.filter((classItem) =>
+        selectedClassIds.includes(Number(classItem.id)),
+      );
+      const selectedStudentTotal = selectedClasses.reduce(
+        (total, classItem) => total + getClassStudentCount(classItem),
+        0,
+      );
+      const maxCapacity = Number(formData.maxCapacity);
+      const classroomId = Number(formData.classroomId);
+      const slotStartId = Number(formData.slotStartId);
+      const slotEndId = Number(formData.slotEndId);
+      const slotStart = timeSlotsList.find(
+        (slot) => getTimeSlotId(slot) === slotStartId,
+      );
+      const slotEnd = timeSlotsList.find(
+        (slot) => getTimeSlotId(slot) === slotEndId,
+      );
+      const slotStartNo = getTimeSlotNo(slotStart);
+      const slotEndNo = getTimeSlotNo(slotEnd);
+
+      if (selectedClassIds.length < 1 || selectedClassIds.length > 2) {
+        alert("Vui lòng chọn từ 1 đến tối đa 2 classes.");
+        return;
+      }
+
+      if (maxCapacity < selectedStudentTotal) {
+        alert("Sức chứa không được nhỏ hơn tổng số sinh viên của các classes đã chọn.");
+        return;
+      }
+
+      if (!classroomId) {
+        alert("Vui lòng chọn phòng học.");
+        return;
+      }
+
+      if (!slotStartId || !slotEndId || slotEndNo < slotStartNo) {
+        alert("Tiết kết thúc phải lớn hơn hoặc bằng tiết bắt đầu.");
+        return;
+      }
+
       const payload = {
         semesterId: Number(formData.semesterId),
         courseId: Number(formData.courseId),
         lecturerId: Number(formData.lecturerId),
         sectionCode: formData.sectionCode,
-        enrolledCount: modalMode === "edit" ? selectedSection.students : 0,
-        maxCapacity: Number(formData.maxCapacity),
+        classIds: selectedClassIds,
+        enrolledCount: selectedStudentTotal,
+        maxCapacity,
         status: "ACTIVE",
+        classroomId,
         day: formData.day,
-        slot: Number(formData.slot),
+        slotStartId,
+        slotEndId,
       };
 
       if (modalMode === "add") {
-        await httpClient.post("/api/staff/class-sections", payload);
+        await httpClient.post("/api/admin/class-sections", payload);
         alert("Đã thêm lớp học phần mới thành công!");
       } else {
         await httpClient.put(
-          `/api/staff/class-sections/${selectedSection.dbId}`,
+          `/api/admin/class-sections/${selectedSection.dbId}`,
           payload,
         );
         alert("Đã cập nhật lớp học phần thành công!");
@@ -279,7 +386,7 @@ export const StaffSectionsPage = () => {
     }
     try {
       await httpClient.delete(
-        `/api/staff/class-sections/${selectedSection.dbId}`,
+        `/api/admin/class-sections/${selectedSection.dbId}`,
       );
       alert("Đã hủy lớp học phần thành công!");
       setIsModalOpen(false);
@@ -290,23 +397,6 @@ export const StaffSectionsPage = () => {
   };
 
   // --- BỘ LỌC CHO BẢNG ---
-  const handleAssignSection = () => {
-    if (!selectedSection) return;
-
-    navigate(APP_ROUTES.staffAllocation, {
-      state: {
-        openRoomSearch: true,
-        semesterId: selectedSection.semesterId?.toString(),
-        sectionId: selectedSection.dbId,
-        sectionCode: selectedSection.id,
-        courseName: selectedSection.name,
-        dayCode: selectedSection.dayCode,
-        slotNumber: selectedSection.slotNumber,
-        maxCapacity: selectedSection.maxCapacity,
-      },
-    });
-  };
-
   const filtered = sections.filter((s) => {
     const matchSearch =
       s.id.toLowerCase().includes(search.toLowerCase()) ||
@@ -340,6 +430,49 @@ export const StaffSectionsPage = () => {
 
   // Kiểm tra trạng thái học kỳ (Dựa theo enum COMPLETED trong file SQL của bạn)
   const isSemesterClosed = currentSemester?.status === "COMPLETED";
+  const selectedClassIds = formData.classIds.map(Number).filter(Boolean);
+  const selectedClasses = classesList.filter((classItem) =>
+    selectedClassIds.includes(Number(classItem.id)),
+  );
+  const selectedStudentTotal = selectedClasses.reduce(
+    (total, classItem) => total + getClassStudentCount(classItem),
+    0,
+  );
+  const filteredClassesForModal = classesList.filter(
+    (classItem) =>
+      formData.facultyCode === "all" ||
+      classItem.facultyCode === formData.facultyCode,
+  );
+  const toggleClassSelection = (classId) => {
+    setFormData((prev) => {
+      const nextClassId = Number(classId);
+      const exists = prev.classIds.includes(nextClassId);
+      if (exists) {
+        return {
+          ...prev,
+          classIds: prev.classIds.filter((id) => id !== nextClassId),
+        };
+      }
+      if (prev.classIds.length >= 2) {
+        return prev;
+      }
+      return {
+        ...prev,
+        classIds: [...prev.classIds, nextClassId],
+      };
+    });
+  };
+  const selectedClassLabel =
+    selectedClasses.length > 0
+      ? selectedClasses.map((classItem) => classItem.classCode).join(", ")
+      : "Chọn 1-2 classes";
+  const sortedTimeSlots = [...timeSlotsList].sort(
+    (a, b) => getTimeSlotNo(a) - getTimeSlotNo(b),
+  );
+  const selectedSlotStart = sortedTimeSlots.find(
+    (slot) => getTimeSlotId(slot) === Number(formData.slotStartId),
+  );
+  const selectedSlotStartNo = getTimeSlotNo(selectedSlotStart);
   if (isLoading) {
     return (
       <div className="p-5 flex flex-col justify-center items-center min-h-[400px]">
@@ -373,17 +506,6 @@ export const StaffSectionsPage = () => {
             onClick={() => handleOpenModal("edit")}
           >
             <Edit className="w-3.5 h-3.5" /> Sửa
-          </Button>
-
-          {/* NÚT PHÂN CÔNG */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5 text-sm border-green-600 text-green-600 hover:bg-green-50 disabled:border-gray-200 disabled:text-gray-400"
-            disabled={!selectedSection || selectedSection.allocationStatus !== "UNASSIGNED"}
-            onClick={handleAssignSection}
-          >
-            <MapPin className="w-3.5 h-3.5" /> Phân công
           </Button>
 
           {/* NÚT THÊM */}
@@ -528,6 +650,9 @@ export const StaffSectionsPage = () => {
               <TableHead className="text-xs font-semibold text-gray-600">
                 Bộ môn
               </TableHead>
+              <TableHead className="text-xs font-semibold text-gray-600">
+                Classes
+              </TableHead>
               <TableHead className="text-xs font-semibold text-gray-600 text-center">
                 TC
               </TableHead>
@@ -552,7 +677,7 @@ export const StaffSectionsPage = () => {
             {paginated.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={9}
+                  colSpan={10}
                   className="text-center py-10 text-gray-500"
                 >
                   Không tìm thấy dữ liệu.
@@ -580,6 +705,9 @@ export const StaffSectionsPage = () => {
                       <span className="text-[11px] text-gray-600">
                         {s.department || "---"}
                       </span>
+                    </TableCell>
+                    <TableCell className="text-xs text-gray-600">
+                      {s.classCodes || "---"}
                     </TableCell>
                     <TableCell className="text-xs text-center">
                       {s.credits}
@@ -676,6 +804,7 @@ export const StaffSectionsPage = () => {
                           departmentCode: "all",
                           courseId: "",
                           lecturerId: "",
+                          classIds: [],
                         })
                       }
                     >
@@ -828,7 +957,75 @@ export const StaffSectionsPage = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-gray-700">
+                    Classes <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsClassDropdownOpen((open) => !open)}
+                      className="flex h-10 w-full items-center justify-between rounded-md border border-gray-300 bg-white px-3 text-left text-sm text-gray-700 shadow-sm hover:bg-gray-50"
+                    >
+                      <span className={selectedClasses.length ? "font-medium text-gray-900" : "text-gray-400"}>
+                        {selectedClassLabel}
+                      </span>
+                      <ChevronDown className="h-4 w-4 text-gray-400" />
+                    </button>
+
+                    {isClassDropdownOpen && (
+                      <div className="absolute z-50 mt-1 max-h-56 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+                        {filteredClassesForModal.length === 0 ? (
+                          <div className="px-3 py-2 text-xs text-gray-500">
+                            Không có class phù hợp.
+                          </div>
+                        ) : (
+                          filteredClassesForModal.map((classItem) => {
+                            const classId = Number(classItem.id);
+                            const checked = selectedClassIds.includes(classId);
+                            const disabled = !checked && selectedClassIds.length >= 2;
+
+                            return (
+                              <button
+                                key={classItem.id}
+                                type="button"
+                                disabled={disabled}
+                                onClick={() => toggleClassSelection(classId)}
+                                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-blue-50 ${
+                                  disabled ? "cursor-not-allowed opacity-50" : ""
+                                }`}
+                              >
+                                <span className={`flex h-4 w-4 items-center justify-center rounded border ${
+                                  checked
+                                    ? "border-blue-600 bg-blue-600 text-white"
+                                    : "border-gray-300 bg-white"
+                                }`}>
+                                  {checked && <Check className="h-3 w-3" />}
+                                </span>
+                                <span className="flex-1">
+                                  <span className="font-medium text-gray-800">
+                                    {classItem.classCode}
+                                  </span>
+                                  <span className="ml-2 text-xs text-gray-500">
+                                    {classItem.className}
+                                  </span>
+                                </span>
+                                <span className="text-xs font-semibold text-gray-500">
+                                  {getClassStudentCount(classItem)} SV
+                                </span>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-gray-500">
+                    Chọn 1 hoặc 2 classes. Tổng sinh viên: {selectedStudentTotal}.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-gray-700">
                       Mã Lớp (VD: 01) <span className="text-red-500">*</span>
@@ -852,6 +1049,7 @@ export const StaffSectionsPage = () => {
                     <Input
                       required
                       type="number"
+                      min={Math.max(1, selectedStudentTotal)}
                       placeholder="Số lượng..."
                       value={formData.maxCapacity}
                       onChange={(e) =>
@@ -861,6 +1059,35 @@ export const StaffSectionsPage = () => {
                         })
                       }
                     />
+                    {Number(formData.maxCapacity) > 0 &&
+                      Number(formData.maxCapacity) < selectedStudentTotal && (
+                        <p className="text-[11px] text-red-500">
+                          Phải &gt;= tổng sinh viên đã chọn ({selectedStudentTotal}).
+                        </p>
+                      )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-700">
+                      Phòng <span className="text-red-500">*</span>
+                    </label>
+                    <Select
+                      required
+                      value={formData.classroomId}
+                      onValueChange={(v) =>
+                        setFormData({ ...formData, classroomId: v })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Chọn phòng" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {classroomsList.map((room) => (
+                          <SelectItem key={room.id} value={room.id.toString()}>
+                            {getClassroomLabel(room)} - {room.capacity} chỗ
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-gray-700">
@@ -888,24 +1115,77 @@ export const StaffSectionsPage = () => {
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-gray-700">
-                      Tiết học <span className="text-red-500">*</span>
+                      Tiết bắt đầu <span className="text-red-500">*</span>
                     </label>
                     <Select
                       required
-                      value={formData.slot}
+                      value={formData.slotStartId}
                       onValueChange={(v) =>
-                        setFormData({ ...formData, slot: v })
+                        setFormData((prev) => {
+                          const nextStartNo = getTimeSlotNo(
+                            sortedTimeSlots.find((slot) => getTimeSlotId(slot) === Number(v)),
+                          );
+                          const currentEnd = sortedTimeSlots.find(
+                            (slot) => getTimeSlotId(slot) === Number(prev.slotEndId),
+                          );
+                          const currentEndNo = getTimeSlotNo(currentEnd);
+
+                          return {
+                            ...prev,
+                            slotStartId: v,
+                            slotEndId:
+                              currentEndNo && currentEndNo >= nextStartNo
+                                ? prev.slotEndId
+                                : v,
+                          };
+                        })
                       }
                     >
                       <SelectTrigger>
-                        <SelectValue />
+                        <SelectValue placeholder="Chọn tiết" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="1">Tiết 1-3</SelectItem>
-                        <SelectItem value="2">Tiết 4-6</SelectItem>
-                        <SelectItem value="3">Tiết 7-9</SelectItem>
-                        <SelectItem value="4">Tiết 10-12</SelectItem>
-                        <SelectItem value="5">Tiết 13-15</SelectItem>
+                        {sortedTimeSlots.map((slot) => (
+                          <SelectItem
+                            key={getTimeSlotId(slot)}
+                            value={getTimeSlotId(slot).toString()}
+                          >
+                            {getTimeSlotLabel(slot)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-700">
+                      Tiết kết thúc <span className="text-red-500">*</span>
+                    </label>
+                    <Select
+                      required
+                      value={formData.slotEndId}
+                      onValueChange={(v) =>
+                        setFormData({ ...formData, slotEndId: v })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Chọn tiết" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {sortedTimeSlots.map((slot) => {
+                          const disabled =
+                            selectedSlotStartNo > 0 &&
+                            getTimeSlotNo(slot) < selectedSlotStartNo;
+
+                          return (
+                            <SelectItem
+                              key={getTimeSlotId(slot)}
+                              value={getTimeSlotId(slot).toString()}
+                              disabled={disabled}
+                            >
+                              {getTimeSlotLabel(slot)}
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                   </div>

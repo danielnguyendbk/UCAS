@@ -44,13 +44,6 @@ const STAFF_STATS = [
 ];
 const STAFF_QUICK_ACTIONS = [
   {
-    label: "Qu\u1EA3n l\xFD l\u1EDBp h\u1ECDc ph\u1EA7n",
-    icon: ClipboardList,
-    path: APP_ROUTES.staffSections,
-    color: "text-blue-600",
-    bg: "bg-blue-50 hover:bg-blue-100"
-  },
-  {
     label: "Qu\u1EA3n l\xFD th\u1EDDi kh\xF3a bi\u1EC3u",
     icon: ListChecks,
     path: APP_ROUTES.staffSchedule,

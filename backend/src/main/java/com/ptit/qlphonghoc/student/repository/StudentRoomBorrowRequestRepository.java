@@ -13,12 +13,58 @@ import java.util.Optional;
 
 public interface StudentRoomBorrowRequestRepository extends JpaRepository<Student, Integer> {
 
+    String BORROW_SELECT = """
+        SELECT
+            rbr.id AS id,
+            rbr.request_title AS requestTitle,
+            rbr.request_type AS requestType,
+            rbr.booking_scope AS bookingScope,
+            rbr.semester_id AS semesterId,
+            rbr.booking_date AS bookingDate,
+            rbr.slot_start_id AS slotStartId,
+            rbr.slot_end_id AS slotEndId,
+            ts_start.slot_no AS slot,
+            ts_start.slot_no AS slotStart,
+            ts_end.slot_no AS slotEnd,
+            CONCAT(ts_start.slot_no, '-', ts_end.slot_no) AS periodText,
+            rbr.requested_by AS requestedBy,
+            rbr.club_id AS clubId,
+            c.club_name AS clubName,
+            rbr.expected_attendees AS expectedAttendees,
+            rbr.preferred_classroom_id AS preferredClassroomId,
+            CONCAT(b.code, '-', cr.room_number) AS preferredRoomCode,
+            rbr.approved_classroom_id AS approvedClassroomId,
+            CASE
+                WHEN approved_room.id IS NULL THEN NULL
+                ELSE CONCAT(approved_building.code, '-', approved_room.room_number)
+            END AS approvedRoomCode,
+            rbr.requested_room_type AS requestedRoomType,
+            rbr.purpose_note AS purposeNote,
+            rbr.status AS status,
+            rbr.processing_note AS processingNote,
+            rbr.reject_reason AS rejectReason,
+            rbr.approved_at AS approvedAt,
+            rbr.created_at AS createdAt
+        FROM room_borrow_requests rbr
+        JOIN time_slots ts_start ON ts_start.slot_id = rbr.slot_start_id
+        JOIN time_slots ts_end ON ts_end.slot_id = rbr.slot_end_id
+        LEFT JOIN clubs c ON c.id = rbr.club_id
+        LEFT JOIN classrooms cr ON cr.id = rbr.preferred_classroom_id
+        LEFT JOIN buildings b ON b.id = cr.building_id
+        LEFT JOIN classrooms approved_room ON approved_room.id = rbr.approved_classroom_id
+        LEFT JOIN buildings approved_building ON approved_building.id = approved_room.building_id
+        """;
+
     @Query(value = """
-        SELECT id
-        FROM time_slots
-        WHERE slot_number = :slotNumber
+        SELECT COUNT(*)
+        FROM time_slots start_slot
+        JOIN time_slots end_slot ON end_slot.slot_id = :slotEndId
+        WHERE start_slot.slot_id = :slotStartId
+          AND end_slot.slot_id >= start_slot.slot_id
+          AND end_slot.end_time > start_slot.start_time
         """, nativeQuery = true)
-    Optional<Integer> findTimeSlotIdBySlotNumber(@Param("slotNumber") Integer slotNumber);
+    int countValidSlotRange(@Param("slotStartId") Integer slotStartId,
+                            @Param("slotEndId") Integer slotEndId);
 
     @Query(value = """
         SELECT COUNT(*)
@@ -70,24 +116,6 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
     );
 
     @Query(value = """
-        SELECT COUNT(*)
-        FROM club_memberships cm
-        JOIN students s ON s.id = cm.student_id
-        JOIN clubs c ON c.id = cm.club_id
-        WHERE UPPER(c.club_code) = :clubCode
-          AND s.user_id = :userId
-          AND s.is_deleted = FALSE
-          AND c.status = 'ACTIVE'
-          AND c.is_deleted = FALSE
-          AND cm.is_active = TRUE
-          AND cm.is_representative = TRUE
-        """, nativeQuery = true)
-    int countRepresentativeMembershipByCode(
-            @Param("clubCode") String clubCode,
-            @Param("userId") Integer userId
-    );
-
-    @Query(value = """
         SELECT
             cr.id AS classroomId,
             CONCAT(b.code, '-', cr.room_number) AS roomCode,
@@ -120,15 +148,15 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
           )
           AND NOT EXISTS (
               SELECT 1
-              FROM room_allocations ra
-              JOIN section_schedules ss ON ss.id = ra.schedule_id
-              JOIN class_sections cs ON cs.id = ss.section_id
-              WHERE ra.classroom_id = cr.id
-                AND ra.is_active = TRUE
+              FROM schedules sch
+              JOIN class_sections cs ON cs.id = sch.section_id
+              WHERE sch.classroom_id = cr.id
+                AND sch.status = 'ACTIVE'
                 AND cs.status = 'ACTIVE'
                 AND cs.semester_id = :semesterId
-                AND ss.day_of_week = :dayOfWeek
-                AND ss.time_slot_id = :timeSlotId
+                AND sch.day_of_week = :dayOfWeek
+                AND sch.slot_start_id <= :slotEndId
+                AND sch.slot_end_id >= :slotStartId
           )
           AND NOT EXISTS (
               SELECT 1
@@ -136,7 +164,8 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
               WHERE rbr.approved_classroom_id = cr.id
                 AND rbr.status = 'APPROVED'
                 AND rbr.booking_date = :bookingDate
-                AND rbr.time_slot_id = :timeSlotId
+                AND rbr.slot_start_id <= :slotEndId
+                AND rbr.slot_end_id >= :slotStartId
           )
         ORDER BY cr.capacity ASC, b.code, cr.room_number
         """, nativeQuery = true)
@@ -144,7 +173,8 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
             @Param("semesterId") Integer semesterId,
             @Param("bookingDate") LocalDate bookingDate,
             @Param("dayOfWeek") String dayOfWeek,
-            @Param("timeSlotId") Integer timeSlotId,
+            @Param("slotStartId") Integer slotStartId,
+            @Param("slotEndId") Integer slotEndId,
             @Param("expectedAttendees") Integer expectedAttendees,
             @Param("roomType") String roomType,
             @Param("keyword") String keyword
@@ -159,7 +189,10 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
             semester_id,
             section_id,
             booking_date,
-            time_slot_id,
+            slot_start_id,
+            slot_end_id,
+            start_time,
+            end_time,
             requested_by,
             club_id,
             expected_attendees,
@@ -174,14 +207,17 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
             processing_note,
             reject_reason
         )
-        VALUES (
+        SELECT
             :requestTitle,
             :requestType,
             :bookingScope,
             :semesterId,
             NULL,
             :bookingDate,
-            :timeSlotId,
+            start_slot.slot_id,
+            end_slot.slot_id,
+            start_slot.start_time,
+            end_slot.end_time,
             :requestedBy,
             :clubId,
             :expectedAttendees,
@@ -195,7 +231,9 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
             NULL,
             NULL,
             NULL
-        )
+        FROM time_slots start_slot
+        JOIN time_slots end_slot ON end_slot.slot_id = :slotEndId
+        WHERE start_slot.slot_id = :slotStartId
         """, nativeQuery = true)
     void insertBorrowRequest(
             @Param("requestTitle") String requestTitle,
@@ -203,7 +241,8 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
             @Param("bookingScope") String bookingScope,
             @Param("semesterId") Integer semesterId,
             @Param("bookingDate") LocalDate bookingDate,
-            @Param("timeSlotId") Integer timeSlotId,
+            @Param("slotStartId") Integer slotStartId,
+            @Param("slotEndId") Integer slotEndId,
             @Param("requestedBy") Integer requestedBy,
             @Param("clubId") Integer clubId,
             @Param("expectedAttendees") Integer expectedAttendees,
@@ -215,94 +254,12 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
     @Query(value = "SELECT LAST_INSERT_ID()", nativeQuery = true)
     Integer getLastInsertId();
 
-    @Query(value = """
-        SELECT
-            rbr.id AS id,
-            rbr.request_title AS requestTitle,
-            rbr.request_type AS requestType,
-            rbr.booking_scope AS bookingScope,
-            rbr.semester_id AS semesterId,
-            rbr.booking_date AS bookingDate,
-            ts.slot_number AS slot,
-            CASE ts.slot_number
-                WHEN 1 THEN '1-3'
-                WHEN 2 THEN '4-6'
-                WHEN 3 THEN '7-9'
-                WHEN 4 THEN '10-12'
-                WHEN 5 THEN '13-15'
-                ELSE CAST(ts.slot_number AS CHAR)
-            END AS periodText,
-            rbr.requested_by AS requestedBy,
-            rbr.club_id AS clubId,
-            c.club_name AS clubName,
-            rbr.expected_attendees AS expectedAttendees,
-            rbr.preferred_classroom_id AS preferredClassroomId,
-            CONCAT(b.code, '-', cr.room_number) AS preferredRoomCode,
-            rbr.approved_classroom_id AS approvedClassroomId,
-            CASE
-                WHEN approved_room.id IS NULL THEN NULL
-                ELSE CONCAT(approved_building.code, '-', approved_room.room_number)
-            END AS approvedRoomCode,
-            rbr.requested_room_type AS requestedRoomType,
-            rbr.purpose_note AS purposeNote,
-            rbr.status AS status,
-            rbr.processing_note AS processingNote,
-            rbr.reject_reason AS rejectReason,
-            rbr.approved_at AS approvedAt,
-            rbr.created_at AS createdAt
-        FROM room_borrow_requests rbr
-        JOIN time_slots ts ON ts.id = rbr.time_slot_id
-        LEFT JOIN clubs c ON c.id = rbr.club_id
-        LEFT JOIN classrooms cr ON cr.id = rbr.preferred_classroom_id
-        LEFT JOIN buildings b ON b.id = cr.building_id
-        LEFT JOIN classrooms approved_room ON approved_room.id = rbr.approved_classroom_id
-        LEFT JOIN buildings approved_building ON approved_building.id = approved_room.building_id
+    @Query(value = BORROW_SELECT + """
         WHERE rbr.id = :id
         """, nativeQuery = true)
     Optional<BorrowRequestProjection> findBorrowRequestById(@Param("id") Integer id);
 
-    @Query(value = """
-        SELECT
-            rbr.id AS id,
-            rbr.request_title AS requestTitle,
-            rbr.request_type AS requestType,
-            rbr.booking_scope AS bookingScope,
-            rbr.semester_id AS semesterId,
-            rbr.booking_date AS bookingDate,
-            ts.slot_number AS slot,
-            CASE ts.slot_number
-                WHEN 1 THEN '1-3'
-                WHEN 2 THEN '4-6'
-                WHEN 3 THEN '7-9'
-                WHEN 4 THEN '10-12'
-                WHEN 5 THEN '13-15'
-                ELSE CAST(ts.slot_number AS CHAR)
-            END AS periodText,
-            rbr.requested_by AS requestedBy,
-            rbr.club_id AS clubId,
-            c.club_name AS clubName,
-            rbr.expected_attendees AS expectedAttendees,
-            rbr.preferred_classroom_id AS preferredClassroomId,
-            CONCAT(b.code, '-', cr.room_number) AS preferredRoomCode,
-            rbr.approved_classroom_id AS approvedClassroomId,
-            CASE
-                WHEN approved_room.id IS NULL THEN NULL
-                ELSE CONCAT(approved_building.code, '-', approved_room.room_number)
-            END AS approvedRoomCode,
-            rbr.requested_room_type AS requestedRoomType,
-            rbr.purpose_note AS purposeNote,
-            rbr.status AS status,
-            rbr.processing_note AS processingNote,
-            rbr.reject_reason AS rejectReason,
-            rbr.approved_at AS approvedAt,
-            rbr.created_at AS createdAt
-        FROM room_borrow_requests rbr
-        JOIN time_slots ts ON ts.id = rbr.time_slot_id
-        LEFT JOIN clubs c ON c.id = rbr.club_id
-        LEFT JOIN classrooms cr ON cr.id = rbr.preferred_classroom_id
-        LEFT JOIN buildings b ON b.id = cr.building_id
-        LEFT JOIN classrooms approved_room ON approved_room.id = rbr.approved_classroom_id
-        LEFT JOIN buildings approved_building ON approved_building.id = approved_room.building_id
+    @Query(value = BORROW_SELECT + """
         WHERE rbr.requested_by = :userId
         ORDER BY rbr.created_at DESC, rbr.id DESC
         """, nativeQuery = true)
@@ -348,6 +305,14 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
         LocalDate getBookingDate();
 
         Integer getSlot();
+
+        Integer getSlotStartId();
+
+        Integer getSlotEndId();
+
+        Integer getSlotStart();
+
+        Integer getSlotEnd();
 
         String getPeriodText();
 

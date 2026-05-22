@@ -12,6 +12,10 @@ public class StudentRoomBorrowRequestResponse {
     private Integer semesterId;
     private LocalDate bookingDate;
     private Integer slot;
+    private Integer slotStartId;
+    private Integer slotEndId;
+    private Integer slotStart;
+    private Integer slotEnd;
     private String periodText;
     private Integer requestedBy;
     private Integer clubId;
@@ -83,6 +87,38 @@ public class StudentRoomBorrowRequestResponse {
 
     public void setSlot(Integer slot) {
         this.slot = slot;
+    }
+
+    public Integer getSlotStartId() {
+        return slotStartId;
+    }
+
+    public void setSlotStartId(Integer slotStartId) {
+        this.slotStartId = slotStartId;
+    }
+
+    public Integer getSlotEndId() {
+        return slotEndId;
+    }
+
+    public void setSlotEndId(Integer slotEndId) {
+        this.slotEndId = slotEndId;
+    }
+
+    public Integer getSlotStart() {
+        return slotStart;
+    }
+
+    public void setSlotStart(Integer slotStart) {
+        this.slotStart = slotStart;
+    }
+
+    public Integer getSlotEnd() {
+        return slotEnd;
+    }
+
+    public void setSlotEnd(Integer slotEnd) {
+        this.slotEnd = slotEnd;
     }
 
     public String getPeriodText() {

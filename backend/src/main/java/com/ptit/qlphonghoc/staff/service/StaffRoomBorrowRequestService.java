@@ -37,6 +37,9 @@ public class StaffRoomBorrowRequestService {
         if (current.getPreferredClassroomId() == null) {
             throw new BadRequestException("This request does not have a preferred classroom to approve.");
         }
+        if (!"AVAILABLE".equals(current.getAvailabilityStatus())) {
+            throw new BadRequestException("The preferred classroom is no longer available.");
+        }
 
         try {
             int updated = repository.approvePendingRequest(
@@ -103,6 +106,10 @@ public class StaffRoomBorrowRequestService {
         response.setSemesterId(projection.getSemesterId());
         response.setSemesterName(projection.getSemesterName());
         response.setBookingDate(projection.getBookingDate());
+        response.setSlotStartId(projection.getSlotStartId());
+        response.setSlotEndId(projection.getSlotEndId());
+        response.setSlotStart(projection.getSlotStart());
+        response.setSlotEnd(projection.getSlotEnd());
         response.setSlot(projection.getSlot());
         response.setPeriodText(projection.getPeriodText());
         response.setRequestedBy(projection.getRequestedBy());

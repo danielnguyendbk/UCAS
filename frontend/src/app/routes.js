@@ -5,6 +5,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { ClassroomsPage } from "./pages/ClassroomsPage";
 import { CoursesPage } from "./pages/CoursesPage";
 import { LecturersPage } from "./pages/LecturersPage";
+import { StaffSectionsPage } from "./pages/StaffSectionsPage";
 import { TimetablePage } from "./pages/TimetablePage";
 import { AutoAssignmentPage } from "./pages/AutoAssignmentPage";
 import { WeeklySchedulePage } from "./pages/WeeklySchedulePage";
@@ -12,7 +13,6 @@ import { UserManagementPage } from "./pages/UserManagementPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { StaffDashboardPage } from "./pages/StaffDashboardPage";
-import { StaffSectionsPage } from "./pages/StaffSectionsPage";
 import { StaffSchedulePage } from "./pages/StaffSchedulePage";
 import { StaffAllocationPage } from "./pages/StaffAllocationPage";
 import { StaffLookupPage } from "./pages/StaffLookupPage";
@@ -45,6 +45,7 @@ const router = createBrowserRouter([
       { path: "classrooms", Component: ClassroomsPage },
       { path: "courses", Component: CoursesPage },
       { path: "lecturers", Component: LecturersPage },
+      { path: "sections", Component: StaffSectionsPage },
       { path: "timetable", Component: TimetablePage },
       { path: "auto-assignment", Component: AutoAssignmentPage },
       { path: "weekly-schedule", Component: WeeklySchedulePage },
@@ -53,7 +54,6 @@ const router = createBrowserRouter([
       { path: "settings", Component: SettingsPage },
       // Staff routes
       { path: "staff", Component: StaffDashboardPage },
-      { path: "staff/sections", Component: StaffSectionsPage },
       { path: "staff/schedule", Component: StaffSchedulePage },
       { path: "staff/allocation", Component: StaffAllocationPage },
       { path: "staff/lookup", Component: StaffLookupPage },

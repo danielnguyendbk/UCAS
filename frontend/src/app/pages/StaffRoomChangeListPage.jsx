@@ -116,6 +116,8 @@ const getErrorMessage = (error, fallback) =>
   error?.response?.data?.error ||
   fallback;
 
+const getPeriodText = (item) => item?.periodText || item?.slot || "-";
+
 const StaffRoomChangeListPage = () => {
   const [requests, setRequests] = useState([]);
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -325,7 +327,7 @@ const StaffRoomChangeListPage = () => {
                   <TableHead className="text-xs font-semibold text-gray-600">Lớp học phần</TableHead>
                   <TableHead className="text-xs font-semibold text-gray-600">Đổi phòng</TableHead>
                   <TableHead className="text-xs font-semibold text-gray-600">Phạm vi</TableHead>
-                  <TableHead className="text-xs font-semibold text-gray-600">Ca</TableHead>
+                  <TableHead className="text-xs font-semibold text-gray-600">Tiết</TableHead>
                   <TableHead className="text-center text-xs font-semibold text-gray-600">Trạng thái</TableHead>
                   <TableHead className="text-center text-xs font-semibold text-gray-600">Thao tác</TableHead>
                 </TableRow>
@@ -354,7 +356,7 @@ const StaffRoomChangeListPage = () => {
                       <div className="mt-0.5 text-[11px] text-gray-500">{scopeText(request)}</div>
                     </TableCell>
                     <TableCell className="text-xs text-gray-700">
-                      {request.dayOfWeek} - Ca {request.slot}
+                      {request.dayOfWeek} - Tiết {getPeriodText(request)}
                     </TableCell>
                     <TableCell className="text-center">
                       <StatusBadge status={request.status} />
@@ -409,7 +411,7 @@ const StaffRoomChangeListPage = () => {
                   <Detail label="Người gửi" value={`${selectedRequest.requesterName || selectedRequest.lecturerName} (${selectedRequest.requesterUsername || "-"})`} />
                   <Detail label="Lớp học phần" value={`${selectedRequest.classCode} - ${selectedRequest.courseName}`} />
                   <Detail label="Đổi phòng" value={`${selectedRequest.oldRoomCode} -> ${selectedRequest.newRoomCode || selectedRequest.requestedRoomCode}`} />
-                  <Detail label="Thời gian" value={`${selectedRequest.dayOfWeek} - Ca ${selectedRequest.slot} - ${scopeText(selectedRequest)}`} />
+                  <Detail label="Thời gian" value={`${selectedRequest.dayOfWeek} - Tiết ${getPeriodText(selectedRequest)} - ${scopeText(selectedRequest)}`} />
                 </div>
 
                 <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">

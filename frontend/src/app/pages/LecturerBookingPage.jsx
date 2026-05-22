@@ -29,14 +29,6 @@ const REQUEST_TYPE_OPTIONS = [
   { value: "OTHER", label: "Khác" },
 ];
 
-const SLOT_OPTIONS = [
-  { value: "1", label: "Ca 1 (07:00 - 09:00)" },
-  { value: "2", label: "Ca 2 (09:10 - 11:10)" },
-  { value: "3", label: "Ca 3 (13:00 - 15:00)" },
-  { value: "4", label: "Ca 4 (15:10 - 17:10)" },
-  { value: "5", label: "Ca 5 (17:30 - 19:30)" },
-];
-
 const emptyForm = {
   semesterId: "",
   requestType: "MAKEUP_CLASS",
@@ -47,7 +39,8 @@ const emptyForm = {
   sectionName: "",
   sectionMaxCapacity: "",
   bookingDate: "",
-  slot: "",
+  slotStartId: "",
+  slotEndId: "",
   expectedAttendees: "",
   preferredClassroomId: "",
   preferredRoomCode: "",
@@ -83,9 +76,23 @@ const getActiveSemesterId = (semesters) => {
   return String(getSemesterId(activeSemester || semesters[0]) || "");
 };
 
+const getTimeSlotId = (slot) => Number(slot?.slotId ?? slot?.id ?? 0);
+
+const getTimeSlotNo = (slot) =>
+  Number(slot?.slotNo ?? slot?.slot_no ?? slot?.slotNumber ?? 0);
+
+const getTimeSlotLabel = (slot) => {
+  const slotNo = getTimeSlotNo(slot);
+  const startTime = String(slot?.startTime ?? "").slice(0, 5);
+  const endTime = String(slot?.endTime ?? "").slice(0, 5);
+  const timeText = startTime && endTime ? ` (${startTime}-${endTime})` : "";
+  return `Tiết ${slotNo}${timeText}`;
+};
+
 const LecturerBookingPage = () => {
   const [form, setForm] = useState(emptyForm);
   const [semesters, setSemesters] = useState([]);
+  const [timeSlots, setTimeSlots] = useState([]);
   const [formErrors, setFormErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [submittedRequest, setSubmittedRequest] = useState(null);
@@ -109,23 +116,35 @@ const LecturerBookingPage = () => {
   );
 
   useEffect(() => {
-    const fetchSemesters = async () => {
+    const fetchInitialData = async () => {
       try {
-        const res = await httpClient.get("/api/categories/semesters");
-        const list = res.data?.data || [];
+        const [semesterRes, slotRes] = await Promise.all([
+          httpClient.get("/api/categories/semesters"),
+          httpClient.get("/api/categories/time-slots"),
+        ]);
+        const list = semesterRes.data?.data || [];
+        const slots = slotRes.data?.data || [];
+        const sortedSlots = [...slots].sort(
+          (a, b) => getTimeSlotNo(a) - getTimeSlotNo(b),
+        );
+        const firstSlotId = sortedSlots[0] ? String(getTimeSlotId(sortedSlots[0])) : "";
+
         setSemesters(list);
+        setTimeSlots(sortedSlots);
         const activeSemesterId = getActiveSemesterId(list);
-        if (activeSemesterId) {
-          setForm((prev) => ({ ...prev, semesterId: activeSemesterId }));
-        }
+        setForm((prev) => ({
+          ...prev,
+          semesterId: activeSemesterId || prev.semesterId,
+          slotStartId: prev.slotStartId || firstSlotId,
+          slotEndId: prev.slotEndId || firstSlotId,
+        }));
       } catch (error) {
-        console.error("Lỗi lấy học kỳ:", error);
+        console.error("Lỗi lấy dữ liệu ban đầu:", error);
       }
     };
 
-    fetchSemesters();
+    fetchInitialData();
   }, []);
-
   useEffect(() => {
     if (!isClubRequest) {
       setClubLookup({ loading: false, data: null, error: "" });
@@ -238,7 +257,8 @@ const LecturerBookingPage = () => {
   const canSearchRooms =
     form.semesterId &&
     form.bookingDate &&
-    form.slot &&
+    form.slotStartId &&
+    form.slotEndId &&
     Number(form.expectedAttendees) > 0;
 
   const updateForm = (patch) => {
@@ -283,7 +303,20 @@ const LecturerBookingPage = () => {
     if (!form.semesterId) errs.semesterId = "Vui lòng chọn học kỳ.";
     if (!form.requestType) errs.requestType = "Vui lòng chọn loại yêu cầu.";
     if (!form.bookingDate) errs.bookingDate = "Vui lòng chọn ngày mượn.";
-    if (!form.slot) errs.slot = "Vui lòng chọn ca mượn.";
+    if (!form.slotStartId) errs.slotStartId = "Vui lòng chọn tiết bắt đầu.";
+    if (!form.slotEndId) {
+      errs.slotEndId = "Vui lòng chọn tiết kết thúc.";
+    } else {
+      const startSlot = timeSlots.find(
+        (slot) => getTimeSlotId(slot) === Number(form.slotStartId),
+      );
+      const endSlot = timeSlots.find(
+        (slot) => getTimeSlotId(slot) === Number(form.slotEndId),
+      );
+      if (getTimeSlotNo(endSlot) < getTimeSlotNo(startSlot)) {
+        errs.slotEndId = "Tiết kết thúc phải lớn hơn hoặc bằng tiết bắt đầu.";
+      }
+    }
     if (isClubRequest) {
       if (!form.clubCode.trim()) {
         errs.clubCode = "Vui lòng nhập mã CLB.";
@@ -328,7 +361,8 @@ const LecturerBookingPage = () => {
         clubCode: isClubRequest ? form.clubCode.trim().toUpperCase() : null,
         sectionId: isMakeupClass ? Number(form.sectionId) : null,
         bookingDate: form.bookingDate,
-        slot: Number(form.slot),
+        slotStartId: Number(form.slotStartId),
+        slotEndId: Number(form.slotEndId),
         expectedAttendees: Number(form.expectedAttendees),
         preferredClassroomId: Number(form.preferredClassroomId),
         purposeNote: form.purposeNote.trim(),
@@ -339,6 +373,8 @@ const LecturerBookingPage = () => {
       setForm((prev) => ({
         ...emptyForm,
         semesterId: prev.semesterId,
+        slotStartId: prev.slotStartId,
+        slotEndId: prev.slotEndId,
       }));
       setFormErrors({});
     } catch (error) {
@@ -556,25 +592,79 @@ const LecturerBookingPage = () => {
 
                 <div className="space-y-2">
                   <Label className="text-xs font-bold text-gray-600 uppercase tracking-wider">
-                    Ca mượn <span className="text-red-500">*</span>
+                    Tiết bắt đầu <span className="text-red-500">*</span>
                   </Label>
                   <Select
-                    value={form.slot}
-                    onValueChange={(value) => resetSelectedRoom({ slot: value })}
+                    value={form.slotStartId}
+                    onValueChange={(value) => {
+                      const nextStart = timeSlots.find(
+                        (slot) => getTimeSlotId(slot) === Number(value),
+                      );
+                      const currentEnd = timeSlots.find(
+                        (slot) => getTimeSlotId(slot) === Number(form.slotEndId),
+                      );
+                      resetSelectedRoom({
+                        slotStartId: value,
+                        slotEndId:
+                          getTimeSlotNo(currentEnd) >= getTimeSlotNo(nextStart)
+                            ? form.slotEndId
+                            : value,
+                      });
+                    }}
                   >
-                    <SelectTrigger className={`h-11 ${formErrors.slot ? "border-red-400" : ""}`}>
-                      <SelectValue placeholder="Chọn ca học" />
+                    <SelectTrigger className={`h-11 ${formErrors.slotStartId ? "border-red-400" : ""}`}>
+                      <SelectValue placeholder="Chọn tiết bắt đầu" />
                     </SelectTrigger>
                     <SelectContent>
-                      {SLOT_OPTIONS.map((slot) => (
-                        <SelectItem key={slot.value} value={slot.value}>
-                          {slot.label}
+                      {timeSlots.map((slot) => (
+                        <SelectItem
+                          key={getTimeSlotId(slot)}
+                          value={getTimeSlotId(slot).toString()}
+                        >
+                          {getTimeSlotLabel(slot)}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  {formErrors.slot && (
-                    <p className="text-[11px] text-red-500">{formErrors.slot}</p>
+                  {formErrors.slotStartId && (
+                    <p className="text-[11px] text-red-500">{formErrors.slotStartId}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-gray-600 uppercase tracking-wider">
+                    Tiết kết thúc <span className="text-red-500">*</span>
+                  </Label>
+                  <Select
+                    value={form.slotEndId}
+                    onValueChange={(value) => resetSelectedRoom({ slotEndId: value })}
+                  >
+                    <SelectTrigger className={`h-11 ${formErrors.slotEndId ? "border-red-400" : ""}`}>
+                      <SelectValue placeholder="Chọn tiết kết thúc" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {timeSlots.map((slot) => {
+                        const startSlot = timeSlots.find(
+                          (item) => getTimeSlotId(item) === Number(form.slotStartId),
+                        );
+                        const disabled =
+                          getTimeSlotNo(startSlot) > 0 &&
+                          getTimeSlotNo(slot) < getTimeSlotNo(startSlot);
+
+                        return (
+                          <SelectItem
+                            key={getTimeSlotId(slot)}
+                            value={getTimeSlotId(slot).toString()}
+                            disabled={disabled}
+                          >
+                            {getTimeSlotLabel(slot)}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  {formErrors.slotEndId && (
+                    <p className="text-[11px] text-red-500">{formErrors.slotEndId}</p>
                   )}
                 </div>
 
@@ -677,6 +767,8 @@ const LecturerBookingPage = () => {
                     setForm((prev) => ({
                       ...emptyForm,
                       semesterId: prev.semesterId,
+                      slotStartId: prev.slotStartId,
+                      slotEndId: prev.slotEndId,
                     }))
                   }
                 >
@@ -755,7 +847,8 @@ const LecturerBookingPage = () => {
         onOpenChange={setIsRoomSearchOpen}
         onSelect={handleRoomSelect}
         date={form.bookingDate}
-        slot={form.slot}
+        slotStartId={form.slotStartId}
+        slotEndId={form.slotEndId}
         semesterId={form.semesterId}
         expectedAttendees={form.expectedAttendees}
         isLecturerBorrowMode

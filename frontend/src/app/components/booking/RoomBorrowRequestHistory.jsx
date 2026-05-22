@@ -82,9 +82,9 @@ const formatDateTime = (value) => {
 const getPeriodLabel = (request) => {
   if (!request?.slot && !request?.periodText) return "Chưa có";
   if (request.periodText) {
-    return `Ca ${request.slot || "-"} (tiết ${request.periodText})`;
+    return `Tiết ${request.periodText}`;
   }
-  return `Ca ${request.slot}`;
+  return `Tiết ${request.slot}`;
 };
 
 const getRoomText = (request) =>

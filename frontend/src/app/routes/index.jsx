@@ -9,6 +9,7 @@ import AdminDashboardPage from "@/features/admin/pages/DashboardPage";
 import AdminLecturersPage from "@/features/admin/pages/LecturersPage";
 import AdminReportsPage from "@/features/admin/pages/ReportsPage";
 import AdminSettingsPage from "@/features/admin/pages/SettingsPage";
+import AdminSectionsPage from "@/features/admin/pages/SectionsPage";
 import AdminUserManagementPage from "@/features/admin/pages/UserManagementPage";
 import AdminWeeklySchedulePage from "@/features/admin/pages/WeeklySchedulePage";
 import EmployeeUsagePage from "@/features/employee/pages/EmployeeUsagePage";
@@ -25,13 +26,13 @@ import LecturerRoomChangeRequestPage from "@/features/lecturer/pages/LecturerRoo
 import StaffAllocationPage from "@/features/staff/pages/StaffAllocationPage";
 import StaffBookingsPage from "@/features/staff/pages/StaffBookingsPage";
 import StaffBookingListPage from "@/features/staff/pages/StaffBookingListPage";
+import StaffClassSectionsPage from "@/features/staff/pages/StaffClassSectionsPage";
 import StaffDashboardPage from "@/features/staff/pages/StaffDashboardPage";
 import StaffEmergencyRoomChangePage from "@/features/staff/pages/StaffEmergencyRoomChangePage";
 import StaffLookupPage from "@/features/staff/pages/StaffLookupPage";
 import StaffRoomChangeListPage from "@/features/staff/pages/StaffRoomChangeListPage";
 import StaffMaintenanceListPage from "@/features/staff/pages/StaffMaintenanceListPage";
 import StaffSchedulePage from "@/features/staff/pages/StaffSchedulePage";
-import StaffSectionsPage from "@/features/staff/pages/StaffSectionsPage";
 import StudentSchedulePage from "@/features/student/pages/StudentSchedulePage";
 import StudentBookingPage from "@/features/student/pages/StudentBookingPage";
 import StudentBookingHistoryPage from "@/features/student/pages/StudentBookingHistoryPage";
@@ -52,6 +53,7 @@ const appRouter = createBrowserRouter([
       { path: APP_ROUTES.classrooms.slice(1), Component: AdminClassroomsPage },
       { path: APP_ROUTES.courses.slice(1), Component: AdminCoursesPage },
       { path: APP_ROUTES.lecturers.slice(1), Component: AdminLecturersPage },
+      { path: APP_ROUTES.adminSections.slice(1), Component: AdminSectionsPage },
       { path: APP_ROUTES.timetable.slice(1), Component: TimetablePage },
       { path: APP_ROUTES.autoAssignment.slice(1), Component: AdminAutoAssignmentPage },
       { path: APP_ROUTES.weeklySchedule.slice(1), Component: AdminWeeklySchedulePage },
@@ -60,8 +62,8 @@ const appRouter = createBrowserRouter([
       { path: APP_ROUTES.settings.slice(1), Component: AdminSettingsPage },
       // Staff routes
       { path: APP_ROUTES.staffDashboard.slice(1), Component: StaffDashboardPage },
-      { path: APP_ROUTES.staffSections.slice(1), Component: StaffSectionsPage },
       { path: APP_ROUTES.staffSchedule.slice(1), Component: StaffSchedulePage },
+      { path: APP_ROUTES.staffClassSections.slice(1), Component: StaffClassSectionsPage },
       { path: APP_ROUTES.staffAllocation.slice(1), Component: StaffAllocationPage },
       { path: APP_ROUTES.staffLookup.slice(1), Component: StaffLookupPage },
       { path: APP_ROUTES.staffBookings.slice(1), Component: StaffBookingsPage },

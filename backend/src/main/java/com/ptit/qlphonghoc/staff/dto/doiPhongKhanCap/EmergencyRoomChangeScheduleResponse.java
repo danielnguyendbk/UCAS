@@ -10,6 +10,11 @@ public class EmergencyRoomChangeScheduleResponse {
     private String lecturerName;
     private String dayOfWeekCode;
     private String dayOfWeekText;
+    private Integer slotStartId;
+    private Integer slotEndId;
+    private Integer slotStartNo;
+    private Integer slotEndNo;
+    private String periodText;
     private Integer slotNumber;
     private Integer currentClassroomId;
     private String currentRoomCode;
@@ -78,6 +83,46 @@ public class EmergencyRoomChangeScheduleResponse {
 
     public void setDayOfWeekText(String dayOfWeekText) {
         this.dayOfWeekText = dayOfWeekText;
+    }
+
+    public Integer getSlotStartId() {
+        return slotStartId;
+    }
+
+    public void setSlotStartId(Integer slotStartId) {
+        this.slotStartId = slotStartId;
+    }
+
+    public Integer getSlotEndId() {
+        return slotEndId;
+    }
+
+    public void setSlotEndId(Integer slotEndId) {
+        this.slotEndId = slotEndId;
+    }
+
+    public Integer getSlotStartNo() {
+        return slotStartNo;
+    }
+
+    public void setSlotStartNo(Integer slotStartNo) {
+        this.slotStartNo = slotStartNo;
+    }
+
+    public Integer getSlotEndNo() {
+        return slotEndNo;
+    }
+
+    public void setSlotEndNo(Integer slotEndNo) {
+        this.slotEndNo = slotEndNo;
+    }
+
+    public String getPeriodText() {
+        return periodText;
+    }
+
+    public void setPeriodText(String periodText) {
+        this.periodText = periodText;
     }
 
     public Integer getSlotNumber() {

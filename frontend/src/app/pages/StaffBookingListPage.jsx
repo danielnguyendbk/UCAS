@@ -82,6 +82,11 @@ const AVAILABILITY_CONFIG = {
     className: "bg-red-50 text-red-700 border-red-200",
     icon: AlertTriangle,
   },
+  CHANGE_CONFLICT: {
+    label: "Trùng đổi phòng",
+    className: "bg-red-50 text-red-700 border-red-200",
+    icon: AlertTriangle,
+  },
   CAPACITY_LOW: {
     label: "Không đủ sức chứa",
     className: "bg-orange-50 text-orange-700 border-orange-200",
@@ -177,6 +182,12 @@ const getErrorMessage = (error, fallback) =>
   error?.response?.data?.message ||
   error?.response?.data?.error ||
   fallback;
+
+const getPeriodLabelByRange = (booking) => {
+  if (!booking?.slot && !booking?.periodText) return "Chưa có";
+  if (booking?.periodText) return `Tiết ${booking.periodText}`;
+  return `Tiết ${booking.slot}`;
+};
 
 const getRoomText = (booking) =>
   booking?.approvedRoomCode ||
@@ -524,7 +535,7 @@ const StaffBookingListPage = () => {
                       <TableCell className="min-w-[140px] text-xs text-gray-700">
                         <div>{formatDate(booking.bookingDate)}</div>
                         <div className="mt-0.5 text-[11px] text-gray-500">
-                          {getPeriodLabel(booking)}
+                          {getPeriodLabelByRange(booking)}
                         </div>
                       </TableCell>
                       <TableCell className="max-w-[260px] text-xs text-gray-700">
@@ -619,7 +630,7 @@ const StaffBookingListPage = () => {
                   <DetailItem
                     icon={CalendarDays}
                     label="Thời gian mượn"
-                    value={`${formatDate(selectedBooking.bookingDate)} - ${getPeriodLabel(
+                    value={`${formatDate(selectedBooking.bookingDate)} - ${getPeriodLabelByRange(
                       selectedBooking,
                     )}`}
                   />

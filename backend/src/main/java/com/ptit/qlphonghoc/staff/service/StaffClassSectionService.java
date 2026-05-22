@@ -1,19 +1,20 @@
 package com.ptit.qlphonghoc.staff.service;
 
-import com.ptit.qlphonghoc.staff.entity.ClassSection;
-import com.ptit.qlphonghoc.staff.repository.ClassSectionRepository;
 import com.ptit.qlphonghoc.staff.dto.class_section.CreateSectionRequest;
 import com.ptit.qlphonghoc.staff.dto.class_section.StaffSectionTableResponse;
 import com.ptit.qlphonghoc.staff.dto.class_section.UpdateSectionRequest;
-
+import com.ptit.qlphonghoc.staff.entity.ClassSection;
+import com.ptit.qlphonghoc.staff.repository.ClassSectionRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.text.Normalizer;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
 @Service
 public class StaffClassSectionService {
@@ -38,26 +39,29 @@ public class StaffClassSectionService {
                 .map(this::toResponse)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
-                        "Không tìm thấy lớp học phần id = " + id
+                        "Khong tim thay lop hoc phan id = " + id
                 ));
     }
 
     @Transactional
     public StaffSectionTableResponse create(CreateSectionRequest request) {
         validateMainInput(request);
-        
-        // KIỂM TRA TRẠNG THÁI HỌC KỲ TRƯỚC KHI THÊM
+        List<Integer> classIds = normalizeClassIds(request.getClassIds());
+        int enrolledCount = validateClassSelection(classIds, request.getMaxCapacity());
         checkSemesterStatus(request.getSemesterId());
+        validateScheduleSelection(request);
 
         ClassSection section = new ClassSection();
-        applyRequestToEntity(section, request);
+        applyRequestToEntity(section, request, enrolledCount);
 
         ClassSection saved = classSectionRepository.saveAndFlush(section);
-
+        syncSectionEnrollments(saved.getId(), classIds);
         saveOrUpdateSchedule(
                 saved.getId(),
+                request.getClassroomId(),
                 request.getDay(),
-                request.getSlot()
+                request.getSlotStartId(),
+                request.getSlotEndId()
         );
 
         return getById(saved.getId());
@@ -66,23 +70,26 @@ public class StaffClassSectionService {
     @Transactional
     public StaffSectionTableResponse update(Integer id, UpdateSectionRequest request) {
         validateMainInput(request);
-
-        // KIỂM TRA TRẠNG THÁI HỌC KỲ TRƯỚC KHI SỬA
+        List<Integer> classIds = normalizeClassIds(request.getClassIds());
+        int enrolledCount = validateClassSelection(classIds, request.getMaxCapacity());
         checkSemesterStatus(request.getSemesterId());
+        validateScheduleSelection(request);
 
         ClassSection section = classSectionRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
-                        "Không tìm thấy lớp học phần id = " + id
+                        "Khong tim thay lop hoc phan id = " + id
                 ));
 
-        applyRequestToEntity(section, request);
+        applyRequestToEntity(section, request, enrolledCount);
         classSectionRepository.saveAndFlush(section);
-
+        syncSectionEnrollments(id, classIds);
         saveOrUpdateSchedule(
                 id,
+                request.getClassroomId(),
                 request.getDay(),
-                request.getSlot()
+                request.getSlotStartId(),
+                request.getSlotEndId()
         );
 
         return getById(id);
@@ -93,55 +100,117 @@ public class StaffClassSectionService {
         ClassSection section = classSectionRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
-                        "Không tìm thấy lớp học phần id = " + id
+                        "Khong tim thay lop hoc phan id = " + id
                 ));
 
-        classSectionRepository.deactivateRoomAllocationsOfSection(id);
-        classSectionRepository.deactivateSchedulesOfSection(id);
+        if (classSectionRepository.countActiveEnrollmentsBySectionId(id) > 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Khong the xoa lop hoc phan vi dang co sinh vien tham gia."
+            );
+        }
 
+        classSectionRepository.deactivateSchedulesOfSection(id);
         section.setStatus("CANCELLED");
         classSectionRepository.save(section);
     }
 
-    // HÀM KIỂM TRA HỌC KỲ (SỬ DỤNG CHUNG CHO CREATE VÀ UPDATE)
     private void checkSemesterStatus(Integer semesterId) {
         String status = classSectionRepository.findSemesterStatus(semesterId);
         if ("COMPLETED".equalsIgnoreCase(status)) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Không thể thêm hoặc chỉnh sửa lớp học phần trong học kỳ đã hoàn thành."
+                    "Khong the them hoac chinh sua lop hoc phan trong hoc ky da hoan thanh."
             );
         }
     }
 
     private void validateMainInput(CreateSectionRequest request) {
-        if (request.getSlot() == null || request.getSlot() < 1 || request.getSlot() > 5) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "slot chỉ nhận giá trị 1, 2, 3, 4, 5."
-            );
-        }
-
         if (request.getDay() == null || request.getDay().isBlank()) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "day không được để trống."
+                    "day khong duoc de trong."
+            );
+        }
+
+        if (request.getSectionCode() == null || request.getSectionCode().isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "sectionCode khong duoc de trong."
             );
         }
     }
 
-    private void applyRequestToEntity(ClassSection section, CreateSectionRequest request) {
+    private void validateScheduleSelection(CreateSectionRequest request) {
+        if (classSectionRepository.countActiveClassroomById(request.getClassroomId()) == 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Phong hoc khong ton tai hoac dang khong hoat dong."
+            );
+        }
+
+        if (classSectionRepository.countValidSlotRange(request.getSlotStartId(), request.getSlotEndId()) == 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Tiet ket thuc phai lon hon hoac bang tiet bat dau."
+            );
+        }
+    }
+
+    private List<Integer> normalizeClassIds(List<Integer> rawClassIds) {
+        if (rawClassIds == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Can chon tu 1 den toi da 2 classes."
+            );
+        }
+
+        List<Integer> classIds = rawClassIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        if (classIds.isEmpty() || classIds.size() > 2) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Can chon tu 1 den toi da 2 classes."
+            );
+        }
+
+        return classIds;
+    }
+
+    private int validateClassSelection(List<Integer> classIds, Integer maxCapacity) {
+        int activeClassCount = classSectionRepository.countActiveClassesByIds(classIds);
+        if (activeClassCount != classIds.size()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Danh sach classes khong hop le."
+            );
+        }
+
+        int studentCount = classSectionRepository.countStudentsByClassIds(classIds);
+        if (maxCapacity == null || maxCapacity < studentCount) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "maxCapacity khong duoc nho hon tong so sinh vien cua cac classes da chon."
+            );
+        }
+
+        return studentCount;
+    }
+
+    private void syncSectionEnrollments(Integer sectionId, List<Integer> classIds) {
+        classSectionRepository.deactivateEnrollmentsOfSection(sectionId);
+        classSectionRepository.enrollStudentsFromClasses(sectionId, classIds);
+    }
+
+    private void applyRequestToEntity(ClassSection section, CreateSectionRequest request, int enrolledCount) {
         section.setSemesterId(request.getSemesterId());
         section.setCourseId(request.getCourseId());
         section.setLecturerId(request.getLecturerId());
         section.setSectionCode(request.getSectionCode().trim());
-
-        if (request.getEnrolledCount() == null) {
-            section.setEnrolledCount(0);
-        } else {
-            section.setEnrolledCount(request.getEnrolledCount());
-        }
-
+        section.setEnrolledCount(enrolledCount);
         section.setMaxCapacity(request.getMaxCapacity());
 
         if (request.getStatus() == null || request.getStatus().isBlank()) {
@@ -151,30 +220,23 @@ public class StaffClassSectionService {
         }
     }
 
-    private Integer saveOrUpdateSchedule(Integer sectionId, String rawDay, Integer slotNumber) {
+    private Integer saveOrUpdateSchedule(
+            Integer sectionId,
+            Integer classroomId,
+            String rawDay,
+            Integer slotStartId,
+            Integer slotEndId
+    ) {
         String dayOfWeek = normalizeDay(rawDay);
-
-        Integer timeSlotId = classSectionRepository.findTimeSlotIdBySlotNumber(slotNumber)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Không tồn tại time_slot với slot_number = " + slotNumber
-                ));
-
         Integer scheduleId = classSectionRepository.findScheduleIdBySectionId(sectionId)
                 .orElse(null);
 
         if (scheduleId == null) {
-            classSectionRepository.insertSchedule(sectionId, dayOfWeek, timeSlotId);
-
-            return classSectionRepository.findScheduleIdBySectionId(sectionId)
-                    .orElseThrow(() -> new ResponseStatusException(
-                            HttpStatus.INTERNAL_SERVER_ERROR,
-                            "Tạo lịch học thất bại."
-                    ));
+            classSectionRepository.insertSchedule(sectionId, classroomId, dayOfWeek, slotStartId, slotEndId);
+            return classSectionRepository.findScheduleIdBySectionId(sectionId).orElse(null);
         }
 
-        classSectionRepository.updateScheduleById(scheduleId, dayOfWeek, timeSlotId);
-
+        classSectionRepository.updateScheduleById(scheduleId, classroomId, dayOfWeek, slotStartId, slotEndId);
         return scheduleId;
     }
 
@@ -184,69 +246,27 @@ public class StaffClassSectionService {
                 .toUpperCase(Locale.ROOT)
                 .replaceAll("\\s+", " ");
 
-        switch (value) {
-            case "MON":
-            case "MONDAY":
-            case "T2":
-            case "THU 2":
-            case "2":
-                return "MON";
-
-            case "TUE":
-            case "TUESDAY":
-            case "T3":
-            case "THU 3":
-            case "3":
-                return "TUE";
-
-            case "WED":
-            case "WEDNESDAY":
-            case "T4":
-            case "THU 4":
-            case "4":
-                return "WED";
-
-            case "THU":
-            case "THURSDAY":
-            case "T5":
-            case "THU 5":
-            case "5":
-                return "THU";
-
-            case "FRI":
-            case "FRIDAY":
-            case "T6":
-            case "THU 6":
-            case "6":
-                return "FRI";
-
-            case "SAT":
-            case "SATURDAY":
-            case "T7":
-            case "THU 7":
-            case "7":
-                return "SAT";
-
-            case "SUN":
-            case "SUNDAY":
-            case "CN":
-            case "CHU NHAT":
-                return "SUN";
-
-            default:
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "day không hợp lệ. Dùng MON/TUE/... hoặc Thứ 2/Thứ 3/..."
-                );
-        }
+        return switch (value) {
+            case "MON", "MONDAY", "T2", "THU 2", "2" -> "MON";
+            case "TUE", "TUESDAY", "T3", "THU 3", "3" -> "TUE";
+            case "WED", "WEDNESDAY", "T4", "THU 4", "4" -> "WED";
+            case "THU", "THURSDAY", "T5", "THU 5", "5" -> "THU";
+            case "FRI", "FRIDAY", "T6", "THU 6", "6" -> "FRI";
+            case "SAT", "SATURDAY", "T7", "THU 7", "7" -> "SAT";
+            case "SUN", "SUNDAY", "CN", "CHU NHAT" -> "SUN";
+            default -> throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "day khong hop le. Dung MON/TUE/... hoac Thu 2/Thu 3/..."
+            );
+        };
     }
 
     private String removeAccent(String input) {
         String normalized = Normalizer.normalize(input, Normalizer.Form.NFD);
         return normalized
                 .replaceAll("\\p{M}", "")
-                .replace('đ', 'd')
-                .replace('Đ', 'D');
+                .replace('\u0111', 'd')
+                .replace('\u0110', 'D');
     }
 
     private StaffSectionTableResponse toResponse(
@@ -265,10 +285,17 @@ public class StaffClassSectionService {
         response.setCourseId(projection.getCourseId());
         response.setLecturerId(projection.getLecturerId());
         response.setMaxCapacity(projection.getMaxCapacity());
+        response.setClassIds(parseClassIds(projection.getClassIds()));
+        response.setClassCodes(projection.getClassCodes());
+        response.setClassNames(projection.getClassNames());
         response.setLecturerName(projection.getLecturerName());
         response.setDay(projection.getDay());
         response.setDayCode(projection.getDayCode());
         response.setSlot(projection.getSlot());
+        response.setSlotStartId(projection.getSlotStartId());
+        response.setSlotEndId(projection.getSlotEndId());
+        response.setSlotStart(projection.getSlotStart());
+        response.setSlotEnd(projection.getSlotEnd());
         response.setSchedule(projection.getSchedule());
         response.setClassroomId(projection.getClassroomId());
         response.setRoom(projection.getRoom());
@@ -277,5 +304,17 @@ public class StaffClassSectionService {
         response.setSectionStatus(projection.getSectionStatus());
 
         return response;
+    }
+
+    private List<Integer> parseClassIds(String classIds) {
+        if (classIds == null || classIds.isBlank()) {
+            return List.of();
+        }
+
+        return Arrays.stream(classIds.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .map(Integer::valueOf)
+                .toList();
     }
 }

@@ -1,20 +1,23 @@
 package com.ptit.qlphonghoc.staff.dto.class_section;
 
+import java.util.List;
+
 public class StaffSectionTableResponse {
     private Integer id;
     private String classCode;
     private String courseName;
     private String facultyCode;
-    
-    // THÊM TRƯỜNG NÀY VÀO ĐÂY
-    private String departmentCode; 
-
+    private String departmentCode;
     private Integer credits;
     private Integer studentCount;
     private String lecturerName;
     private String day;
     private String dayCode;
     private Integer slot;
+    private Integer slotStartId;
+    private Integer slotEndId;
+    private Integer slotStart;
+    private Integer slotEnd;
     private String schedule;
     private Integer classroomId;
     private String room;
@@ -25,8 +28,9 @@ public class StaffSectionTableResponse {
     private Integer courseId;
     private Integer lecturerId;
     private Integer maxCapacity;
-
-    // --- GETTERS & SETTERS ---
+    private List<Integer> classIds;
+    private String classCodes;
+    private String classNames;
 
     public Integer getId() { return id; }
     public void setId(Integer id) { this.id = id; }
@@ -40,7 +44,6 @@ public class StaffSectionTableResponse {
     public String getFacultyCode() { return facultyCode; }
     public void setFacultyCode(String facultyCode) { this.facultyCode = facultyCode; }
 
-    // THÊM GETTER/SETTER CHO DEPARTMENT MỚI
     public String getDepartmentCode() { return departmentCode; }
     public void setDepartmentCode(String departmentCode) { this.departmentCode = departmentCode; }
 
@@ -61,6 +64,18 @@ public class StaffSectionTableResponse {
 
     public Integer getSlot() { return slot; }
     public void setSlot(Integer slot) { this.slot = slot; }
+
+    public Integer getSlotStartId() { return slotStartId; }
+    public void setSlotStartId(Integer slotStartId) { this.slotStartId = slotStartId; }
+
+    public Integer getSlotEndId() { return slotEndId; }
+    public void setSlotEndId(Integer slotEndId) { this.slotEndId = slotEndId; }
+
+    public Integer getSlotStart() { return slotStart; }
+    public void setSlotStart(Integer slotStart) { this.slotStart = slotStart; }
+
+    public Integer getSlotEnd() { return slotEnd; }
+    public void setSlotEnd(Integer slotEnd) { this.slotEnd = slotEnd; }
 
     public String getSchedule() { return schedule; }
     public void setSchedule(String schedule) { this.schedule = schedule; }
@@ -91,4 +106,13 @@ public class StaffSectionTableResponse {
 
     public Integer getMaxCapacity() { return maxCapacity; }
     public void setMaxCapacity(Integer maxCapacity) { this.maxCapacity = maxCapacity; }
+
+    public List<Integer> getClassIds() { return classIds; }
+    public void setClassIds(List<Integer> classIds) { this.classIds = classIds; }
+
+    public String getClassCodes() { return classCodes; }
+    public void setClassCodes(String classCodes) { this.classCodes = classCodes; }
+
+    public String getClassNames() { return classNames; }
+    public void setClassNames(String classNames) { this.classNames = classNames; }
 }

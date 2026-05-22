@@ -96,6 +96,8 @@ const scopeText = (item) => {
   return item.changeScope || "";
 };
 
+const getPeriodText = (item) => item?.periodText || item?.slot || "-";
+
 const LecturerRoomChangeListPage = () => {
   const [requests, setRequests] = useState([]);
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -194,7 +196,7 @@ const LecturerRoomChangeListPage = () => {
                   <TableHead className="text-xs font-semibold text-gray-600">Lớp học phần</TableHead>
                   <TableHead className="text-xs font-semibold text-gray-600">Đổi phòng</TableHead>
                   <TableHead className="text-xs font-semibold text-gray-600">Phạm vi</TableHead>
-                  <TableHead className="text-xs font-semibold text-gray-600">Ca</TableHead>
+                  <TableHead className="text-xs font-semibold text-gray-600">Tiết</TableHead>
                   <TableHead className="text-center text-xs font-semibold text-gray-600">Trạng thái</TableHead>
                   <TableHead className="text-xs font-semibold text-gray-600">Ngày tạo</TableHead>
                   <TableHead className="text-center text-xs font-semibold text-gray-600">Xem</TableHead>
@@ -216,7 +218,7 @@ const LecturerRoomChangeListPage = () => {
                       <div className="mt-0.5 text-[11px] text-gray-500">{scopeText(item)}</div>
                     </TableCell>
                     <TableCell className="text-xs text-gray-700">
-                      {item.dayOfWeek} - Ca {item.slot}
+                      {item.dayOfWeek} - Tiết {getPeriodText(item)}
                     </TableCell>
                     <TableCell className="text-center">
                       <StatusBadge status={item.status} />

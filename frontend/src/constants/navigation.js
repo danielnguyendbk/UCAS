@@ -44,6 +44,7 @@ const NAVIGATION_BY_ROLE = {
     { icon: School, label: "Ph\xF2ng h\u1ECDc", path: APP_ROUTES.classrooms },
     { icon: BookOpen, label: "M\xF4n h\u1ECDc", path: APP_ROUTES.courses },
     { icon: Users, label: "Gi\u1EA3ng vi\xEAn", path: APP_ROUTES.lecturers },
+    { icon: ClipboardList, label: "L\u1EDBp h\u1ECDc ph\u1EA7n", path: APP_ROUTES.adminSections },
     { icon: Calendar, label: "Th\u1EDDi kh\xF3a bi\u1EC3u", path: APP_ROUTES.timetable },
     { icon: CalendarDays, label: "L\u1ECBch tu\u1EA7n", path: APP_ROUTES.weeklySchedule },
     { icon: Wand2, label: "Ph\xE2n c\xF4ng t\u1EF1 \u0111\u1ED9ng", path: APP_ROUTES.autoAssignment },
@@ -53,8 +54,8 @@ const NAVIGATION_BY_ROLE = {
   ],
   Staff: [
     { icon: LayoutDashboard, label: "T\u1ED5ng quan", path: APP_ROUTES.staffDashboard },
-    { icon: ClipboardList, label: "L\u1EDBp h\u1ECDc ph\u1EA7n", path: APP_ROUTES.staffSections },
     { icon: Calendar, label: "Th\u1EDDi kh\xF3a bi\u1EC3u", path: APP_ROUTES.staffSchedule },
+    { icon: ClipboardList, label: "L\u1EDBp h\u1ECDc ph\u1EA7n", path: APP_ROUTES.staffClassSections },
     { icon: Building2, label: "Ph\xE2n ph\xF2ng & Xung \u0111\u1ED9t", path: APP_ROUTES.staffAllocation },
     { icon: Search, label: "Tra c\u1EE9u l\u1ECBch", path: APP_ROUTES.staffLookup },
     { icon: PlusSquare, label: "\u0110\u1EB7t/\u0110\u1ED5i ph\xF2ng kh\u1EA9n c\u1EA5p", path: APP_ROUTES.staffBookings, badge: "G\u1EA5p" },

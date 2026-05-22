@@ -1,6 +1,5 @@
 package com.ptit.qlphonghoc.staff.dto.datPhongKhanCap;
 
-import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -9,46 +8,51 @@ import java.time.LocalDate;
 
 public class CreateEmergencyRoomBookingRequest {
 
-    @NotNull(message = "semesterId không được để trống")
+    @NotNull(message = "semesterId is required")
     private Integer semesterId;
 
     /*
      * STUDENT, LECTURER, CLASS, DEPARTMENT, CLUB, OTHER
      */
-    @NotBlank(message = "targetType không được để trống")
+    @NotBlank(message = "targetType is required")
     private String targetType;
 
-    @NotBlank(message = "recipientName không được để trống")
+    @NotBlank(message = "recipientName is required")
     private String recipientName;
 
     private String recipientCode;
 
-    @NotNull(message = "expectedAttendees không được để trống")
-    @Min(value = 1, message = "Số người dự kiến phải > 0")
+    @NotNull(message = "expectedAttendees is required")
+    @Min(value = 1, message = "expectedAttendees must be greater than 0")
     private Integer expectedAttendees;
 
-    @NotNull(message = "classroomId không được để trống")
+    @NotNull(message = "classroomId is required")
     private Integer classroomId;
 
-    @NotNull(message = "bookingDate không được để trống")
+    @NotNull(message = "bookingDate is required")
     private LocalDate bookingDate;
 
-    @NotNull(message = "slot không được để trống")
-    @Min(value = 1, message = "slot phải từ 1 đến 5")
-    @Max(value = 5, message = "slot phải từ 1 đến 5")
+    @Min(value = 1, message = "slotStartId must be greater than 0")
+    private Integer slotStartId;
+
+    @Min(value = 1, message = "slotEndId must be greater than 0")
+    private Integer slotEndId;
+
+    // Legacy field kept for older clients; new UI sends slotStartId/slotEndId.
+    @Min(value = 1, message = "slot must be greater than 0")
     private Integer slot;
 
-    @NotBlank(message = "purpose không được để trống")
+    @NotBlank(message = "purpose is required")
     private String purpose;
 
-    @NotBlank(message = "emergencyReason không được để trống")
+    @NotBlank(message = "emergencyReason is required")
     private String emergencyReason;
 
     /*
-     * ID user staff đang tạo yêu cầu.
-     * Sau này có JWT thì bỏ field này và lấy từ token.
+     * Staff user id creating the emergency booking.
+     * Later this should come from JWT instead of the request body.
      */
-    @NotNull(message = "staffUserId không được để trống")
+    @NotNull(message = "staffUserId is required")
     private Integer staffUserId;
 
     public CreateEmergencyRoomBookingRequest() {
@@ -108,6 +112,22 @@ public class CreateEmergencyRoomBookingRequest {
 
     public void setBookingDate(LocalDate bookingDate) {
         this.bookingDate = bookingDate;
+    }
+
+    public Integer getSlotStartId() {
+        return slotStartId;
+    }
+
+    public void setSlotStartId(Integer slotStartId) {
+        this.slotStartId = slotStartId;
+    }
+
+    public Integer getSlotEndId() {
+        return slotEndId;
+    }
+
+    public void setSlotEndId(Integer slotEndId) {
+        this.slotEndId = slotEndId;
     }
 
     public Integer getSlot() {

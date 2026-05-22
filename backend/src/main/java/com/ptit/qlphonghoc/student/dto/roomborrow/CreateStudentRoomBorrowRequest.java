@@ -1,6 +1,5 @@
 package com.ptit.qlphonghoc.student.dto.roomborrow;
 
-import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -20,9 +19,15 @@ public class CreateStudentRoomBorrowRequest {
     @NotNull(message = "bookingDate is required")
     private LocalDate bookingDate;
 
-    @NotNull(message = "slot is required")
-    @Min(value = 1, message = "slot must be from 1 to 5")
-    @Max(value = 5, message = "slot must be from 1 to 5")
+    @NotNull(message = "slotStartId is required")
+    @Min(value = 1, message = "slotStartId must be greater than 0")
+    private Integer slotStartId;
+
+    @NotNull(message = "slotEndId is required")
+    @Min(value = 1, message = "slotEndId must be greater than 0")
+    private Integer slotEndId;
+
+    // Legacy field kept for older clients; new UI sends slotStartId/slotEndId.
     private Integer slot;
 
     @NotNull(message = "expectedAttendees is required")
@@ -66,6 +71,22 @@ public class CreateStudentRoomBorrowRequest {
 
     public void setBookingDate(LocalDate bookingDate) {
         this.bookingDate = bookingDate;
+    }
+
+    public Integer getSlotStartId() {
+        return slotStartId;
+    }
+
+    public void setSlotStartId(Integer slotStartId) {
+        this.slotStartId = slotStartId;
+    }
+
+    public Integer getSlotEndId() {
+        return slotEndId;
+    }
+
+    public void setSlotEndId(Integer slotEndId) {
+        this.slotEndId = slotEndId;
     }
 
     public Integer getSlot() {

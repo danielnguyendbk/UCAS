@@ -26,21 +26,10 @@ import {
 import { httpClient } from "../../services/httpClient";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 
-const slotOptions = [
-  { value: "1", label: "Ca 1 (07:00 - 09:00)" },
-  { value: "2", label: "Ca 2 (09:10 - 11:10)" },
-  { value: "3", label: "Ca 3 (13:00 - 15:00)" },
-  { value: "4", label: "Ca 4 (15:10 - 17:10)" },
-  { value: "5", label: "Ca 5 (17:30 - 19:30)" },
-];
-
 const weekOptions = Array.from({ length: 20 }, (_, index) => {
   const value = String(index + 1);
   return { value, label: `Tuần ${value}` };
 });
-
-const normalizeText = (value) =>
-  (value || "").toString().trim().toLowerCase();
 
 const dayCodeToJsDay = {
   SUN: 0,
@@ -51,6 +40,9 @@ const dayCodeToJsDay = {
   FRI: 5,
   SAT: 6,
 };
+
+const normalizeText = (value) =>
+  (value || "").toString().trim().toLowerCase();
 
 const toDateInputValue = (date) => {
   const localDate = new Date(
@@ -85,6 +77,20 @@ const getActiveSemesterId = (semesters) => {
   return (activeSemester || semesters[0])?.id?.toString() || "";
 };
 
+const getTimeSlotId = (slot) =>
+  Number(slot?.slotId ?? slot?.slot_id ?? slot?.id ?? 0);
+
+const getTimeSlotNo = (slot) =>
+  Number(slot?.slotNo ?? slot?.slot_no ?? slot?.slotNumber ?? 0);
+
+const getTimeSlotLabel = (slot) => {
+  const slotNo = getTimeSlotNo(slot);
+  return slot?.slotLabel || slot?.slot_label || `Tiết ${slotNo || ""}`;
+};
+
+const getSchedulePeriod = (schedule) =>
+  schedule?.periodText || schedule?.slotLabel || String(schedule?.slotNumber || "");
+
 const initialBookingForm = {
   semesterId: "",
   usedForType: "CLASS",
@@ -93,7 +99,8 @@ const initialBookingForm = {
   roomId: "",
   roomCode: "",
   date: "",
-  slot: "",
+  slotStartId: "",
+  slotEndId: "",
   purpose: "",
   emergencyReason: "",
   attendees: "",
@@ -120,6 +127,7 @@ const StaffBookingsPage = () => {
   const [successMessage, setSuccessMessage] = useState("");
   const [isRoomSearchOpen, setIsRoomSearchOpen] = useState(false);
   const [semestersList, setSemestersList] = useState([]);
+  const [timeSlots, setTimeSlots] = useState([]);
   const [changeSchedules, setChangeSchedules] = useState([]);
   const [loadingSchedules, setLoadingSchedules] = useState(false);
 
@@ -162,23 +170,37 @@ const StaffBookingsPage = () => {
   }, [matchedChangeSchedules, changeForm.sectionCode, changeForm.courseName]);
 
   useEffect(() => {
-    const fetchSemesters = async () => {
+    const fetchInitialData = async () => {
       try {
-        const res = await httpClient.get("/api/categories/semesters");
-        const list = res.data.data || [];
-        setSemestersList(list);
+        const [semestersRes, slotsRes] = await Promise.all([
+          httpClient.get("/api/categories/semesters"),
+          httpClient.get("/api/categories/time-slots"),
+        ]);
+        const semesters = semestersRes.data?.data || semestersRes.data || [];
+        const slots = (slotsRes.data?.data || slotsRes.data || [])
+          .slice()
+          .sort((a, b) => getTimeSlotNo(a) - getTimeSlotNo(b));
+        const activeSemesterId = getActiveSemesterId(semesters);
+        const firstSlotId = slots[0] ? String(getTimeSlotId(slots[0])) : "";
 
-        const activeSemesterId = getActiveSemesterId(list);
+        setSemestersList(semesters);
+        setTimeSlots(slots);
+
         if (activeSemesterId) {
-          setBookingForm((prev) => ({ ...prev, semesterId: activeSemesterId }));
+          setBookingForm((prev) => ({
+            ...prev,
+            semesterId: activeSemesterId,
+            slotStartId: prev.slotStartId || firstSlotId,
+            slotEndId: prev.slotEndId || firstSlotId,
+          }));
           setChangeForm((prev) => ({ ...prev, semesterId: activeSemesterId }));
         }
       } catch (error) {
-        console.error("Lỗi lấy danh sách học kỳ:", error);
+        console.error("Không tải được danh mục học kỳ/tiết học:", error);
       }
     };
 
-    fetchSemesters();
+    fetchInitialData();
   }, []);
 
   useEffect(() => {
@@ -197,7 +219,7 @@ const StaffBookingsPage = () => {
         setChangeSchedules(res.data?.data || res.data || []);
       } catch (error) {
         setChangeSchedules([]);
-        console.error("Lỗi lấy lớp học phần đã phân phòng:", error);
+        console.error("Không tải được lớp học phần đã phân phòng:", error);
       } finally {
         setLoadingSchedules(false);
       }
@@ -257,7 +279,20 @@ const StaffBookingsPage = () => {
     const nextErrors = {};
     if (!bookingForm.semesterId) nextErrors.semesterId = "Vui lòng chọn học kỳ";
     if (!bookingForm.date) nextErrors.date = "Vui lòng chọn ngày";
-    if (!bookingForm.slot) nextErrors.slot = "Vui lòng chọn ca học";
+    if (!bookingForm.slotStartId) nextErrors.slotStartId = "Vui lòng chọn tiết bắt đầu";
+    if (!bookingForm.slotEndId) {
+      nextErrors.slotEndId = "Vui lòng chọn tiết kết thúc";
+    } else {
+      const startSlot = timeSlots.find(
+        (slot) => getTimeSlotId(slot) === Number(bookingForm.slotStartId),
+      );
+      const endSlot = timeSlots.find(
+        (slot) => getTimeSlotId(slot) === Number(bookingForm.slotEndId),
+      );
+      if (startSlot && endSlot && getTimeSlotNo(endSlot) < getTimeSlotNo(startSlot)) {
+        nextErrors.slotEndId = "Tiết kết thúc phải lớn hơn hoặc bằng tiết bắt đầu";
+      }
+    }
     if (!bookingForm.attendees || Number(bookingForm.attendees) <= 0) {
       nextErrors.attendees = "Số người phải lớn hơn 0";
     }
@@ -332,7 +367,8 @@ const StaffBookingsPage = () => {
         expectedAttendees: Number(bookingForm.attendees),
         classroomId: Number(bookingForm.roomId),
         bookingDate: bookingForm.date,
-        slot: Number(bookingForm.slot),
+        slotStartId: Number(bookingForm.slotStartId),
+        slotEndId: Number(bookingForm.slotEndId),
         purpose: bookingForm.purpose,
         emergencyReason: bookingForm.emergencyReason,
         staffUserId: user?.id || 2,
@@ -342,6 +378,8 @@ const StaffBookingsPage = () => {
       setBookingForm({
         ...initialBookingForm,
         semesterId: bookingForm.semesterId,
+        slotStartId: bookingForm.slotStartId,
+        slotEndId: bookingForm.slotEndId,
       });
       setErrors({});
     } catch (error) {
@@ -408,7 +446,8 @@ const StaffBookingsPage = () => {
   const canOpenBookingRoomSearch =
     bookingForm.semesterId &&
     bookingForm.date &&
-    bookingForm.slot &&
+    bookingForm.slotStartId &&
+    bookingForm.slotEndId &&
     bookingForm.attendees;
 
   const isChangeSessionDateValid =
@@ -534,25 +573,74 @@ const StaffBookingsPage = () => {
 
                 <div className="space-y-2">
                   <Label>
-                    Ca học <span className="text-red-500">*</span>
+                    Tiết bắt đầu <span className="text-red-500">*</span>
                   </Label>
                   <Select
-                    value={bookingForm.slot}
-                    onValueChange={(value) => resetBookingRoom({ slot: value })}
+                    value={bookingForm.slotStartId}
+                    onValueChange={(value) => {
+                      const nextStart = timeSlots.find(
+                        (slot) => getTimeSlotId(slot) === Number(value),
+                      );
+                      const currentEnd = timeSlots.find(
+                        (slot) => getTimeSlotId(slot) === Number(bookingForm.slotEndId),
+                      );
+                      resetBookingRoom({
+                        slotStartId: value,
+                        slotEndId:
+                          currentEnd && nextStart && getTimeSlotNo(currentEnd) >= getTimeSlotNo(nextStart)
+                            ? bookingForm.slotEndId
+                            : value,
+                      });
+                    }}
                   >
                     <SelectTrigger className="h-10">
-                      <SelectValue placeholder="Chọn ca học" />
+                      <SelectValue placeholder="Chọn tiết bắt đầu" />
                     </SelectTrigger>
                     <SelectContent>
-                      {slotOptions.map((slot) => (
-                        <SelectItem key={slot.value} value={slot.value}>
-                          {slot.label}
+                      {timeSlots.map((slot) => (
+                        <SelectItem key={getTimeSlotId(slot)} value={String(getTimeSlotId(slot))}>
+                          {getTimeSlotLabel(slot)}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  {errors.slot && (
-                    <p className="text-xs text-red-600">{errors.slot}</p>
+                  {errors.slotStartId && (
+                    <p className="text-xs text-red-600">{errors.slotStartId}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label>
+                    Tiết kết thúc <span className="text-red-500">*</span>
+                  </Label>
+                  <Select
+                    value={bookingForm.slotEndId}
+                    onValueChange={(value) => resetBookingRoom({ slotEndId: value })}
+                  >
+                    <SelectTrigger className="h-10">
+                      <SelectValue placeholder="Chọn tiết kết thúc" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {timeSlots.map((slot) => {
+                        const startSlot = timeSlots.find(
+                          (item) => getTimeSlotId(item) === Number(bookingForm.slotStartId),
+                        );
+                        const disabled =
+                          startSlot && getTimeSlotNo(slot) < getTimeSlotNo(startSlot);
+                        return (
+                          <SelectItem
+                            key={getTimeSlotId(slot)}
+                            value={String(getTimeSlotId(slot))}
+                            disabled={disabled}
+                          >
+                            {getTimeSlotLabel(slot)}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  {errors.slotEndId && (
+                    <p className="text-xs text-red-600">{errors.slotEndId}</p>
                   )}
                 </div>
 
@@ -630,8 +718,7 @@ const StaffBookingsPage = () => {
 
                 <div className="space-y-2">
                   <Label>
-                    Người / đơn vị sử dụng{" "}
-                    <span className="text-red-500">*</span>
+                    Người / đơn vị sử dụng <span className="text-red-500">*</span>
                   </Label>
                   <Input
                     value={bookingForm.usedForName}
@@ -751,8 +838,7 @@ const StaffBookingsPage = () => {
 
                 <div className="space-y-2">
                   <Label>
-                    Mã lớp học phần & tên môn{" "}
-                    <span className="text-red-500">*</span>
+                    Mã lớp học phần & tên môn <span className="text-red-500">*</span>
                   </Label>
                   <div className="grid grid-cols-3 gap-2">
                     <Input
@@ -805,8 +891,8 @@ const StaffBookingsPage = () => {
                       </p>
                       <p>
                         <span className="font-semibold">Lịch:</span>{" "}
-                        {selectedChangeSchedule.dayOfWeekText}, ca{" "}
-                        {selectedChangeSchedule.slotNumber}
+                        {selectedChangeSchedule.dayOfWeekText}, tiết{" "}
+                        {getSchedulePeriod(selectedChangeSchedule)}
                       </p>
                       <p>
                         <span className="font-semibold">Sức chứa cần:</span>{" "}
@@ -991,10 +1077,11 @@ const StaffBookingsPage = () => {
           mode === "booking" ? handleBookingRoomSelect : handleChangeRoomSelect
         }
         date={mode === "booking" ? bookingForm.date : changeForm.targetDate}
-        slot={
-          mode === "booking"
-            ? bookingForm.slot
-            : selectedChangeSchedule?.slotNumber
+        slotStartId={
+          mode === "booking" ? bookingForm.slotStartId : selectedChangeSchedule?.slotStartId
+        }
+        slotEndId={
+          mode === "booking" ? bookingForm.slotEndId : selectedChangeSchedule?.slotEndId
         }
         semesterId={
           mode === "booking" ? bookingForm.semesterId : changeForm.semesterId
