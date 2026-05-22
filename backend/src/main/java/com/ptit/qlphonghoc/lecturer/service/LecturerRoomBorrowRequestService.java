@@ -54,24 +54,20 @@ public class LecturerRoomBorrowRequestService {
     public List<LecturerAvailableRoomResponse> findAvailableRooms(
             Integer semesterId,
             LocalDate bookingDate,
-            Integer slot,
+            Integer slotStartId,
+            Integer slotEndId,
             Integer expectedAttendees,
             String roomType,
             String keyword
     ) {
-        validateSearchInput(semesterId, bookingDate, slot, expectedAttendees);
-
-        Integer timeSlotId = repository.findTimeSlotIdBySlotNumber(slot)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "slot does not exist: " + slot
-                ));
+        validateSearchInput(semesterId, bookingDate, slotStartId, slotEndId, expectedAttendees);
 
         return repository.findAvailableRooms(
                         semesterId,
                         bookingDate,
                         toDayCode(bookingDate),
-                        timeSlotId,
+                        slotStartId,
+                        slotEndId,
                         expectedAttendees,
                         normalizeRoomType(roomType),
                         normalizeBlank(keyword)
@@ -138,11 +134,6 @@ public class LecturerRoomBorrowRequestService {
         String bookingScope = "CLUB_ACTIVITY".equals(requestType) ? "CLUB" : "PERSONAL";
         Integer clubId = resolveClubId(bookingScope, request.getClubCode(), userId);
         Integer sectionId = resolveSectionId(requestType, request.getSectionId(), request, lecturer.getId());
-        Integer timeSlotId = repository.findTimeSlotIdBySlotNumber(request.getSlot())
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "slot does not exist: " + request.getSlot()
-                ));
 
         int classroomCount = repository.countUsableClassroom(
                 request.getPreferredClassroomId(),
@@ -162,7 +153,8 @@ public class LecturerRoomBorrowRequestService {
                 request.getSemesterId(),
                 sectionId,
                 request.getBookingDate(),
-                timeSlotId,
+                request.getSlotStartId(),
+                request.getSlotEndId(),
                 userId,
                 clubId,
                 request.getExpectedAttendees(),
@@ -183,7 +175,8 @@ public class LecturerRoomBorrowRequestService {
     private void validateSearchInput(
             Integer semesterId,
             LocalDate bookingDate,
-            Integer slot,
+            Integer slotStartId,
+            Integer slotEndId,
             Integer expectedAttendees
     ) {
         if (semesterId == null) {
@@ -192,8 +185,14 @@ public class LecturerRoomBorrowRequestService {
         if (bookingDate == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "bookingDate is required.");
         }
-        if (slot == null || slot < 1 || slot > 5) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "slot must be from 1 to 5.");
+        if (slotStartId == null || slotEndId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "slotStartId and slotEndId are required.");
+        }
+        if (repository.countValidSlotRange(slotStartId, slotEndId) == 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "slotEndId must be greater than or equal to slotStartId."
+            );
         }
         if (expectedAttendees == null || expectedAttendees <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "expectedAttendees must be greater than 0.");
@@ -212,7 +211,8 @@ public class LecturerRoomBorrowRequestService {
         validateSearchInput(
                 request.getSemesterId(),
                 request.getBookingDate(),
-                request.getSlot(),
+                request.getSlotStartId(),
+                request.getSlotEndId(),
                 request.getExpectedAttendees()
         );
 
@@ -425,6 +425,10 @@ public class LecturerRoomBorrowRequestService {
         response.setSemesterId(projection.getSemesterId());
         response.setBookingDate(projection.getBookingDate());
         response.setSlot(projection.getSlot());
+        response.setSlotStartId(projection.getSlotStartId());
+        response.setSlotEndId(projection.getSlotEndId());
+        response.setSlotStart(projection.getSlotStart());
+        response.setSlotEnd(projection.getSlotEnd());
         response.setPeriodText(projection.getPeriodText());
         response.setRequestedBy(projection.getRequestedBy());
         response.setClubId(projection.getClubId());

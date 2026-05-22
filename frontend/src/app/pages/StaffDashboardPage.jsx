@@ -6,7 +6,6 @@ import {
   Building2,
   AlertTriangle,
   CalendarCheck,
-  ArrowRight,
   Search,
   PlusSquare,
   ListChecks,
@@ -65,7 +64,6 @@ const stats = [
   }
 ];
 const quickActions = [
-  { label: "Qu\u1EA3n l\xFD l\u1EDBp h\u1ECDc ph\u1EA7n", icon: ClipboardList, path: "/staff/sections", color: "text-blue-600", bg: "bg-blue-50 hover:bg-blue-100" },
   { label: "Qu\u1EA3n l\xFD th\u1EDDi kh\xF3a bi\u1EC3u", icon: ListChecks, path: "/staff/schedule", color: "text-indigo-600", bg: "bg-indigo-50 hover:bg-indigo-100" },
   { label: "Ph\xE2n ph\xF2ng & Xung \u0111\u1ED9t", icon: Building2, path: "/staff/allocation", color: "text-teal-600", bg: "bg-teal-50 hover:bg-teal-100" },
   { label: "Tra c\u1EE9u l\u1ECBch ph\xF2ng", icon: Search, path: "/staff/lookup", color: "text-cyan-600", bg: "bg-cyan-50 hover:bg-cyan-100" },
@@ -157,11 +155,7 @@ const StaffDashboardPage = () => {
       ] }),
       /* @__PURE__ */ jsxs(Card, { className: "shadow-sm border-0 ring-1 ring-gray-200 lg:col-span-2", children: [
         /* @__PURE__ */ jsxs(CardHeader, { className: "pb-3 flex flex-row items-center justify-between", children: [
-          /* @__PURE__ */ jsx(CardTitle, { className: "text-sm font-semibold text-gray-700", children: "L\u1EDBp h\u1ECDc ph\u1EA7n g\u1EA7n \u0111\xE2y" }),
-          /* @__PURE__ */ jsxs(Link, { to: "/staff/sections", className: "text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-medium", children: [
-            "Xem t\u1EA5t c\u1EA3 ",
-            /* @__PURE__ */ jsx(ArrowRight, { className: "w-3 h-3" })
-          ] })
+          /* @__PURE__ */ jsx(CardTitle, { className: "text-sm font-semibold text-gray-700", children: "L\u1EDBp h\u1ECDc ph\u1EA7n g\u1EA7n \u0111\xE2y" })
         ] }),
         /* @__PURE__ */ jsx(CardContent, { className: "p-0", children: loading ? /* @__PURE__ */ jsxs("div", { className: "flex items-center justify-center py-12 text-sm text-gray-400", children: [
           /* @__PURE__ */ jsx(RefreshCw, { className: "w-4 h-4 animate-spin mr-2" }),

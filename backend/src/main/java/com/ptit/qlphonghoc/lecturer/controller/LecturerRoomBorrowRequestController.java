@@ -43,16 +43,22 @@ public class LecturerRoomBorrowRequestController {
     public ResponseEntity<List<LecturerAvailableRoomResponse>> findAvailableRooms(
             @RequestParam Integer semesterId,
             @RequestParam LocalDate bookingDate,
-            @RequestParam Integer slot,
+            @RequestParam(required = false) Integer slotStartId,
+            @RequestParam(required = false) Integer slotEndId,
+            @RequestParam(required = false) Integer slot,
             @RequestParam Integer expectedAttendees,
             @RequestParam(required = false) String roomType,
             @RequestParam(required = false) String keyword
     ) {
+        Integer effectiveSlotStartId = slotStartId != null ? slotStartId : slot;
+        Integer effectiveSlotEndId = slotEndId != null ? slotEndId : effectiveSlotStartId;
+
         return ResponseEntity.ok(
                 service.findAvailableRooms(
                         semesterId,
                         bookingDate,
-                        slot,
+                        effectiveSlotStartId,
+                        effectiveSlotEndId,
                         expectedAttendees,
                         roomType,
                         keyword

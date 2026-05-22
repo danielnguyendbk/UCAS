@@ -94,6 +94,9 @@ const getResponseList = (response) => {
   return [];
 };
 
+const getSchedulePeriod = (schedule) =>
+  schedule?.periodText || schedule?.slotLabel || String(schedule?.slotNumber || "");
+
 const initialForm = {
   semesterId: "",
   sectionCode: "",
@@ -478,8 +481,8 @@ const LecturerRoomChangeRequestPage = () => {
                     </p>
                     <p>
                       <span className="font-semibold">Lịch:</span>{" "}
-                      {selectedSchedule.dayOfWeekText}, ca{" "}
-                      {selectedSchedule.slotNumber}
+                      {selectedSchedule.dayOfWeekText}, tiết{" "}
+                      {getSchedulePeriod(selectedSchedule)}
                     </p>
                     <p>
                       <span className="font-semibold">Sức chứa tối đa:</span>{" "}

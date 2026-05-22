@@ -72,7 +72,8 @@ public class LecturerRoomChangeRequestService {
                         schedule.getScheduleId(),
                         schedule.getCurrentClassroomId(),
                         schedule.getDayOfWeekCode(),
-                        schedule.getTimeSlotId(),
+                        schedule.getSlotStartId(),
+                        schedule.getSlotEndId(),
                         attendees,
                         normalizeBlank(roomType),
                         normalizeBlank(keyword),
@@ -129,7 +130,8 @@ public class LecturerRoomChangeRequestService {
                 schedule.getScheduleId(),
                 schedule.getCurrentClassroomId(),
                 schedule.getDayOfWeekCode(),
-                schedule.getTimeSlotId(),
+                schedule.getSlotStartId(),
+                schedule.getSlotEndId(),
                 request.getNewClassroomId(),
                 schedule.getMaxCapacity(),
                 "",
@@ -302,6 +304,11 @@ public class LecturerRoomChangeRequestService {
         response.setLecturerName(projection.getLecturerName());
         response.setDayOfWeekCode(projection.getDayOfWeekCode());
         response.setDayOfWeekText(projection.getDayOfWeekText());
+        response.setSlotStartId(projection.getSlotStartId());
+        response.setSlotEndId(projection.getSlotEndId());
+        response.setSlotStartNo(projection.getSlotStartNo());
+        response.setSlotEndNo(projection.getSlotEndNo());
+        response.setPeriodText(projection.getPeriodText());
         response.setSlotNumber(projection.getSlotNumber());
         response.setCurrentClassroomId(projection.getCurrentClassroomId());
         response.setCurrentRoomCode(projection.getCurrentRoomCode());
@@ -335,7 +342,12 @@ public class LecturerRoomChangeRequestService {
         response.setCourseName(projection.getCourseName());
         response.setLecturerName(projection.getLecturerName());
         response.setDayOfWeek(projection.getDayOfWeek());
+        response.setSlotStartId(projection.getSlotStartId());
+        response.setSlotEndId(projection.getSlotEndId());
+        response.setSlotStart(projection.getSlotStart());
+        response.setSlotEnd(projection.getSlotEnd());
         response.setSlot(projection.getSlot());
+        response.setPeriodText(projection.getPeriodText());
         response.setChangeScope(projection.getChangeScope());
         response.setTargetDate(projection.getTargetDate());
         response.setFromWeek(projection.getFromWeek());

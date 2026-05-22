@@ -42,6 +42,7 @@ const adminMenuItems = [
   { icon: School, label: "Ph\xF2ng h\u1ECDc", path: "/classrooms" },
   { icon: BookOpen, label: "M\xF4n h\u1ECDc", path: "/courses" },
   { icon: Users, label: "Gi\u1EA3ng vi\xEAn", path: "/lecturers" },
+  { icon: ClipboardList, label: "L\u1EDBp h\u1ECDc ph\u1EA7n", path: "/sections" },
   { icon: Calendar, label: "Th\u1EDDi kh\xF3a bi\u1EC3u", path: "/timetable" },
   { icon: CalendarDays, label: "L\u1ECBch tu\u1EA7n", path: "/weekly-schedule" },
   { icon: Wand2, label: "Ph\xE2n c\xF4ng t\u1EF1 \u0111\u1ED9ng", path: "/auto-assignment" },
@@ -51,7 +52,6 @@ const adminMenuItems = [
 ];
 const staffMenuItems = [
   { icon: LayoutDashboard, label: "T\u1ED5ng quan", path: "/staff" },
-  { icon: ClipboardList, label: "L\u1EDBp h\u1ECDc ph\u1EA7n", path: "/staff/sections" },
   { icon: Calendar, label: "Th\u1EDDi kh\xF3a bi\u1EC3u", path: "/staff/schedule" },
   { icon: Building2, label: "Ph\xE2n ph\xF2ng & Xung \u0111\u1ED9t", path: "/staff/allocation" },
   { icon: Search, label: "Tra c\u1EE9u l\u1ECBch", path: "/staff/lookup" },

@@ -13,11 +13,16 @@ import java.util.Optional;
 public interface StaffEmergencyRoomBookingRepository extends JpaRepository<ClassSection, Integer> {
 
     @Query(value = """
-        SELECT id
-        FROM time_slots
-        WHERE slot_number = :slotNumber
+        SELECT COUNT(*)
+        FROM time_slots start_slot
+        JOIN time_slots end_slot ON end_slot.slot_id = :slotEndId
+        WHERE start_slot.slot_id = :slotStartId
+          AND end_slot.slot_no >= start_slot.slot_no
         """, nativeQuery = true)
-    Optional<Integer> findTimeSlotIdBySlotNumber(@Param("slotNumber") Integer slotNumber);
+    int countValidSlotRange(
+            @Param("slotStartId") Integer slotStartId,
+            @Param("slotEndId") Integer slotEndId
+    );
 
     @Query(value = """
         SELECT COUNT(*)
@@ -62,15 +67,15 @@ public interface StaffEmergencyRoomBookingRepository extends JpaRepository<Class
 
           AND NOT EXISTS (
               SELECT 1
-              FROM room_allocations ra
-              JOIN section_schedules ss ON ss.id = ra.schedule_id
-              JOIN class_sections cs ON cs.id = ss.section_id
-              WHERE ra.classroom_id = cr.id
-                AND ra.is_active = TRUE
+              FROM schedules sch
+              JOIN class_sections cs ON cs.id = sch.section_id
+              WHERE sch.classroom_id = cr.id
+                AND sch.status = 'ACTIVE'
                 AND cs.status = 'ACTIVE'
                 AND cs.semester_id = :semesterId
-                AND ss.day_of_week = :dayOfWeek
-                AND ss.time_slot_id = :timeSlotId
+                AND sch.day_of_week = :dayOfWeek
+                AND sch.slot_start_id <= :slotEndId
+                AND sch.slot_end_id >= :slotStartId
           )
 
           AND NOT EXISTS (
@@ -79,14 +84,38 @@ public interface StaffEmergencyRoomBookingRepository extends JpaRepository<Class
               WHERE rbr.approved_classroom_id = cr.id
                 AND rbr.status = 'APPROVED'
                 AND rbr.booking_date = :bookingDate
-                AND rbr.time_slot_id = :timeSlotId
+                AND rbr.slot_start_id <= :slotEndId
+                AND rbr.slot_end_id >= :slotStartId
+          )
+
+          AND NOT EXISTS (
+              SELECT 1
+              FROM temporary_room_changes trc
+              JOIN schedules sch ON sch.id = trc.schedule_id
+              JOIN semesters sem ON sem.id = trc.semester_id
+              WHERE trc.new_classroom_id = cr.id
+                AND trc.status = 'APPROVED'
+                AND trc.is_active = TRUE
+                AND trc.semester_id = :semesterId
+                AND sch.day_of_week = :dayOfWeek
+                AND sch.slot_start_id <= :slotEndId
+                AND sch.slot_end_id >= :slotStartId
+                AND (
+                    (trc.change_scope = 'SESSION' AND trc.target_date = :bookingDate)
+                    OR (
+                        trc.change_scope IN ('WEEK_RANGE','REST_OF_SEMESTER')
+                        AND FLOOR(DATEDIFF(:bookingDate, sem.start_date) / 7) + 1
+                            BETWEEN trc.from_week AND COALESCE(trc.to_week, 999)
+                    )
+                )
           )
         """, nativeQuery = true)
     int countAvailableClassroomForEmergency(
             @Param("semesterId") Integer semesterId,
             @Param("bookingDate") LocalDate bookingDate,
             @Param("dayOfWeek") String dayOfWeek,
-            @Param("timeSlotId") Integer timeSlotId,
+            @Param("slotStartId") Integer slotStartId,
+            @Param("slotEndId") Integer slotEndId,
             @Param("classroomId") Integer classroomId,
             @Param("expectedAttendees") Integer expectedAttendees
     );
@@ -97,60 +126,51 @@ public interface StaffEmergencyRoomBookingRepository extends JpaRepository<Class
             CONCAT(b.code, '-', cr.room_number) AS roomCode,
             cr.capacity AS capacity,
             cr.room_type AS roomType,
-
             CASE cr.room_type
-                WHEN 'LECTURE' THEN 'Phòng học'
-                WHEN 'LAB' THEN 'Phòng máy'
-                WHEN 'SEMINAR' THEN 'Phòng seminar'
-                WHEN 'AUDITORIUM' THEN 'Hội trường nhỏ'
+                WHEN 'LECTURE' THEN 'Phong hoc'
+                WHEN 'LAB' THEN 'Phong may'
+                WHEN 'SEMINAR' THEN 'Phong seminar'
+                WHEN 'AUDITORIUM' THEN 'Hoi truong nho'
                 ELSE cr.room_type
             END AS roomTypeText,
-
-            /* ĐÃ CẬP NHẬT THIẾT BỊ THEO YÊU CẦU MỚI */
             CASE cr.room_type
-                WHEN 'LAB' THEN 'Máy tính, Máy lạnh'
-                WHEN 'SEMINAR' THEN 'Micro, Tivi, Máy lạnh'
-                WHEN 'LECTURE' THEN 'Micro, Tivi, Máy lạnh'
-                WHEN 'AUDITORIUM' THEN 'Micro, Máy chiếu, Máy lạnh'
-                ELSE 'Không có'
+                WHEN 'LAB' THEN 'May tinh, May lanh'
+                WHEN 'SEMINAR' THEN 'Micro, Tivi, May lanh'
+                WHEN 'LECTURE' THEN 'Micro, Tivi, May lanh'
+                WHEN 'AUDITORIUM' THEN 'Micro, May chieu, May lanh'
+                ELSE 'Khong co'
             END AS mainEquipment,
-
-            'Khả dụng theo dữ liệu hiện tại' AS statusText
-
+            'Kha dung theo du lieu hien tai' AS statusText
         FROM classrooms cr
         JOIN buildings b ON b.id = cr.building_id
-
         WHERE cr.is_active = TRUE
           AND cr.capacity >= :expectedAttendees
-
           AND (:keyword IS NULL OR :keyword = ''
                OR LOWER(CONCAT(b.code, '-', cr.room_number)) LIKE CONCAT('%', LOWER(:keyword), '%')
                OR LOWER(cr.room_type) LIKE CONCAT('%', LOWER(:keyword), '%')
-               /* CẬP NHẬT TÌM KIẾM ĐỂ KHỚP VỚI THIẾT BỊ MỚI */
                OR LOWER(
                     CASE cr.room_type
-                        WHEN 'LAB' THEN 'Máy tính, Máy lạnh'
-                        WHEN 'SEMINAR' THEN 'Micro, Tivi, Máy lạnh'
-                        WHEN 'LECTURE' THEN 'Micro, Tivi, Máy lạnh'
-                        WHEN 'AUDITORIUM' THEN 'Micro, Máy chiếu, Máy lạnh'
+                        WHEN 'LAB' THEN 'May tinh, May lanh'
+                        WHEN 'SEMINAR' THEN 'Micro, Tivi, May lanh'
+                        WHEN 'LECTURE' THEN 'Micro, Tivi, May lanh'
+                        WHEN 'AUDITORIUM' THEN 'Micro, May chieu, May lanh'
                         ELSE ''
                     END
                   ) LIKE CONCAT('%', LOWER(:keyword), '%')
           )
-
           AND (:roomType IS NULL OR :roomType = '' OR cr.room_type = :roomType)
 
           AND NOT EXISTS (
               SELECT 1
-              FROM room_allocations ra
-              JOIN section_schedules ss ON ss.id = ra.schedule_id
-              JOIN class_sections cs ON cs.id = ss.section_id
-              WHERE ra.classroom_id = cr.id
-                AND ra.is_active = TRUE
+              FROM schedules sch
+              JOIN class_sections cs ON cs.id = sch.section_id
+              WHERE sch.classroom_id = cr.id
+                AND sch.status = 'ACTIVE'
                 AND cs.status = 'ACTIVE'
                 AND cs.semester_id = :semesterId
-                AND ss.day_of_week = :dayOfWeek
-                AND ss.time_slot_id = :timeSlotId
+                AND sch.day_of_week = :dayOfWeek
+                AND sch.slot_start_id <= :slotEndId
+                AND sch.slot_end_id >= :slotStartId
           )
 
           AND NOT EXISTS (
@@ -159,16 +179,39 @@ public interface StaffEmergencyRoomBookingRepository extends JpaRepository<Class
               WHERE rbr.approved_classroom_id = cr.id
                 AND rbr.status = 'APPROVED'
                 AND rbr.booking_date = :bookingDate
-                AND rbr.time_slot_id = :timeSlotId
+                AND rbr.slot_start_id <= :slotEndId
+                AND rbr.slot_end_id >= :slotStartId
           )
 
+          AND NOT EXISTS (
+              SELECT 1
+              FROM temporary_room_changes trc
+              JOIN schedules sch ON sch.id = trc.schedule_id
+              JOIN semesters sem ON sem.id = trc.semester_id
+              WHERE trc.new_classroom_id = cr.id
+                AND trc.status = 'APPROVED'
+                AND trc.is_active = TRUE
+                AND trc.semester_id = :semesterId
+                AND sch.day_of_week = :dayOfWeek
+                AND sch.slot_start_id <= :slotEndId
+                AND sch.slot_end_id >= :slotStartId
+                AND (
+                    (trc.change_scope = 'SESSION' AND trc.target_date = :bookingDate)
+                    OR (
+                        trc.change_scope IN ('WEEK_RANGE','REST_OF_SEMESTER')
+                        AND FLOOR(DATEDIFF(:bookingDate, sem.start_date) / 7) + 1
+                            BETWEEN trc.from_week AND COALESCE(trc.to_week, 999)
+                    )
+                )
+          )
         ORDER BY b.code, cr.room_number
         """, nativeQuery = true)
     List<AvailableRoomProjection> findAvailableRooms(
             @Param("semesterId") Integer semesterId,
             @Param("bookingDate") LocalDate bookingDate,
             @Param("dayOfWeek") String dayOfWeek,
-            @Param("timeSlotId") Integer timeSlotId,
+            @Param("slotStartId") Integer slotStartId,
+            @Param("slotEndId") Integer slotEndId,
             @Param("expectedAttendees") Integer expectedAttendees,
             @Param("roomType") String roomType,
             @Param("keyword") String keyword
@@ -182,7 +225,10 @@ public interface StaffEmergencyRoomBookingRepository extends JpaRepository<Class
             booking_scope,
             semester_id,
             booking_date,
-            time_slot_id,
+            slot_start_id,
+            slot_end_id,
+            start_time,
+            end_time,
             requested_by,
             club_id,
             expected_attendees,
@@ -197,13 +243,16 @@ public interface StaffEmergencyRoomBookingRepository extends JpaRepository<Class
             processing_note,
             reject_reason
         )
-        VALUES (
+        SELECT
             :requestTitle,
             'OTHER',
             'PERSONAL',
             :semesterId,
             :bookingDate,
-            :timeSlotId,
+            :slotStartId,
+            :slotEndId,
+            start_slot.start_time,
+            end_slot.end_time,
             :staffUserId,
             NULL,
             :expectedAttendees,
@@ -217,13 +266,16 @@ public interface StaffEmergencyRoomBookingRepository extends JpaRepository<Class
             CURRENT_TIMESTAMP,
             :processingNote,
             NULL
-        )
+        FROM time_slots start_slot
+        JOIN time_slots end_slot ON end_slot.slot_id = :slotEndId
+        WHERE start_slot.slot_id = :slotStartId
         """, nativeQuery = true)
     void insertEmergencyBooking(
             @Param("requestTitle") String requestTitle,
             @Param("semesterId") Integer semesterId,
             @Param("bookingDate") LocalDate bookingDate,
-            @Param("timeSlotId") Integer timeSlotId,
+            @Param("slotStartId") Integer slotStartId,
+            @Param("slotEndId") Integer slotEndId,
             @Param("staffUserId") Integer staffUserId,
             @Param("expectedAttendees") Integer expectedAttendees,
             @Param("classroomId") Integer classroomId,
@@ -240,28 +292,25 @@ public interface StaffEmergencyRoomBookingRepository extends JpaRepository<Class
             rbr.request_title AS requestTitle,
             rbr.semester_id AS semesterId,
             rbr.booking_date AS bookingDate,
-            ts.slot_number AS slot,
-
-            CASE ts.slot_number
-                WHEN 1 THEN '1-3'
-                WHEN 2 THEN '4-6'
-                WHEN 3 THEN '7-9'
-                WHEN 4 THEN '10-12'
-                WHEN 5 THEN '13-15'
-                ELSE CAST(ts.slot_number AS CHAR)
+            rbr.slot_start_id AS slotStartId,
+            rbr.slot_end_id AS slotEndId,
+            start_slot.slot_no AS slotStart,
+            end_slot.slot_no AS slotEnd,
+            start_slot.slot_no AS slot,
+            CASE
+                WHEN start_slot.slot_no = end_slot.slot_no THEN CAST(start_slot.slot_no AS CHAR)
+                ELSE CONCAT(start_slot.slot_no, '-', end_slot.slot_no)
             END AS periodText,
-
             cr.id AS classroomId,
             CONCAT(b.code, '-', cr.room_number) AS roomCode,
-
             rbr.expected_attendees AS expectedAttendees,
             rbr.purpose_note AS purpose,
             rbr.processing_note AS emergencyReason,
             rbr.status AS status,
             rbr.approved_by AS approvedBy
-
         FROM room_borrow_requests rbr
-        JOIN time_slots ts ON ts.id = rbr.time_slot_id
+        JOIN time_slots start_slot ON start_slot.slot_id = rbr.slot_start_id
+        JOIN time_slots end_slot ON end_slot.slot_id = rbr.slot_end_id
         JOIN classrooms cr ON cr.id = rbr.approved_classroom_id
         JOIN buildings b ON b.id = cr.building_id
         WHERE rbr.id = :id
@@ -292,6 +341,14 @@ public interface StaffEmergencyRoomBookingRepository extends JpaRepository<Class
         Integer getSemesterId();
 
         LocalDate getBookingDate();
+
+        Integer getSlotStartId();
+
+        Integer getSlotEndId();
+
+        Integer getSlotStart();
+
+        Integer getSlotEnd();
 
         Integer getSlot();
 

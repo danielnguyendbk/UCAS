@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { Bell, ChevronDown, ChevronRight, Menu, School, LogOut, User, Key, Settings as SettingsIcon, CheckCircle, AlertTriangle } from "lucide-react";
+import { Bell, ChevronDown, ChevronRight, Menu, School, LogOut, User, Key, Settings as SettingsIcon, CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import { NAVIGATION_BY_ROLE, ROLE_BADGE_CLASSES, ROLE_LABELS } from "@/constants/navigation";
 import { APP_ROUTES } from "@/constants/routes";
@@ -21,6 +21,240 @@ const getActiveSemesterName = (semesters) => {
   return (activeSemester || semesters[0])?.name || "";
 };
 
+const getResponseList = (response) => {
+  const payload = response.data;
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  return [];
+};
+
+const normalize = (value) => String(value || "").trim().toUpperCase();
+
+const toTimestamp = (value) => {
+  if (!value) return 0;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 0;
+  return date.getTime();
+};
+
+const formatRelativeTime = (value) => {
+  const timestamp = toTimestamp(value);
+  if (!timestamp) return "Vừa cập nhật";
+
+  const diffMs = Date.now() - timestamp;
+  if (diffMs < 60_000) return "Vừa xong";
+  if (diffMs < 3_600_000) return `${Math.max(1, Math.floor(diffMs / 60_000))} phút trước`;
+  if (diffMs < 86_400_000) return `${Math.floor(diffMs / 3_600_000)} giờ trước`;
+  if (diffMs < 604_800_000) return `${Math.floor(diffMs / 86_400_000)} ngày trước`;
+
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(timestamp));
+};
+
+const STATUS_LABELS = {
+  PENDING: "Chờ duyệt",
+  APPROVED: "Đã duyệt",
+  REJECTED: "Từ chối",
+  IN_PROGRESS: "Đang xử lý",
+  RESOLVED: "Đã hoàn thành",
+  COMPLETED: "Đã hoàn thành",
+  CANCELLED: "Đã hủy",
+};
+
+const getStatusLabel = (status) => STATUS_LABELS[normalize(status)] || status || "Mới cập nhật";
+
+const getNotificationTone = (status) => {
+  const normalized = normalize(status);
+  if (["APPROVED", "RESOLVED", "COMPLETED"].includes(normalized)) return "success";
+  if (["REJECTED", "CANCELLED"].includes(normalized)) return "danger";
+  if (normalized === "IN_PROGRESS") return "info";
+  return "warning";
+};
+
+const notificationToneClasses = {
+  success: "bg-green-100 text-green-600",
+  danger: "bg-red-100 text-red-600",
+  info: "bg-blue-100 text-blue-600",
+  warning: "bg-amber-100 text-amber-600",
+};
+
+const NOTIFICATION_SOURCES_BY_ROLE = {
+  Staff: [
+    {
+      id: "staff-borrow",
+      title: "Yêu cầu đặt phòng",
+      endpoint: "/api/staff/room-borrow-requests",
+      path: APP_ROUTES.staffBookingList,
+      kind: "borrow",
+    },
+    {
+      id: "staff-change",
+      title: "Yêu cầu đổi phòng",
+      endpoint: "/api/staff/emergency-room-changes",
+      path: APP_ROUTES.staffRoomChangeList,
+      kind: "change",
+    },
+    {
+      id: "staff-maintenance",
+      title: "Yêu cầu sửa chữa",
+      endpoint: "/api/staff/maintenance-requests",
+      path: APP_ROUTES.staffMaintenanceList,
+      kind: "maintenance",
+    },
+  ],
+  Lecturer: [
+    {
+      id: "lecturer-borrow",
+      title: "Đặt phòng của tôi",
+      endpoint: "/api/lecturer/room-borrow-requests",
+      path: APP_ROUTES.lecturerBookingHistory,
+      kind: "borrow",
+    },
+    {
+      id: "lecturer-change",
+      title: "Đổi phòng của tôi",
+      endpoint: "/api/lecturer/room-change-requests",
+      path: APP_ROUTES.lecturerRoomChangeList,
+      kind: "change",
+    },
+    {
+      id: "lecturer-maintenance",
+      title: "Sửa chữa của tôi",
+      endpoint: "/api/lecturer/maintenance-requests",
+      path: APP_ROUTES.lecturerMaintenanceHistory,
+      kind: "maintenance",
+    },
+  ],
+  Student: [
+    {
+      id: "student-borrow",
+      title: "Đặt phòng của tôi",
+      endpoint: "/api/student/room-borrow-requests",
+      path: APP_ROUTES.studentBookingHistory,
+      kind: "borrow",
+    },
+    {
+      id: "student-maintenance",
+      title: "Sửa chữa của tôi",
+      endpoint: "/api/student/maintenance-requests",
+      path: APP_ROUTES.studentMaintenanceHistory,
+      kind: "maintenance",
+    },
+  ],
+  Employee: [
+    {
+      id: "employee-maintenance",
+      title: "Yêu cầu sửa chữa",
+      endpoint: "/api/facility/maintenance-requests",
+      path: APP_ROUTES.employeeMaintenanceHistory,
+      kind: "maintenance",
+    },
+  ],
+};
+
+const getNotificationRoleKey = (user) => {
+  const backendRole = normalize(user?.backendRole);
+  if (backendRole === "STAFF") return "Staff";
+  if (backendRole === "LECTURER") return "Lecturer";
+  if (backendRole === "STUDENT") return "Student";
+  if (["FACILITY", "EMPLOYEES"].includes(backendRole)) return "Employee";
+  return user?.role;
+};
+
+const getNotificationTimestampValue = (item) =>
+  item.createdAt ||
+  item.updatedAt ||
+  item.approvedAt ||
+  item.handledAt ||
+  item.bookingDate ||
+  item.requestedDate;
+
+const joinNonEmpty = (...values) =>
+  values.filter((value) => value !== null && value !== undefined && String(value).trim() !== "").join(" - ");
+
+const buildBorrowNotification = (item, source, readNotificationIds) => {
+  const id = `${source.id}-${item.id}`;
+  const timestampValue = getNotificationTimestampValue(item);
+  const roomCode = item.approvedRoomCode || item.preferredRoomCode || item.requestedRoomCode;
+  const message = joinNonEmpty(
+    item.requesterName || item.requesterUsername,
+    item.requestTitle || item.purposeNote || item.clubName || item.sectionCode || item.courseName || "Yêu cầu đặt phòng",
+    roomCode ? `Phòng ${roomCode}` : "",
+    getStatusLabel(item.status),
+  );
+
+  return {
+    id,
+    title: source.title,
+    message,
+    time: formatRelativeTime(timestampValue),
+    timestamp: toTimestamp(timestampValue) || Number(item.id) || 0,
+    type: getNotificationTone(item.status),
+    unread: !readNotificationIds.has(id),
+    path: source.path,
+  };
+};
+
+const buildChangeNotification = (item, source, readNotificationIds) => {
+  const id = `${source.id}-${item.id}`;
+  const timestampValue = getNotificationTimestampValue(item);
+  const roomText = item.newRoomCode || item.requestedRoomCode || item.preferredRoomCode || item.oldRoomCode;
+  const message = joinNonEmpty(
+    item.requesterName || item.lecturerName,
+    item.classCode || item.sectionCode || item.courseName || "Yêu cầu đổi phòng",
+    roomText ? `Phòng ${roomText}` : "",
+    getStatusLabel(item.status),
+  );
+
+  return {
+    id,
+    title: source.title,
+    message,
+    time: formatRelativeTime(timestampValue),
+    timestamp: toTimestamp(timestampValue) || Number(item.id) || 0,
+    type: getNotificationTone(item.status),
+    unread: !readNotificationIds.has(id),
+    path: source.path,
+  };
+};
+
+const buildMaintenanceNotification = (item, source, readNotificationIds) => {
+  const id = `${source.id}-${item.id}`;
+  const timestampValue = getNotificationTimestampValue(item);
+  const message = joinNonEmpty(
+    item.requestCode || `#${item.id}`,
+    item.roomCode || item.roomName,
+    item.issueTitle || item.description || "Yêu cầu sửa chữa",
+    getStatusLabel(item.status),
+  );
+
+  return {
+    id,
+    title: source.title,
+    message,
+    time: formatRelativeTime(timestampValue),
+    timestamp: toTimestamp(timestampValue) || Number(item.id) || 0,
+    type: getNotificationTone(item.status),
+    unread: !readNotificationIds.has(id),
+    path: source.path,
+  };
+};
+
+const buildNotification = (item, source, readNotificationIds) => {
+  if (source.kind === "change") {
+    return buildChangeNotification(item, source, readNotificationIds);
+  }
+  if (source.kind === "maintenance") {
+    return buildMaintenanceNotification(item, source, readNotificationIds);
+  }
+  return buildBorrowNotification(item, source, readNotificationIds);
+};
+
 const defaultRootPaths = new Set([
   APP_ROUTES.home,
   APP_ROUTES.staffDashboard,
@@ -30,7 +264,7 @@ const defaultRootPaths = new Set([
 ]);
 
 const ROLE_PATH_GUARDS = {
-  ADMIN: [/^\/$/, /^\/(classrooms|courses|lecturers|timetable|auto-assignment|weekly-schedule|reports|user-management|settings)(\/|$)/],
+  ADMIN: [/^\/$/, /^\/(classrooms|courses|lecturers|sections|timetable|auto-assignment|weekly-schedule|reports|user-management|settings)(\/|$)/],
   STAFF: [/^\/staff(\/|$)/],
   LECTURER: [/^\/lecturer(\/|$)/],
   STUDENT: [/^\/student(\/|$)/],
@@ -44,12 +278,32 @@ const AppLayout = () => {
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeSemesterName, setActiveSemesterName] = useState("");
-  
-  // Mock Notifications
-  const [notifications, setNotifications] = useState([
-    { id: 1, title: "Sửa chữa hoàn tất", message: "Yêu cầu REQ001 tại phòng A-201 đã được xử lý xong.", time: "5 phút trước", type: "success", unread: true },
-    { id: 2, title: "Yêu cầu mới", message: "Có yêu cầu sửa chữa mới tại phòng B-105.", time: "1 giờ trước", type: "info", unread: false },
-  ]);
+  const [notifications, setNotifications] = useState([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notificationsError, setNotificationsError] = useState("");
+  const [readNotificationIds, setReadNotificationIds] = useState(() => new Set());
+
+  const menuItems = useMemo(
+    () => (user ? NAVIGATION_BY_ROLE[user.role] || [] : []),
+    [user?.role],
+  );
+
+  const activeMenuPath = useMemo(() => {
+    const matches = menuItems
+      .filter((item) => item.path)
+      .filter((item) => {
+        if (defaultRootPaths.has(item.path)) {
+          return location.pathname === item.path;
+        }
+        return (
+          location.pathname === item.path ||
+          location.pathname.startsWith(`${item.path}/`)
+        );
+      })
+      .sort((a, b) => b.path.length - a.path.length);
+
+    return matches[0]?.path ?? null;
+  }, [location.pathname, menuItems]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -87,6 +341,58 @@ const AppLayout = () => {
   }, [isAuthenticated]);
 
   useEffect(() => {
+    if (!isAuthenticated || !user) {
+      setNotifications([]);
+      return undefined;
+    }
+
+    const roleKey = getNotificationRoleKey(user);
+    const sources = NOTIFICATION_SOURCES_BY_ROLE[roleKey] || [];
+    if (sources.length === 0) {
+      setNotifications([]);
+      return undefined;
+    }
+
+    let isMounted = true;
+
+    const fetchNotifications = async () => {
+      setNotificationsLoading(true);
+      setNotificationsError("");
+
+      const results = await Promise.allSettled(
+        sources.map(async (source) => {
+          const response = await httpClient.get(source.endpoint);
+          return getResponseList(response)
+            .map((item) => buildNotification(item, source, readNotificationIds))
+            .filter((item) => item.id);
+        }),
+      );
+
+      if (!isMounted) return;
+
+      const nextNotifications = results
+        .filter((result) => result.status === "fulfilled")
+        .flatMap((result) => result.value)
+        .sort((a, b) => b.timestamp - a.timestamp)
+        .slice(0, 8);
+
+      setNotifications(nextNotifications);
+      if (results.some((result) => result.status === "rejected")) {
+        setNotificationsError("Một vài thông báo chưa tải được.");
+      }
+      setNotificationsLoading(false);
+    };
+
+    void fetchNotifications();
+    const intervalId = window.setInterval(fetchNotifications, 60_000);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
+    };
+  }, [isAuthenticated, user?.role, user?.backendRole, readNotificationIds]);
+
+  useEffect(() => {
     if (!isAuthenticated || !user?.backendRole) return;
 
     const allowedMatchers = ROLE_PATH_GUARDS[user.backendRole] ?? [];
@@ -100,25 +406,6 @@ const AppLayout = () => {
     return null;
   }
 
-  const menuItems = NAVIGATION_BY_ROLE[user.role] || [];
-
-  const activeMenuPath = useMemo(() => {
-    const matches = menuItems
-      .filter((item) => item.path)
-      .filter((item) => {
-        if (defaultRootPaths.has(item.path)) {
-          return location.pathname === item.path;
-        }
-        return (
-          location.pathname === item.path ||
-          location.pathname.startsWith(`${item.path}/`)
-        );
-      })
-      .sort((a, b) => b.path.length - a.path.length);
-
-    return matches[0]?.path ?? null;
-  }, [location.pathname, menuItems]);
-
   const isItemActive = (path) => activeMenuPath === path;
 
   const handleLogout = () => {
@@ -126,7 +413,42 @@ const AppLayout = () => {
     navigate(APP_ROUTES.login);
   };
 
-  const unreadCount = notifications.filter(n => n.unread).length;
+  const handleMarkNotificationsRead = () => {
+    setReadNotificationIds((previous) => {
+      const next = new Set(previous);
+      notifications.forEach((notification) => next.add(notification.id));
+      return next;
+    });
+    setNotifications((previous) =>
+      previous.map((notification) => ({ ...notification, unread: false })),
+    );
+  };
+
+  const handleOpenNotification = (notification) => {
+    setReadNotificationIds((previous) => {
+      const next = new Set(previous);
+      next.add(notification.id);
+      return next;
+    });
+    setNotifications((previous) =>
+      previous.map((item) =>
+        item.id === notification.id ? { ...item, unread: false } : item,
+      ),
+    );
+    if (notification.path) {
+      navigate(notification.path);
+    }
+  };
+
+  const handleOpenNotificationList = () => {
+    const roleKey = getNotificationRoleKey(user);
+    const firstPath = NOTIFICATION_SOURCES_BY_ROLE[roleKey]?.[0]?.path;
+    if (firstPath) {
+      navigate(firstPath);
+    }
+  };
+
+  const unreadCount = notifications.filter((notification) => notification.unread).length;
 
   return (
     <div className="h-screen flex bg-gray-50 overflow-hidden font-sans">
@@ -264,32 +586,66 @@ const AppLayout = () => {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-80 p-0 shadow-2xl border-gray-200">
                 <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-                  <h3 className="font-bold text-sm text-gray-900">Thông báo</h3>
-                  <button className="text-[10px] font-bold text-blue-600 hover:underline" onClick={() => setNotifications(n => n.map(x => ({...x, unread: false})))}>Đánh dấu đã đọc</button>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-sm text-gray-900">Thông báo</h3>
+                    {notificationsLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />}
+                  </div>
+                  <button
+                    className="text-[10px] font-bold text-blue-600 hover:underline disabled:text-gray-400 disabled:no-underline"
+                    onClick={handleMarkNotificationsRead}
+                    disabled={unreadCount === 0}
+                  >
+                    Đánh dấu đã đọc
+                  </button>
                 </div>
+                {notificationsError && (
+                  <div className="border-b border-amber-100 bg-amber-50 px-4 py-2 text-[11px] font-medium text-amber-700">
+                    {notificationsError}
+                  </div>
+                )}
                 <div className="max-h-[350px] overflow-y-auto">
-                  {notifications.length > 0 ? notifications.map(notif => (
-                    <div key={notif.id} className={`p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer flex gap-3 ${notif.unread ? 'bg-blue-50/30' : ''}`}>
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${notif.type === 'success' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'}`}>
-                        {notif.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-xs font-bold text-gray-900 ${notif.unread ? 'pr-2 relative' : ''}`}>
-                          {notif.title}
-                          {notif.unread && <span className="absolute right-0 top-1 w-1.5 h-1.5 bg-blue-600 rounded-full"></span>}
-                        </p>
-                        <p className="text-[11px] text-gray-600 mt-0.5 line-clamp-2 leading-relaxed">{notif.message}</p>
-                        <p className="text-[10px] text-gray-400 mt-2 font-medium">{notif.time}</p>
-                      </div>
+                  {notificationsLoading && notifications.length === 0 ? (
+                    <div className="flex items-center justify-center gap-2 p-8 text-sm text-gray-500">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Đang tải thông báo...
                     </div>
-                  )) : (
+                  ) : notifications.length > 0 ? notifications.map((notif) => {
+                    const toneClassName = notificationToneClasses[notif.type] || notificationToneClasses.info;
+                    const NotificationIcon = notif.type === "success" ? CheckCircle : AlertTriangle;
+
+                    return (
+                      <button
+                        type="button"
+                        key={notif.id}
+                        onClick={() => handleOpenNotification(notif)}
+                        className={`w-full p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer flex gap-3 text-left ${notif.unread ? "bg-blue-50/30" : ""}`}
+                      >
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${toneClassName}`}>
+                          <NotificationIcon className="w-4 h-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-xs font-bold text-gray-900 ${notif.unread ? "pr-2 relative" : ""}`}>
+                            {notif.title}
+                            {notif.unread && <span className="absolute right-0 top-1 w-1.5 h-1.5 bg-blue-600 rounded-full"></span>}
+                          </p>
+                          <p className="text-[11px] text-gray-600 mt-0.5 line-clamp-2 leading-relaxed">{notif.message}</p>
+                          <p className="text-[10px] text-gray-400 mt-2 font-medium">{notif.time}</p>
+                        </div>
+                      </button>
+                    );
+                  }) : (
                     <div className="p-8 text-center">
                       <p className="text-sm text-gray-500">Không có thông báo mới</p>
                     </div>
                   )}
                 </div>
                 <div className="p-2 border-t border-gray-100 text-center">
-                  <button className="text-xs font-semibold text-gray-500 hover:text-blue-600 py-1 w-full">Xem tất cả thông báo</button>
+                  <button
+                    className="text-xs font-semibold text-gray-500 hover:text-blue-600 py-1 w-full"
+                    onClick={handleOpenNotificationList}
+                  >
+                    Mở danh sách yêu cầu
+                  </button>
                 </div>
               </DropdownMenuContent>
             </DropdownMenu>

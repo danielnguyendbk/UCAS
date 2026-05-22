@@ -1,10 +1,9 @@
 package com.ptit.qlphonghoc.staff.service;
 
-import com.ptit.qlphonghoc.staff.repository.StaffEmergencyRoomBookingRepository;
 import com.ptit.qlphonghoc.staff.dto.datPhongKhanCap.AvailableRoomResponse;
 import com.ptit.qlphonghoc.staff.dto.datPhongKhanCap.CreateEmergencyRoomBookingRequest;
 import com.ptit.qlphonghoc.staff.dto.datPhongKhanCap.EmergencyRoomBookingResponse;
-
+import com.ptit.qlphonghoc.staff.repository.StaffEmergencyRoomBookingRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,9 +19,7 @@ public class StaffEmergencyRoomBookingService {
 
     private final StaffEmergencyRoomBookingRepository repository;
 
-    public StaffEmergencyRoomBookingService(
-            StaffEmergencyRoomBookingRepository repository
-    ) {
+    public StaffEmergencyRoomBookingService(StaffEmergencyRoomBookingRepository repository) {
         this.repository = repository;
     }
 
@@ -30,21 +27,15 @@ public class StaffEmergencyRoomBookingService {
     public List<AvailableRoomResponse> findAvailableRooms(
             Integer semesterId,
             LocalDate bookingDate,
-            Integer slot,
+            Integer slotStartId,
+            Integer slotEndId,
             Integer expectedAttendees,
             String roomType,
             String keyword
     ) {
-        validateSearchInput(semesterId, bookingDate, slot, expectedAttendees);
-
-        Integer timeSlotId = repository.findTimeSlotIdBySlotNumber(slot)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Không tồn tại slot = " + slot
-                ));
+        validateSearchInput(semesterId, bookingDate, slotStartId, slotEndId, expectedAttendees);
 
         String dayOfWeek = toDayCode(bookingDate);
-
         String normalizedRoomType = normalizeRoomType(roomType);
         String normalizedKeyword = keyword == null ? "" : keyword.trim();
 
@@ -52,7 +43,8 @@ public class StaffEmergencyRoomBookingService {
                         semesterId,
                         bookingDate,
                         dayOfWeek,
-                        timeSlotId,
+                        slotStartId,
+                        slotEndId,
                         expectedAttendees,
                         normalizedRoomType,
                         normalizedKeyword
@@ -63,24 +55,19 @@ public class StaffEmergencyRoomBookingService {
     }
 
     @Transactional
-    public EmergencyRoomBookingResponse create(
-            CreateEmergencyRoomBookingRequest request
-    ) {
-        validateCreateInput(request);
+    public EmergencyRoomBookingResponse create(CreateEmergencyRoomBookingRequest request) {
+        Integer slotStartId = effectiveSlotStartId(request);
+        Integer slotEndId = effectiveSlotEndId(request, slotStartId);
 
-        Integer timeSlotId = repository.findTimeSlotIdBySlotNumber(request.getSlot())
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Không tồn tại slot = " + request.getSlot()
-                ));
+        validateCreateInput(request, slotStartId, slotEndId);
 
         String dayOfWeek = toDayCode(request.getBookingDate());
-
         int availableCount = repository.countAvailableClassroomForEmergency(
                 request.getSemesterId(),
                 request.getBookingDate(),
                 dayOfWeek,
-                timeSlotId,
+                slotStartId,
+                slotEndId,
                 request.getClassroomId(),
                 request.getExpectedAttendees()
         );
@@ -88,21 +75,20 @@ public class StaffEmergencyRoomBookingService {
         if (availableCount == 0) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Phòng không khả dụng: có thể đã trùng lịch, không đủ sức chứa hoặc không hoạt động."
+                    "Phong khong kha dung: co the da trung lich, khong du suc chua hoac khong hoat dong."
             );
         }
 
-        String requestTitle = "Đặt phòng khẩn cấp - " + request.getRecipientName();
-
+        String requestTitle = "Dat phong khan cap - " + request.getRecipientName();
         String purposeNote = buildPurposeNote(request);
-
         String processingNote = buildProcessingNote(request);
 
         repository.insertEmergencyBooking(
                 requestTitle,
                 request.getSemesterId(),
                 request.getBookingDate(),
-                timeSlotId,
+                slotStartId,
+                slotEndId,
                 request.getStaffUserId(),
                 request.getExpectedAttendees(),
                 request.getClassroomId(),
@@ -111,79 +97,78 @@ public class StaffEmergencyRoomBookingService {
         );
 
         Integer id = repository.getLastInsertId();
-
         return repository.findEmergencyBookingById(id)
                 .map(projection -> toEmergencyResponse(projection, request))
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.INTERNAL_SERVER_ERROR,
-                        "Tạo đặt phòng khẩn cấp thất bại."
+                        "Tao dat phong khan cap that bai."
                 ));
+    }
+
+    private Integer effectiveSlotStartId(CreateEmergencyRoomBookingRequest request) {
+        return request.getSlotStartId() != null ? request.getSlotStartId() : request.getSlot();
+    }
+
+    private Integer effectiveSlotEndId(CreateEmergencyRoomBookingRequest request, Integer slotStartId) {
+        return request.getSlotEndId() != null ? request.getSlotEndId() : slotStartId;
     }
 
     private void validateSearchInput(
             Integer semesterId,
             LocalDate bookingDate,
-            Integer slot,
+            Integer slotStartId,
+            Integer slotEndId,
             Integer expectedAttendees
     ) {
         if (semesterId == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "semesterId không được để trống."
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "semesterId is required.");
         }
-
         if (bookingDate == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "bookingDate is required.");
+        }
+        if (slotStartId == null || slotEndId == null) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "bookingDate không được để trống."
+                    "slotStartId and slotEndId are required."
             );
         }
-
-        if (slot == null || slot < 1 || slot > 5) {
+        if (repository.countValidSlotRange(slotStartId, slotEndId) == 0) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "slot chỉ nhận giá trị 1, 2, 3, 4, 5."
+                    "slotEndId must be greater than or equal to slotStartId."
             );
         }
-
         if (expectedAttendees == null || expectedAttendees <= 0) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "expectedAttendees phải > 0."
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "expectedAttendees must be greater than 0.");
         }
 
-        int validSemesterDate = repository.countValidSemesterDate(
-                semesterId,
-                bookingDate
-        );
-
+        int validSemesterDate = repository.countValidSemesterDate(semesterId, bookingDate);
         if (validSemesterDate == 0) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Ngày sử dụng không nằm trong học kỳ đã chọn."
+                    "Ngay su dung khong nam trong hoc ky da chon."
             );
         }
     }
 
-    private void validateCreateInput(CreateEmergencyRoomBookingRequest request) {
+    private void validateCreateInput(
+            CreateEmergencyRoomBookingRequest request,
+            Integer slotStartId,
+            Integer slotEndId
+    ) {
         validateSearchInput(
                 request.getSemesterId(),
                 request.getBookingDate(),
-                request.getSlot(),
+                slotStartId,
+                slotEndId,
                 request.getExpectedAttendees()
         );
 
         if (request.getTargetType() == null || request.getTargetType().isBlank()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "targetType không được để trống."
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "targetType is required.");
         }
 
         String targetType = request.getTargetType().trim().toUpperCase(Locale.ROOT);
-
         if (!targetType.equals("STUDENT")
                 && !targetType.equals("LECTURER")
                 && !targetType.equals("CLASS")
@@ -192,51 +177,31 @@ public class StaffEmergencyRoomBookingService {
                 && !targetType.equals("OTHER")) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "targetType chỉ nhận STUDENT, LECTURER, CLASS, DEPARTMENT, CLUB hoặc OTHER."
+                    "targetType only accepts STUDENT, LECTURER, CLASS, DEPARTMENT, CLUB or OTHER."
             );
         }
 
         if (request.getRecipientName() == null || request.getRecipientName().isBlank()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "recipientName không được để trống."
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "recipientName is required.");
         }
-
         if (request.getClassroomId() == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "classroomId không được để trống."
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "classroomId is required.");
         }
-
         if (request.getPurpose() == null || request.getPurpose().isBlank()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "purpose không được để trống."
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "purpose is required.");
         }
-
         if (request.getEmergencyReason() == null || request.getEmergencyReason().isBlank()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "emergencyReason không được để trống."
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "emergencyReason is required.");
         }
-
         if (request.getStaffUserId() == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "staffUserId không được để trống."
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "staffUserId is required.");
         }
 
         int staffCount = repository.countActiveStaffOrAdminById(request.getStaffUserId());
-
         if (staffCount == 0) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "staffUserId không hợp lệ hoặc không phải STAFF/ADMIN đang hoạt động."
+                    "staffUserId khong hop le hoac khong phai STAFF/ADMIN dang hoat dong."
             );
         }
 
@@ -244,11 +209,10 @@ public class StaffEmergencyRoomBookingService {
                 request.getClassroomId(),
                 request.getExpectedAttendees()
         );
-
         if (classroomCount == 0) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Phòng không tồn tại, không hoạt động hoặc không đủ sức chứa."
+                    "Phong khong ton tai, khong hoat dong hoac khong du suc chua."
             );
         }
     }
@@ -257,59 +221,43 @@ public class StaffEmergencyRoomBookingService {
         if (roomType == null || roomType.isBlank()) {
             return "";
         }
-
         return roomType.trim().toUpperCase(Locale.ROOT);
     }
 
     private String toDayCode(LocalDate date) {
         DayOfWeek dayOfWeek = date.getDayOfWeek();
-
-        switch (dayOfWeek) {
-            case MONDAY:
-                return "MON";
-            case TUESDAY:
-                return "TUE";
-            case WEDNESDAY:
-                return "WED";
-            case THURSDAY:
-                return "THU";
-            case FRIDAY:
-                return "FRI";
-            case SATURDAY:
-                return "SAT";
-            case SUNDAY:
-                return "SUN";
-            default:
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Ngày sử dụng không hợp lệ."
-                );
-        }
+        return switch (dayOfWeek) {
+            case MONDAY -> "MON";
+            case TUESDAY -> "TUE";
+            case WEDNESDAY -> "WED";
+            case THURSDAY -> "THU";
+            case FRIDAY -> "FRI";
+            case SATURDAY -> "SAT";
+            case SUNDAY -> "SUN";
+        };
     }
 
     private String buildPurposeNote(CreateEmergencyRoomBookingRequest request) {
         String recipientCode = request.getRecipientCode();
-
         if (recipientCode == null || recipientCode.isBlank()) {
             recipientCode = "-";
         }
 
-        return "Đối tượng: " + request.getTargetType().trim().toUpperCase(Locale.ROOT)
-                + "\nTên: " + request.getRecipientName().trim()
-                + "\nMã số: " + recipientCode
-                + "\nMục đích: " + request.getPurpose().trim();
+        return "Doi tuong: " + request.getTargetType().trim().toUpperCase(Locale.ROOT)
+                + "\nTen: " + request.getRecipientName().trim()
+                + "\nMa so: " + recipientCode
+                + "\nMuc dich: " + request.getPurpose().trim();
     }
 
     private String buildProcessingNote(CreateEmergencyRoomBookingRequest request) {
-        return "ĐẶT PHÒNG KHẨN CẤP"
-                + "\nLý do khẩn cấp: " + request.getEmergencyReason().trim();
+        return "DAT PHONG KHAN CAP"
+                + "\nLy do khan cap: " + request.getEmergencyReason().trim();
     }
 
     private AvailableRoomResponse toAvailableRoomResponse(
             StaffEmergencyRoomBookingRepository.AvailableRoomProjection projection
     ) {
         AvailableRoomResponse response = new AvailableRoomResponse();
-
         response.setClassroomId(projection.getClassroomId());
         response.setRoomCode(projection.getRoomCode());
         response.setCapacity(projection.getCapacity());
@@ -317,7 +265,6 @@ public class StaffEmergencyRoomBookingService {
         response.setRoomTypeText(projection.getRoomTypeText());
         response.setMainEquipment(projection.getMainEquipment());
         response.setStatusText(projection.getStatusText());
-
         return response;
     }
 
@@ -326,7 +273,6 @@ public class StaffEmergencyRoomBookingService {
             CreateEmergencyRoomBookingRequest request
     ) {
         EmergencyRoomBookingResponse response = new EmergencyRoomBookingResponse();
-
         response.setId(projection.getId());
         response.setRequestTitle(projection.getRequestTitle());
         response.setTargetType(request.getTargetType());
@@ -334,6 +280,10 @@ public class StaffEmergencyRoomBookingService {
         response.setRecipientCode(request.getRecipientCode());
         response.setSemesterId(projection.getSemesterId());
         response.setBookingDate(projection.getBookingDate());
+        response.setSlotStartId(projection.getSlotStartId());
+        response.setSlotEndId(projection.getSlotEndId());
+        response.setSlotStart(projection.getSlotStart());
+        response.setSlotEnd(projection.getSlotEnd());
         response.setSlot(projection.getSlot());
         response.setPeriodText(projection.getPeriodText());
         response.setClassroomId(projection.getClassroomId());
@@ -343,7 +293,6 @@ public class StaffEmergencyRoomBookingService {
         response.setEmergencyReason(request.getEmergencyReason());
         response.setStatus(projection.getStatus());
         response.setApprovedBy(projection.getApprovedBy());
-
         return response;
     }
 }

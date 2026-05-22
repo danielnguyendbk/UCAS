@@ -33,6 +33,8 @@ export default function RoomSearchModal({
   semesterId,
   date,
   slot,
+  slotStartId,
+  slotEndId,
   expectedAttendees,
   isAllocationMode = false,
   dayOfWeek = "",
@@ -65,6 +67,8 @@ export default function RoomSearchModal({
     semesterId,
     date,
     slot,
+    slotStartId,
+    slotEndId,
     expectedAttendees,
     isAllocationMode,
     dayOfWeek,
@@ -88,10 +92,17 @@ export default function RoomSearchModal({
         (normalizedChangeScope === "SESSION" && !effectiveTargetDate) ||
         (normalizedChangeScope === "WEEK_RANGE" && (!fromWeek || !toWeek)) ||
         (normalizedChangeScope === "REST_OF_SEMESTER" && !fromWeek));
+    const usesSlotRange =
+      isStudentBorrowMode ||
+      isLecturerBorrowMode ||
+      (!isAllocationMode && !isEmergencyChangeMode && (slotStartId || slotEndId));
+    const missingBorrowSlot = usesSlotRange
+      ? !slotStartId || !slotEndId
+      : !slot;
 
     if (
       !semesterId ||
-      (!isEmergencyChangeMode && !slot) ||
+      (!isEmergencyChangeMode && missingBorrowSlot) ||
       expectedAttendees === null ||
       expectedAttendees === undefined ||
       expectedAttendees === "" ||
@@ -99,11 +110,7 @@ export default function RoomSearchModal({
       (!isAllocationMode && !isEmergencyChangeMode && !date) ||
       missingChangeScope
     ) {
-      setError(
-        `Không thể tìm phòng vì dữ liệu đang bị trống. Ca học: ${
-          slot || "chưa có"
-        }, số người: ${expectedAttendees ?? "chưa có"}.`,
-      );
+      setError("Không thể tìm phòng vì dữ liệu đang bị trống.");
       return;
     }
 
@@ -144,6 +151,12 @@ export default function RoomSearchModal({
         params.bookingDate = date;
       } else {
         params.bookingDate = date;
+      }
+
+      if (usesSlotRange) {
+        params.slotStartId = slotStartId;
+        params.slotEndId = slotEndId;
+        delete params.slot;
       }
 
       const res = await httpClient.get(endpoint, { params });

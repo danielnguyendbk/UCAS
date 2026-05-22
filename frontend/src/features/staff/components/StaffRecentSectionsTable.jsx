@@ -1,6 +1,4 @@
 import { jsx, jsxs } from "react/jsx-runtime";
-import { ArrowRight } from "lucide-react";
-import { Link } from "react-router";
 import { Badge } from "@/app/components/ui/badge";
 import {
   Table,
@@ -10,7 +8,6 @@ import {
   TableHeader,
   TableRow
 } from "@/app/components/ui/table";
-import { APP_ROUTES } from "@/constants/routes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/common/Card";
 import { STATUS_CONFIG } from "../constants/dashboard";
 
@@ -23,11 +20,7 @@ const formatStudentCapacity = (section) => {
 const StaffRecentSectionsTable = ({ sections }) => {
   return /* @__PURE__ */ jsxs(Card, { className: "shadow-sm border-0 ring-1 ring-gray-200 lg:col-span-2", children: [
     /* @__PURE__ */ jsxs(CardHeader, { className: "pb-3 flex flex-row items-center justify-between", children: [
-      /* @__PURE__ */ jsx(CardTitle, { className: "text-sm font-semibold text-gray-700", children: "L\u1EDBp h\u1ECDc ph\u1EA7n g\u1EA7n \u0111\xE2y" }),
-      /* @__PURE__ */ jsxs(Link, { to: APP_ROUTES.staffSections, className: "text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-medium", children: [
-        "Xem t\u1EA5t c\u1EA3 ",
-        /* @__PURE__ */ jsx(ArrowRight, { className: "w-3 h-3" })
-      ] })
+      /* @__PURE__ */ jsx(CardTitle, { className: "text-sm font-semibold text-gray-700", children: "L\u1EDBp h\u1ECDc ph\u1EA7n g\u1EA7n \u0111\xE2y" })
     ] }),
     /* @__PURE__ */ jsx(CardContent, { className: "p-0", children: /* @__PURE__ */ jsx("div", { className: "overflow-x-auto", children: /* @__PURE__ */ jsxs(Table, { children: [
       /* @__PURE__ */ jsx(TableHeader, { children: /* @__PURE__ */ jsxs(TableRow, { className: "bg-gray-50", children: [

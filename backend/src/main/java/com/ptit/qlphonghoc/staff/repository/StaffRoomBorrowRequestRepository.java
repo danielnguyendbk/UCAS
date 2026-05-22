@@ -22,14 +22,14 @@ public interface StaffRoomBorrowRequestRepository extends JpaRepository<ClassSec
             rbr.semester_id AS semesterId,
             sem.semester_name AS semesterName,
             rbr.booking_date AS bookingDate,
-            ts.slot_number AS slot,
-            CASE ts.slot_number
-                WHEN 1 THEN '1-3'
-                WHEN 2 THEN '4-6'
-                WHEN 3 THEN '7-9'
-                WHEN 4 THEN '10-12'
-                WHEN 5 THEN '13-15'
-                ELSE CAST(ts.slot_number AS CHAR)
+            rbr.slot_start_id AS slotStartId,
+            rbr.slot_end_id AS slotEndId,
+            ts_start.slot_no AS slotStart,
+            ts_end.slot_no AS slotEnd,
+            ts_start.slot_no AS slot,
+            CASE
+                WHEN ts_start.slot_no = ts_end.slot_no THEN CAST(ts_start.slot_no AS CHAR)
+                ELSE CONCAT(ts_start.slot_no, '-', ts_end.slot_no)
             END AS periodText,
             rbr.requested_by AS requestedBy,
             requester.full_name AS requesterName,
@@ -65,15 +65,15 @@ public interface StaffRoomBorrowRequestRepository extends JpaRepository<ClassSec
                 WHEN preferred_room.capacity < rbr.expected_attendees THEN 'CAPACITY_LOW'
                 WHEN EXISTS (
                     SELECT 1
-                    FROM room_allocations ra
-                    JOIN section_schedules ss ON ss.id = ra.schedule_id
-                    JOIN class_sections allocated_section ON allocated_section.id = ss.section_id
-                    WHERE ra.classroom_id = rbr.preferred_classroom_id
-                      AND ra.is_active = TRUE
+                    FROM schedules sch
+                    JOIN class_sections allocated_section ON allocated_section.id = sch.section_id
+                    WHERE sch.classroom_id = rbr.preferred_classroom_id
+                      AND sch.status = 'ACTIVE'
                       AND allocated_section.status = 'ACTIVE'
                       AND allocated_section.semester_id = rbr.semester_id
-                      AND ss.time_slot_id = rbr.time_slot_id
-                      AND ss.day_of_week = CASE DAYOFWEEK(rbr.booking_date)
+                      AND sch.slot_start_id <= rbr.slot_end_id
+                      AND sch.slot_end_id >= rbr.slot_start_id
+                      AND sch.day_of_week = CASE DAYOFWEEK(rbr.booking_date)
                           WHEN 1 THEN 'SUN'
                           WHEN 2 THEN 'MON'
                           WHEN 3 THEN 'TUE'
@@ -89,9 +89,39 @@ public interface StaffRoomBorrowRequestRepository extends JpaRepository<ClassSec
                     WHERE other_request.id <> rbr.id
                       AND other_request.approved_classroom_id = rbr.preferred_classroom_id
                       AND other_request.booking_date = rbr.booking_date
-                      AND other_request.time_slot_id = rbr.time_slot_id
+                      AND other_request.slot_start_id <= rbr.slot_end_id
+                      AND other_request.slot_end_id >= rbr.slot_start_id
                       AND other_request.status = 'APPROVED'
                 ) THEN 'BOOKING_CONFLICT'
+                WHEN EXISTS (
+                    SELECT 1
+                    FROM temporary_room_changes trc
+                    JOIN schedules sch ON sch.id = trc.schedule_id
+                    JOIN semesters sem2 ON sem2.id = trc.semester_id
+                    WHERE trc.new_classroom_id = rbr.preferred_classroom_id
+                      AND trc.status = 'APPROVED'
+                      AND trc.is_active = TRUE
+                      AND trc.semester_id = rbr.semester_id
+                      AND sch.slot_start_id <= rbr.slot_end_id
+                      AND sch.slot_end_id >= rbr.slot_start_id
+                      AND sch.day_of_week = CASE DAYOFWEEK(rbr.booking_date)
+                          WHEN 1 THEN 'SUN'
+                          WHEN 2 THEN 'MON'
+                          WHEN 3 THEN 'TUE'
+                          WHEN 4 THEN 'WED'
+                          WHEN 5 THEN 'THU'
+                          WHEN 6 THEN 'FRI'
+                          WHEN 7 THEN 'SAT'
+                      END
+                      AND (
+                          (trc.change_scope = 'SESSION' AND trc.target_date = rbr.booking_date)
+                          OR (
+                              trc.change_scope IN ('WEEK_RANGE','REST_OF_SEMESTER')
+                              AND FLOOR(DATEDIFF(rbr.booking_date, sem2.start_date) / 7) + 1
+                                  BETWEEN trc.from_week AND COALESCE(trc.to_week, 999)
+                          )
+                      )
+                ) THEN 'CHANGE_CONFLICT'
                 ELSE 'AVAILABLE'
             END AS availabilityStatus,
             rbr.processing_note AS processingNote,
@@ -105,7 +135,8 @@ public interface StaffRoomBorrowRequestRepository extends JpaRepository<ClassSec
     String REQUEST_FROM = """
         FROM room_borrow_requests rbr
         JOIN semesters sem ON sem.id = rbr.semester_id
-        JOIN time_slots ts ON ts.id = rbr.time_slot_id
+        JOIN time_slots ts_start ON ts_start.slot_id = rbr.slot_start_id
+        JOIN time_slots ts_end ON ts_end.slot_id = rbr.slot_end_id
         JOIN users requester ON requester.id = rbr.requested_by
         LEFT JOIN clubs club ON club.id = rbr.club_id
         LEFT JOIN class_sections cs ON cs.id = rbr.section_id
@@ -185,6 +216,14 @@ public interface StaffRoomBorrowRequestRepository extends JpaRepository<ClassSec
         String getSemesterName();
 
         LocalDate getBookingDate();
+
+        Integer getSlotStartId();
+
+        Integer getSlotEndId();
+
+        Integer getSlotStart();
+
+        Integer getSlotEnd();
 
         Integer getSlot();
 
