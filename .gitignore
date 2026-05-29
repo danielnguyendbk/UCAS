@@ -5,6 +5,15 @@ frontend/node_modules/
 # Build output
 dist/
 frontend/dist/
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
 
 # Logs
 *.log
@@ -14,6 +23,7 @@ yarn-error.log*
 pnpm-debug.log*
 
 # Environment variables
+# Environment files
 .env
 .env.*
 !.env.example
@@ -32,3 +42,28 @@ __pycache__/
 .venv/
 venv/
 .pytest_cache/
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build output
+dist/
+build/
+coverage/
+**/dist/
+**/build/
+**/coverage/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Python (if backend uses Python later)
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+
+# Backend runtime files
+*.sqlite3
+*.db
