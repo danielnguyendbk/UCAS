@@ -286,6 +286,17 @@ export const WeeklySchedulePage = () => {
     return Array.from({ length: 20 }, (_, index) => index + 1);
   }, []);
 
+  const selectedWeekIndex = weekOptions.findIndex(
+    (week) => week.toString() === filterWeek,
+  );
+
+  const goToWeekOffset = (offset) => {
+    const nextIndex = selectedWeekIndex + offset;
+    if (nextIndex < 0 || nextIndex >= weekOptions.length) return;
+    setFilterWeek(weekOptions[nextIndex].toString());
+    resetPage();
+  };
+
   // ── Filter ────────────────────────────────
   const filtered = useMemo(() => {
     const kw = search.trim().toLowerCase();
@@ -468,6 +479,18 @@ export const WeeklySchedulePage = () => {
           </Select>
 
           {/* Tuần học */}
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => goToWeekOffset(-1)}
+              disabled={selectedWeekIndex <= 0}
+              className="h-9 w-9 rounded-lg border-gray-100 bg-gray-50 text-gray-500 shadow-none"
+              title="Tuần trước"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
           <Select value={filterWeek} onValueChange={(v) => { setFilterWeek(v); resetPage(); }}>
             <SelectTrigger className={getSelectTriggerClass(false)}>
               <SelectValue placeholder="Tuần học" />
@@ -481,6 +504,19 @@ export const WeeklySchedulePage = () => {
           </Select>
 
           {/* Thứ / Ngày */}
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => goToWeekOffset(1)}
+              disabled={selectedWeekIndex < 0 || selectedWeekIndex >= weekOptions.length - 1}
+              className="h-9 w-9 rounded-lg border-gray-100 bg-gray-50 text-gray-500 shadow-none"
+              title="Tuần sau"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+
           <Select value={filterDay} onValueChange={(v) => { setFilterDay(v); resetPage(); }}>
             <SelectTrigger className={getSelectTriggerClass(false)}>
               <SelectValue placeholder="Thứ / Ngày" />

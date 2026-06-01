@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import {
   Calendar, Clock, MapPin, Users, XCircle, Send, BookOpen, ChevronLeft, ChevronRight
@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { ScheduleGridView } from "../components/ScheduleGridView";
 import ScheduleToolbar from "../components/ScheduleToolbar";
 import { useNavigate } from "react-router";
+import { httpClient } from "../../services/httpClient";
 
 const mySchedule = [
   { id: 1, section: "CS101.L11", name: "Lập trình hướng đối tượng", credits: 3, class: "D21CNTT01", students: 45, day: "Thứ 2", slot: "Tiết 1-3", time: "07:00 - 09:30", room: "A-301", building: "Toà A", status: "active", week: "Tuần 15" },
@@ -28,6 +29,7 @@ const LecturerSchedulePage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [selectedSession, setSelectedSession] = useState(null);
+  const [timeSlots, setTimeSlots] = useState([]);
   const [filters, setFilters] = useState({
     building: "all",
     room: "all",
@@ -35,10 +37,31 @@ const LecturerSchedulePage = () => {
     date: "2026-04-24"
   });
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchTimeSlots = async () => {
+      try {
+        const response = await httpClient.get("/api/categories/time-slots");
+        const slots = response.data?.data || response.data || [];
+        if (isMounted) setTimeSlots(Array.isArray(slots) ? slots : []);
+      } catch (error) {
+        console.error("Lỗi tải khung giờ thời khóa biểu:", error);
+      }
+    };
+
+    fetchTimeSlots();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const filteredSchedule = mySchedule.filter(s => {
     const matchBuilding = filters.building === "all" || s.building === filters.building || s.room.startsWith(filters.building.replace("Tòa ", ""));
     const matchRoom = filters.room === "all" || s.room === filters.room;
-    return matchBuilding && matchRoom;
+    const matchWeek = !filters.week || s.week?.includes(filters.week);
+    return matchBuilding && matchRoom && matchWeek;
   });
 
   return (
@@ -104,6 +127,7 @@ const LecturerSchedulePage = () => {
               color: s.status === 'conflict' ? 'red' : 'blue',
               badge: statusConfigSchedule[s.status].label
             }))}
+            timeSlots={timeSlots}
             onItemClick={(item) => {
               const session = mySchedule.find(s => s.id === item.id);
               if (session) setSelectedSession(session);
