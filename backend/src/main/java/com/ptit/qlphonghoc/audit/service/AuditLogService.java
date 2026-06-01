@@ -28,7 +28,7 @@ public class AuditLogService {
         auditLog.setUserId(user.getId());
         auditLog.setAction(AuditAction.LOGIN);
         auditLog.setTableName("users");
-        auditLog.setRecordId(user.getId());
+        auditLog.setRecordId(user.getId().longValue());
         auditLog.setIpAddress(ipAddress);
         auditLog.setNewValues(toJson(Map.of(
                 "username", user.getUsername(),

@@ -1,8 +1,8 @@
-import MaintenanceRequestPage from "@/app/components/maintenance/MaintenanceRequestPage";
+import MaintenanceRequestForm from "@/features/shared/components/MaintenanceRequestForm";
 import { APP_ROUTES } from "@/constants/routes";
 
 const EmployeeMaintenanceRequestPage = () => (
-  <MaintenanceRequestPage
+  <MaintenanceRequestForm
     apiBasePath="/api/facility/maintenance-requests"
     title="Yêu cầu sửa chữa"
     subtitle="Báo cáo sự cố thiết bị hoặc cơ sở vật chất cần xử lý"

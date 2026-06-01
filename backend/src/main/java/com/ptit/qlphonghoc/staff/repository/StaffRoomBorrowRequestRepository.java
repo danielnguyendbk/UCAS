@@ -15,7 +15,7 @@ public interface StaffRoomBorrowRequestRepository extends JpaRepository<ClassSec
 
     String REQUEST_SELECT = """
         SELECT
-            rbr.id AS id,
+            rbr.borrow_request_id AS id,
             rbr.request_title AS requestTitle,
             rbr.request_type AS requestType,
             rbr.booking_scope AS bookingScope,
@@ -32,28 +32,28 @@ public interface StaffRoomBorrowRequestRepository extends JpaRepository<ClassSec
                 ELSE CONCAT(ts_start.slot_no, '-', ts_end.slot_no)
             END AS periodText,
             rbr.requested_by AS requestedBy,
-            requester.full_name AS requesterName,
+            requester.username AS requesterName,
             requester.username AS requesterUsername,
             requester.role AS requesterRole,
             rbr.club_id AS clubId,
             club.club_name AS clubName,
             rbr.section_id AS sectionId,
             CASE
-                WHEN cs.id IS NULL THEN NULL
+                WHEN cs.section_id IS NULL THEN NULL
                 ELSE CONCAT(course.course_code, '.L', cs.section_code)
             END AS sectionCode,
             course.course_name AS courseName,
             rbr.expected_attendees AS expectedAttendees,
             rbr.preferred_classroom_id AS preferredClassroomId,
             CASE
-                WHEN preferred_room.id IS NULL THEN NULL
-                ELSE CONCAT(preferred_building.code, '-', preferred_room.room_number)
+                WHEN preferred_room.classroom_id IS NULL THEN NULL
+                ELSE CONCAT(preferred_building.building_code, '-', preferred_room.room_number)
             END AS preferredRoomCode,
             preferred_room.capacity AS preferredRoomCapacity,
             rbr.approved_classroom_id AS approvedClassroomId,
             CASE
-                WHEN approved_room.id IS NULL THEN NULL
-                ELSE CONCAT(approved_building.code, '-', approved_room.room_number)
+                WHEN approved_room.classroom_id IS NULL THEN NULL
+                ELSE CONCAT(approved_building.building_code, '-', approved_room.room_number)
             END AS approvedRoomCode,
             rbr.requested_room_type AS requestedRoomType,
             rbr.purpose_note AS purposeNote,
@@ -66,9 +66,9 @@ public interface StaffRoomBorrowRequestRepository extends JpaRepository<ClassSec
                 WHEN EXISTS (
                     SELECT 1
                     FROM schedules sch
-                    JOIN class_sections allocated_section ON allocated_section.id = sch.section_id
+                    JOIN class_sections allocated_section ON allocated_section.section_id = sch.section_id
                     WHERE sch.classroom_id = rbr.preferred_classroom_id
-                      AND sch.status = 'ACTIVE'
+                      AND sch.status = 'ASSIGNED'
                       AND allocated_section.status = 'ACTIVE'
                       AND allocated_section.semester_id = rbr.semester_id
                       AND sch.slot_start_id <= rbr.slot_end_id
@@ -86,7 +86,7 @@ public interface StaffRoomBorrowRequestRepository extends JpaRepository<ClassSec
                 WHEN EXISTS (
                     SELECT 1
                     FROM room_borrow_requests other_request
-                    WHERE other_request.id <> rbr.id
+                    WHERE other_request.borrow_request_id <> rbr.borrow_request_id
                       AND other_request.approved_classroom_id = rbr.preferred_classroom_id
                       AND other_request.booking_date = rbr.booking_date
                       AND other_request.slot_start_id <= rbr.slot_end_id
@@ -96,8 +96,8 @@ public interface StaffRoomBorrowRequestRepository extends JpaRepository<ClassSec
                 WHEN EXISTS (
                     SELECT 1
                     FROM temporary_room_changes trc
-                    JOIN schedules sch ON sch.id = trc.schedule_id
-                    JOIN semesters sem2 ON sem2.id = trc.semester_id
+                    JOIN schedules sch ON sch.schedule_id = trc.schedule_id
+                    JOIN semesters sem2 ON sem2.semester_id = trc.semester_id
                     WHERE trc.new_classroom_id = rbr.preferred_classroom_id
                       AND trc.status = 'APPROVED'
                       AND trc.is_active = TRUE
@@ -127,25 +127,25 @@ public interface StaffRoomBorrowRequestRepository extends JpaRepository<ClassSec
             rbr.processing_note AS processingNote,
             rbr.reject_reason AS rejectReason,
             rbr.approved_by AS approvedBy,
-            approver.full_name AS approvedByName,
+            approver.username AS approvedByName,
             rbr.approved_at AS approvedAt,
             rbr.created_at AS createdAt
         """;
 
     String REQUEST_FROM = """
         FROM room_borrow_requests rbr
-        JOIN semesters sem ON sem.id = rbr.semester_id
+        JOIN semesters sem ON sem.semester_id = rbr.semester_id
         JOIN time_slots ts_start ON ts_start.slot_id = rbr.slot_start_id
         JOIN time_slots ts_end ON ts_end.slot_id = rbr.slot_end_id
-        JOIN users requester ON requester.id = rbr.requested_by
-        LEFT JOIN clubs club ON club.id = rbr.club_id
-        LEFT JOIN class_sections cs ON cs.id = rbr.section_id
-        LEFT JOIN courses course ON course.id = cs.course_id
-        LEFT JOIN classrooms preferred_room ON preferred_room.id = rbr.preferred_classroom_id
-        LEFT JOIN buildings preferred_building ON preferred_building.id = preferred_room.building_id
-        LEFT JOIN classrooms approved_room ON approved_room.id = rbr.approved_classroom_id
-        LEFT JOIN buildings approved_building ON approved_building.id = approved_room.building_id
-        LEFT JOIN users approver ON approver.id = rbr.approved_by
+        JOIN users requester ON requester.user_id = rbr.requested_by
+        LEFT JOIN clubs club ON club.club_id = rbr.club_id
+        LEFT JOIN class_sections cs ON cs.section_id = rbr.section_id
+        LEFT JOIN courses course ON course.course_id = cs.course_id
+        LEFT JOIN classrooms preferred_room ON preferred_room.classroom_id = rbr.preferred_classroom_id
+        LEFT JOIN buildings preferred_building ON preferred_building.building_id = preferred_room.building_id
+        LEFT JOIN classrooms approved_room ON approved_room.classroom_id = rbr.approved_classroom_id
+        LEFT JOIN buildings approved_building ON approved_building.building_id = approved_room.building_id
+        LEFT JOIN users approver ON approver.user_id = rbr.approved_by
         """;
 
     @Query(value = REQUEST_SELECT + REQUEST_FROM + """
@@ -162,7 +162,7 @@ public interface StaffRoomBorrowRequestRepository extends JpaRepository<ClassSec
     List<RequestProjection> findAllRequests(@Param("status") String status);
 
     @Query(value = REQUEST_SELECT + REQUEST_FROM + """
-        WHERE rbr.id = :id
+        WHERE rbr.borrow_request_id = :id
         """, nativeQuery = true)
     Optional<RequestProjection> findRequestById(@Param("id") Integer id);
 
@@ -175,7 +175,7 @@ public interface StaffRoomBorrowRequestRepository extends JpaRepository<ClassSec
             approved_at = CURRENT_TIMESTAMP,
             processing_note = :processingNote,
             reject_reason = NULL
-        WHERE id = :id
+        WHERE borrow_request_id = :id
           AND status = 'PENDING'
           AND preferred_classroom_id IS NOT NULL
         """, nativeQuery = true)
@@ -194,7 +194,7 @@ public interface StaffRoomBorrowRequestRepository extends JpaRepository<ClassSec
             approved_at = NULL,
             processing_note = :rejectReason,
             reject_reason = :rejectReason
-        WHERE id = :id
+        WHERE borrow_request_id = :id
           AND status = 'PENDING'
         """, nativeQuery = true)
     int rejectPendingRequest(

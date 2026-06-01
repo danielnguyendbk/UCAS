@@ -60,7 +60,7 @@ public class AuthService {
 
     @Transactional
     public LoginResponse login(LoginRequest request, HttpServletRequest httpRequest) {
-        User user = userRepository.findByUsernameAndIsDeletedFalse(request.username())
+        User user = userRepository.findByUsername(request.username())
                 .orElseThrow(() -> new BadCredentialsException("Invalid username or password"));
 
         if (!user.isActive()) {
@@ -92,7 +92,7 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public CurrentUserResponse getCurrentUser(String username) {
-        User user = userRepository.findByUsernameAndIsDeletedFalse(username)
+        User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         if (!user.isActive()) {

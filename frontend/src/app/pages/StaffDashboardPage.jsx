@@ -66,9 +66,7 @@ const stats = [
 const quickActions = [
   { label: "Qu\u1EA3n l\xFD th\u1EDDi kh\xF3a bi\u1EC3u", icon: ListChecks, path: "/staff/schedule", color: "text-indigo-600", bg: "bg-indigo-50 hover:bg-indigo-100" },
   { label: "Ph\xE2n ph\xF2ng & Xung \u0111\u1ED9t", icon: Building2, path: "/staff/allocation", color: "text-teal-600", bg: "bg-teal-50 hover:bg-teal-100" },
-  { label: "Tra c\u1EE9u l\u1ECBch ph\xF2ng", icon: Search, path: "/staff/lookup", color: "text-cyan-600", bg: "bg-cyan-50 hover:bg-cyan-100" },
-  { label: "Tra c\u1EE9u l\u1ECBch h\u1ECDc", icon: CalendarCheck, path: "/staff/lookup", color: "text-violet-600", bg: "bg-violet-50 hover:bg-violet-100" },
-  { label: "Danh s\xE1ch ph\xF2ng tr\u1ED1ng", icon: Building2, path: "/staff/lookup", color: "text-emerald-600", bg: "bg-emerald-50 hover:bg-emerald-100" },
+  { label: "Y\u00EAu c\u1EA7u s\u1EEDa ch\u1EEFa", icon: Search, path: "/staff/maintenance-requests", color: "text-cyan-600", bg: "bg-cyan-50 hover:bg-cyan-100" },
   { label: "Danh s\xE1ch \u0111\u1EB7t ph\xF2ng", icon: ListChecks, path: "/staff/booking-list", color: "text-rose-600", bg: "bg-rose-50 hover:bg-rose-100" },
   { label: "\u0110\u1EB7t ph\xF2ng kh\u1EA9n c\u1EA5p", icon: PlusSquare, path: "/staff/bookings", color: "text-orange-600", bg: "bg-orange-50 hover:bg-orange-100" }
 

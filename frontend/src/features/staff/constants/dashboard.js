@@ -51,32 +51,18 @@ const STAFF_QUICK_ACTIONS = [
     bg: "bg-indigo-50 hover:bg-indigo-100"
   },
   {
-    label: "Ph\xE2n ph\xF2ng & Xung \u0111\u1ED9t",
+    label: "Phân phòng học",
     icon: Building2,
-    path: APP_ROUTES.staffAllocation,
+    path: APP_ROUTES.staffAutoAssignment,
     color: "text-teal-600",
     bg: "bg-teal-50 hover:bg-teal-100"
   },
   {
-    label: "Tra c\u1EE9u l\u1ECBch ph\xF2ng",
-    icon: Search,
-    path: APP_ROUTES.staffLookup,
+    label: "Y\u00EAu c\u1EA7u s\u1EEDa ch\u1EEFa",
+    icon: Building2,
+    path: APP_ROUTES.staffMaintenanceRequests,
     color: "text-cyan-600",
     bg: "bg-cyan-50 hover:bg-cyan-100"
-  },
-  {
-    label: "Tra c\u1EE9u l\u1ECBch h\u1ECDc",
-    icon: CalendarCheck,
-    path: APP_ROUTES.staffLookup,
-    color: "text-violet-600",
-    bg: "bg-violet-50 hover:bg-violet-100"
-  },
-  {
-    label: "Danh s\xE1ch ph\xF2ng tr\u1ED1ng",
-    icon: Building2,
-    path: APP_ROUTES.staffLookup,
-    color: "text-emerald-600",
-    bg: "bg-emerald-50 hover:bg-emerald-100"
   },
   {
     label: "Danh s\xE1ch \u0111\u1EB7t ph\xF2ng",

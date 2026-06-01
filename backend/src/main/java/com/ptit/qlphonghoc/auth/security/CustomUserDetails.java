@@ -22,7 +22,7 @@ public class CustomUserDetails implements UserDetails {
         this.username = user.getUsername();
         this.passwordHash = user.getPasswordHash();
         this.role = user.getRole();
-        this.enabled = user.isActive() && !user.isDeleted();
+        this.enabled = user.isActive();
     }
 
     public Integer getUserId() {

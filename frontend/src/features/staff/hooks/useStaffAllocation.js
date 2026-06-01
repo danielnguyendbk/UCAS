@@ -23,6 +23,9 @@ export const useStaffAllocation = () => {
 
   const [isRoomSearchOpen, setIsRoomSearchOpen] = useState(false);
   const [selectedSection, setSelectedSection] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitMessage, setSubmitMessage] = useState(null);
+  const [submitApiAvailable, setSubmitApiAvailable] = useState(true);
 
   useEffect(() => {
     const fetchSemesters = async () => {
@@ -110,6 +113,28 @@ export const useStaffAllocation = () => {
     }
   };
 
+  const submitForApproval = async () => {
+    setIsSubmitting(true);
+    setSubmitMessage(null);
+    try {
+      const res = await httpClient.post(
+        `/api/staff/room-assignment/submit-for-approval?semesterId=${semesterId}`,
+      );
+      setSubmitMessage(res.data?.message || "Đã gửi Admin duyệt thành công!");
+    } catch (error) {
+      if (error.response?.status === 404) {
+        setSubmitApiAvailable(false);
+        setSubmitMessage("Backend chưa hỗ trợ API gửi duyệt");
+      } else {
+        setSubmitMessage(
+          error.response?.data?.message || "Không thể gửi duyệt. Vui lòng thử lại.",
+        );
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return {
     activeTab,
     setActiveTab,
@@ -128,5 +153,10 @@ export const useStaffAllocation = () => {
     selectedSection,
     handleOpenRoomSearch,
     handleRoomSelect,
+    isSubmitting,
+    submitMessage,
+    submitApiAvailable,
+    submitForApproval,
+    refreshData: fetchData,
   };
 };

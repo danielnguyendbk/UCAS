@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { Bell, ChevronDown, ChevronRight, Menu, School, LogOut, User, Key, Settings as SettingsIcon, CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import { NAVIGATION_BY_ROLE, ROLE_BADGE_CLASSES, ROLE_LABELS } from "@/constants/navigation";
-import { APP_ROUTES } from "@/constants/routes";
+import { APP_ROUTES, ROLE_DEFAULT_PATHS } from "@/constants/routes";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { Badge } from "@/app/components/ui/badge";
 import {
@@ -257,19 +257,33 @@ const buildNotification = (item, source, readNotificationIds) => {
 
 const defaultRootPaths = new Set([
   APP_ROUTES.home,
+  APP_ROUTES.adminDashboard,
   APP_ROUTES.staffDashboard,
   APP_ROUTES.lecturerDashboard,
   APP_ROUTES.employeeDashboard,
-  APP_ROUTES.studentDashboard
+  APP_ROUTES.facilityDashboard,
+  APP_ROUTES.studentDashboard,
 ]);
 
+const getGroupKey = (group) => group.id ?? `group-${group.label}`;
+
+const getNavItemKey = (item, { role = "unknown", groupLabel = "" } = {}) => {
+  if (item.id) return item.id;
+  const slug = [role, groupLabel, item.label, item.path]
+    .filter(Boolean)
+    .join("-")
+    .replace(/\s+/g, "-")
+    .toLowerCase();
+  return slug || `nav-${role}-${groupLabel}-${item.label}`;
+};
+
 const ROLE_PATH_GUARDS = {
-  ADMIN: [/^\/$/, /^\/(classrooms|courses|lecturers|sections|timetable|auto-assignment|weekly-schedule|reports|user-management|settings)(\/|$)/],
-  STAFF: [/^\/staff(\/|$)/],
-  LECTURER: [/^\/lecturer(\/|$)/],
-  STUDENT: [/^\/student(\/|$)/],
-  FACILITY: [/^\/employee(\/|$)/],
-  EMPLOYEES: [/^\/employee(\/|$)/]
+  ADMIN:     [/^\/$/, /^\/admin(\/|$)/],
+  STAFF:     [/^\/$/, /^\/staff(\/|$)/],
+  LECTURER:  [/^\/$/, /^\/lecturer(\/|$)/],
+  STUDENT:   [/^\/$/, /^\/student(\/|$)/],
+  FACILITY:  [/^\/$/, /^\/facility(\/|$)/],
+  EMPLOYEES: [/^\/$/, /^\/facility(\/|$)/]
 };
 
 const AppLayout = () => {
@@ -288,8 +302,22 @@ const AppLayout = () => {
     [user?.role],
   );
 
+  const useGroupedSidebar = user?.role === "Admin";
+
+  const flatMenuItems = useMemo(() => {
+    const flat = [];
+    menuItems.forEach((item) => {
+      if (useGroupedSidebar && item.type === "group" && item.children) {
+        flat.push(...item.children);
+      } else if (item.path) {
+        flat.push(item);
+      }
+    });
+    return flat;
+  }, [menuItems, useGroupedSidebar]);
+
   const activeMenuPath = useMemo(() => {
-    const matches = menuItems
+    const matches = flatMenuItems
       .filter((item) => item.path)
       .filter((item) => {
         if (defaultRootPaths.has(item.path)) {
@@ -303,7 +331,39 @@ const AppLayout = () => {
       .sort((a, b) => b.path.length - a.path.length);
 
     return matches[0]?.path ?? null;
-  }, [location.pathname, menuItems]);
+  }, [location.pathname, flatMenuItems]);
+
+  const [expandedGroups, setExpandedGroups] = useState(new Set());
+
+  const toggleGroup = (groupKey) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupKey)) {
+        next.delete(groupKey);
+      } else {
+        next.add(groupKey);
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (!useGroupedSidebar || !activeMenuPath) return;
+    menuItems.forEach((item) => {
+      if (item.type === "group" && item.children) {
+        const hasActiveChild = item.children.some((child) => child.path === activeMenuPath);
+        if (hasActiveChild) {
+          const groupKey = getGroupKey(item);
+          setExpandedGroups((prev) => {
+            if (prev.has(groupKey)) return prev;
+            const next = new Set(prev);
+            next.add(groupKey);
+            return next;
+          });
+        }
+      }
+    });
+  }, [activeMenuPath, menuItems, useGroupedSidebar]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -398,7 +458,9 @@ const AppLayout = () => {
     const allowedMatchers = ROLE_PATH_GUARDS[user.backendRole] ?? [];
     const isAllowed = allowedMatchers.some((matcher) => matcher.test(location.pathname));
     if (!isAllowed) {
-      navigate(user.redirectPath ?? APP_ROUTES.home, { replace: true });
+      const roleHome =
+        ROLE_DEFAULT_PATHS[user.backendRole] ?? APP_ROUTES.home;
+      navigate(roleHome, { replace: true });
     }
   }, [isAuthenticated, location.pathname, navigate, user]);
 
@@ -498,15 +560,105 @@ const AppLayout = () => {
             {menuItems.map((item, idx) => {
               if (item.type === "divider") {
                 return (
-                  <li key={`divider-${idx}`} className="pt-5 pb-2 px-4">
+                  <li
+                    key={getNavItemKey(item, { role: user.role, groupLabel: `divider-${idx}` })}
+                    className="pt-5 pb-2 px-4"
+                  >
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em]">{item.label}</p>
                   </li>
                 );
               }
+
+              if (item.type === "group" && item.children && !useGroupedSidebar) {
+                return item.children.map((child) => {
+                  const active = isItemActive(child.path);
+                  const childKey = getNavItemKey(child, {
+                    role: user.role,
+                    groupLabel: item.label,
+                  });
+                  return (
+                    <li key={childKey}>
+                      <Link
+                        to={child.path}
+                        onClick={() => setIsSidebarOpen(false)}
+                        className={`
+                          flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group relative
+                          ${active
+                            ? "bg-blue-600 text-white shadow-md shadow-blue-200 font-semibold"
+                            : "text-gray-600 hover:bg-blue-50 hover:text-blue-700"}
+                        `}
+                      >
+                        <span className="text-sm flex-1">{child.label}</span>
+                        {active && <ChevronRight className="w-3.5 h-3.5 text-blue-200" />}
+                      </Link>
+                    </li>
+                  );
+                });
+              }
+
+              if (useGroupedSidebar && item.type === "group") {
+                const Icon = item.icon;
+                const groupKey = getGroupKey(item);
+                const isExpanded = expandedGroups.has(groupKey);
+                const hasActiveChild = item.children?.some((child) => isItemActive(child.path));
+
+                return (
+                  <li key={groupKey} className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(groupKey)}
+                      className={`
+                        w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 text-left font-medium
+                        ${hasActiveChild
+                          ? "bg-blue-50/70 text-blue-700 font-semibold shadow-sm"
+                          : "text-gray-600 hover:bg-blue-50/40 hover:text-blue-700"}
+                      `}
+                    >
+                      <Icon className={`w-[18px] h-[18px] flex-shrink-0 ${hasActiveChild ? "text-blue-600" : "text-gray-400"}`} />
+                      <span className="text-sm flex-1">{item.label}</span>
+                      {isExpanded ? (
+                        <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${hasActiveChild ? "text-blue-600" : "text-gray-400"}`} />
+                      ) : (
+                        <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${hasActiveChild ? "text-blue-600" : "text-gray-400"}`} />
+                      )}
+                    </button>
+                    {isExpanded && item.children && (
+                      <ul className="mt-1 ml-6 pl-3 border-l border-gray-200 space-y-1">
+                        {item.children.map((child) => {
+                          const active = isItemActive(child.path);
+                          const childKey = getNavItemKey(child, {
+                            role: user.role,
+                            groupLabel: item.label,
+                          });
+                          return (
+                            <li key={childKey}>
+                              <Link
+                                to={child.path}
+                                onClick={() => setIsSidebarOpen(false)}
+                                className={`
+                                  flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all duration-150 relative
+                                  ${active
+                                    ? "bg-blue-600 text-white font-semibold shadow-sm"
+                                    : "text-gray-500 hover:bg-blue-50 hover:text-blue-600"}
+                                `}
+                              >
+                                <span className="truncate">{child.label}</span>
+                              </Link>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </li>
+                );
+              }
+
+              // Flat sidebar item (all non-admin roles; also fallback if misconfigured)
               const Icon = item.icon;
               const active = isItemActive(item.path);
+              const itemKey = getNavItemKey(item, { role: user.role });
               return (
-                <li key={item.path}>
+                <li key={itemKey}>
                   <Link
                     to={item.path}
                     onClick={() => setIsSidebarOpen(false)}

@@ -94,12 +94,13 @@ public class StaffAllocationService {
 
         for (Integer sid : unassignedIds) {
             String dayOfWeek = repository.getDayOfWeekBySchedule(sid);
-            Integer timeSlotId = repository.getTimeSlotIdBySchedule(sid);
+            Integer slotStartId = repository.getSlotStartIdBySchedule(sid);
+            Integer slotEndId = repository.getSlotEndIdBySchedule(sid);
             String requiredRoomType = repository.getRequiredRoomTypeBySchedule(sid);
             Integer maxCapacity = repository.getMaxCapacityBySchedule(sid); // LẤY MAX CAPACITY ĐỂ AUTO ASSIGN
 
             Optional<Integer> availableRoomId = repository.findAvailableRoomForAutoAssign(
-                    semesterId, dayOfWeek, timeSlotId, requiredRoomType, maxCapacity
+                    semesterId, dayOfWeek, slotStartId, slotEndId, requiredRoomType, maxCapacity
             );
 
             if (availableRoomId.isPresent()) {
@@ -116,6 +117,6 @@ public class StaffAllocationService {
     }
     public List<StaffAllocationRepository.AllocationRoomProjection> getAvailableRooms(
             Integer semesterId, String dowCode, Integer timeSlotId, Integer expectedAttendees, String roomType) {
-        return repository.findAvailableRoomsForManualAssign(semesterId, dowCode, timeSlotId, expectedAttendees, roomType);
+        return repository.findAvailableRoomsForManualAssign(semesterId, dowCode, timeSlotId, timeSlotId, expectedAttendees, roomType);
     }
 }

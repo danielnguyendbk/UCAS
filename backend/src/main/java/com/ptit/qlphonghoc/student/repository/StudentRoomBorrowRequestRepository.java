@@ -15,7 +15,7 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
 
     String BORROW_SELECT = """
         SELECT
-            rbr.id AS id,
+            rbr.borrow_request_id AS id,
             rbr.request_title AS requestTitle,
             rbr.request_type AS requestType,
             rbr.booking_scope AS bookingScope,
@@ -32,11 +32,11 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
             c.club_name AS clubName,
             rbr.expected_attendees AS expectedAttendees,
             rbr.preferred_classroom_id AS preferredClassroomId,
-            CONCAT(b.code, '-', cr.room_number) AS preferredRoomCode,
+            CONCAT(b.building_code, '-', cr.room_number) AS preferredRoomCode,
             rbr.approved_classroom_id AS approvedClassroomId,
             CASE
-                WHEN approved_room.id IS NULL THEN NULL
-                ELSE CONCAT(approved_building.code, '-', approved_room.room_number)
+                WHEN approved_room.classroom_id IS NULL THEN NULL
+                ELSE CONCAT(approved_building.building_code, '-', approved_room.room_number)
             END AS approvedRoomCode,
             rbr.requested_room_type AS requestedRoomType,
             rbr.purpose_note AS purposeNote,
@@ -48,11 +48,11 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
         FROM room_borrow_requests rbr
         JOIN time_slots ts_start ON ts_start.slot_id = rbr.slot_start_id
         JOIN time_slots ts_end ON ts_end.slot_id = rbr.slot_end_id
-        LEFT JOIN clubs c ON c.id = rbr.club_id
-        LEFT JOIN classrooms cr ON cr.id = rbr.preferred_classroom_id
-        LEFT JOIN buildings b ON b.id = cr.building_id
-        LEFT JOIN classrooms approved_room ON approved_room.id = rbr.approved_classroom_id
-        LEFT JOIN buildings approved_building ON approved_building.id = approved_room.building_id
+        LEFT JOIN clubs c ON c.club_id = rbr.club_id
+        LEFT JOIN classrooms cr ON cr.classroom_id = rbr.preferred_classroom_id
+        LEFT JOIN buildings b ON b.building_id = cr.building_id
+        LEFT JOIN classrooms approved_room ON approved_room.classroom_id = rbr.approved_classroom_id
+        LEFT JOIN buildings approved_building ON approved_building.building_id = approved_room.building_id
         """;
 
     @Query(value = """
@@ -69,7 +69,7 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
     @Query(value = """
         SELECT COUNT(*)
         FROM semesters
-        WHERE id = :semesterId
+        WHERE semester_id = :semesterId
           AND is_deleted = FALSE
           AND :bookingDate BETWEEN start_date AND end_date
         """, nativeQuery = true)
@@ -81,8 +81,9 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
     @Query(value = """
         SELECT COUNT(*)
         FROM classrooms
-        WHERE id = :classroomId
+        WHERE classroom_id = :classroomId
           AND is_active = TRUE
+          AND is_deleted = FALSE
           AND capacity >= :expectedAttendees
         """, nativeQuery = true)
     int countUsableClassroom(
@@ -92,14 +93,14 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
 
     @Query(value = """
         SELECT
-            c.id AS clubId,
+            c.club_id AS clubId,
             c.club_code AS clubCode,
             c.club_name AS clubName,
             CASE WHEN EXISTS (
                 SELECT 1
                 FROM club_memberships cm
-                JOIN students s ON s.id = cm.student_id
-                WHERE cm.club_id = c.id
+                JOIN students s ON s.student_id = cm.student_id
+                WHERE cm.club_id = c.club_id
                   AND s.user_id = :userId
                   AND s.is_deleted = FALSE
                   AND cm.is_active = TRUE
@@ -117,8 +118,8 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
 
     @Query(value = """
         SELECT
-            cr.id AS classroomId,
-            CONCAT(b.code, '-', cr.room_number) AS roomCode,
+            cr.classroom_id AS classroomId,
+            CONCAT(b.building_code, '-', cr.room_number) AS roomCode,
             cr.capacity AS capacity,
             cr.room_type AS roomType,
             CASE cr.room_type
@@ -137,21 +138,22 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
             END AS mainEquipment,
             'Kha dung theo du lieu hien tai' AS statusText
         FROM classrooms cr
-        JOIN buildings b ON b.id = cr.building_id
+        JOIN buildings b ON b.building_id = cr.building_id
         WHERE cr.is_active = TRUE
+          AND cr.is_deleted = FALSE
           AND cr.capacity >= :expectedAttendees
           AND (:roomType IS NULL OR :roomType = '' OR cr.room_type = :roomType)
           AND (
               :keyword IS NULL OR :keyword = ''
-              OR LOWER(CONCAT(b.code, '-', cr.room_number)) LIKE CONCAT('%', LOWER(:keyword), '%')
+              OR LOWER(CONCAT(b.building_code, '-', cr.room_number)) LIKE CONCAT('%', LOWER(:keyword), '%')
               OR LOWER(cr.room_type) LIKE CONCAT('%', LOWER(:keyword), '%')
           )
           AND NOT EXISTS (
               SELECT 1
               FROM schedules sch
-              JOIN class_sections cs ON cs.id = sch.section_id
-              WHERE sch.classroom_id = cr.id
-                AND sch.status = 'ACTIVE'
+              JOIN class_sections cs ON cs.section_id = sch.section_id
+              WHERE sch.classroom_id = cr.classroom_id
+                AND sch.status = 'ASSIGNED'
                 AND cs.status = 'ACTIVE'
                 AND cs.semester_id = :semesterId
                 AND sch.day_of_week = :dayOfWeek
@@ -161,13 +163,13 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
           AND NOT EXISTS (
               SELECT 1
               FROM room_borrow_requests rbr
-              WHERE rbr.approved_classroom_id = cr.id
+              WHERE rbr.approved_classroom_id = cr.classroom_id
                 AND rbr.status = 'APPROVED'
                 AND rbr.booking_date = :bookingDate
                 AND rbr.slot_start_id <= :slotEndId
                 AND rbr.slot_end_id >= :slotStartId
           )
-        ORDER BY cr.capacity ASC, b.code, cr.room_number
+        ORDER BY cr.capacity ASC, b.building_code, cr.room_number
         """, nativeQuery = true)
     List<AvailableRoomProjection> findAvailableRooms(
             @Param("semesterId") Integer semesterId,
@@ -255,13 +257,13 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
     Integer getLastInsertId();
 
     @Query(value = BORROW_SELECT + """
-        WHERE rbr.id = :id
+        WHERE rbr.borrow_request_id = :id
         """, nativeQuery = true)
     Optional<BorrowRequestProjection> findBorrowRequestById(@Param("id") Integer id);
 
     @Query(value = BORROW_SELECT + """
         WHERE rbr.requested_by = :userId
-        ORDER BY rbr.created_at DESC, rbr.id DESC
+        ORDER BY rbr.created_at DESC, rbr.borrow_request_id DESC
         """, nativeQuery = true)
     List<BorrowRequestProjection> findBorrowRequestsByUserId(@Param("userId") Integer userId);
 

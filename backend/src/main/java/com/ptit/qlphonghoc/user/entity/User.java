@@ -1,6 +1,7 @@
 package com.ptit.qlphonghoc.user.entity;
 
 import com.ptit.qlphonghoc.user.enumtype.UserRole;
+import com.ptit.qlphonghoc.user.enumtype.UserStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -9,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 
 import java.time.LocalDateTime;
 
@@ -18,28 +20,30 @@ public class User {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "user_id")
     private Integer id;
 
     @Column(nullable = false, unique = true, length = 50)
     private String username;
 
-    @Column(nullable = false, unique = true, length = 150)
+    @Column(nullable = false, unique = true, length = 100)
     private String email;
 
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
 
-    @Column(name = "full_name", nullable = false, length = 120)
+    @Transient
     private String fullName;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private UserRole role;
 
-    @Column(name = "is_active", nullable = false)
-    private boolean isActive;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private UserStatus status = UserStatus.ACTIVE;
 
-    @Column(name = "last_login_at")
+    @Transient
     private LocalDateTime lastLoginAt;
 
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
@@ -47,9 +51,6 @@ public class User {
 
     @Column(name = "updated_at", nullable = false, insertable = false, updatable = false)
     private LocalDateTime updatedAt;
-
-    @Column(name = "is_deleted", nullable = false)
-    private boolean isDeleted;
 
     public Integer getId() {
         return id;
@@ -84,7 +85,7 @@ public class User {
     }
 
     public String getFullName() {
-        return fullName;
+        return fullName == null || fullName.isBlank() ? username : fullName;
     }
 
     public void setFullName(String fullName) {
@@ -100,11 +101,19 @@ public class User {
     }
 
     public boolean isActive() {
-        return isActive;
+        return status == UserStatus.ACTIVE;
     }
 
     public void setActive(boolean active) {
-        isActive = active;
+        status = active ? UserStatus.ACTIVE : UserStatus.INACTIVE;
+    }
+
+    public UserStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(UserStatus status) {
+        this.status = status;
     }
 
     public LocalDateTime getLastLoginAt() {
@@ -124,10 +133,9 @@ public class User {
     }
 
     public boolean isDeleted() {
-        return isDeleted;
+        return false;
     }
 
     public void setDeleted(boolean deleted) {
-        isDeleted = deleted;
     }
 }

@@ -13,6 +13,7 @@ public class Lecturer {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "lecturer_id")
     private Integer id;
 
     @Column(name = "user_id", nullable = false, unique = true)
@@ -21,7 +22,7 @@ public class Lecturer {
     @Column(name = "department_id", nullable = false)
     private Integer departmentId;
 
-    @Column(name = "staff_code", nullable = false, unique = true, length = 20)
+    @Column(name = "lecturer_code", nullable = false, unique = true, length = 20)
     private String staffCode;
 
     @Column(name = "full_name", nullable = false, length = 120)

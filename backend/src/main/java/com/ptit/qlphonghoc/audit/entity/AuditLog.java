@@ -18,6 +18,7 @@ public class AuditLog {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "audit_log_id")
     private Long id;
 
     @Column(name = "user_id")
@@ -31,7 +32,7 @@ public class AuditLog {
     private String tableName;
 
     @Column(name = "record_id")
-    private Integer recordId;
+    private Long recordId;
 
     @Column(name = "old_values", columnDefinition = "json")
     private String oldValues;
@@ -77,11 +78,11 @@ public class AuditLog {
         this.tableName = tableName;
     }
 
-    public Integer getRecordId() {
+    public Long getRecordId() {
         return recordId;
     }
 
-    public void setRecordId(Integer recordId) {
+    public void setRecordId(Long recordId) {
         this.recordId = recordId;
     }
 

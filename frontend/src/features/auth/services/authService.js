@@ -1,4 +1,4 @@
-import { APP_ROUTES } from "@/constants/routes";
+import { APP_ROUTES, ROLE_DEFAULT_PATHS } from "@/constants/routes";
 import { httpClient } from "@/services/httpClient";
 
 const USER_STORAGE_KEY = "csms_user";
@@ -19,22 +19,15 @@ const BACKEND_ROLE_TO_UI_ROLE = {
   ROLE_EMPLOYEES: "Employee"
 };
 
-const ROLE_REDIRECTS = {
-  ADMIN: APP_ROUTES.home,
-  STAFF: APP_ROUTES.staffDashboard,
-  LECTURER: APP_ROUTES.lecturerDashboard,
-  STUDENT: APP_ROUTES.studentDashboard,
-  FACILITY: APP_ROUTES.employeeDashboard,
-  EMPLOYEES: APP_ROUTES.employeeDashboard
-};
+const ROLE_REDIRECTS = ROLE_DEFAULT_PATHS;
 
 const REDIRECT_ALIASES = {
   "/admin": APP_ROUTES.home,
   "/staff": APP_ROUTES.staffDashboard,
-  "/lecturer": APP_ROUTES.lecturerDashboard,
-  "/student": APP_ROUTES.studentDashboard,
-  "/facility": APP_ROUTES.employeeDashboard,
-  "/employees": APP_ROUTES.employeeDashboard
+  "/lecturer": APP_ROUTES.lecturerTimetable,
+  "/student": APP_ROUTES.studentTimetable,
+  "/facility": APP_ROUTES.facilityTimetable,
+  "/employees": APP_ROUTES.facilityTimetable,
 };
 
 const decodeJwtPayload = (token) => {

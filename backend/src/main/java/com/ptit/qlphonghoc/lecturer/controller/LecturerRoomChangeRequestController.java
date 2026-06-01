@@ -47,7 +47,7 @@ public class LecturerRoomChangeRequestController {
     @GetMapping("/semesters")
     public ResponseEntity<List<Map<String, Object>>> getSemesters() {
         String sql = """
-            SELECT id, semester_name AS name, semester_type AS type, status
+            SELECT semester_id AS id, semester_name AS name, semester_type AS type, status
             FROM semesters
             WHERE is_deleted = FALSE
             ORDER BY
