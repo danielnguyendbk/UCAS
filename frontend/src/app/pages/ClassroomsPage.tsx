@@ -272,7 +272,7 @@ export const ClassroomsPage = () => {
           <p className="font-medium text-red-700">Lỗi tải dữ liệu</p>
           <p className="text-red-600 mt-1">{error}</p>
           <p className="text-sm text-red-500 mt-2">
-            Hãy kiểm tra backend có đang chạy ở http://localhost:3000 không.
+            Hãy kiểm tra backend có đang chạy ở http://localhost:8080 không.
           </p>
         </div>
       </div>
