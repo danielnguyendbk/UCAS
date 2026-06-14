@@ -1,7 +1,23 @@
 import { useEffect, useState, useMemo } from "react";
-import { Bell, ChevronDown, ChevronRight, Menu, School, LogOut, User, Key, Settings as SettingsIcon, CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
+import {
+  Bell,
+  ChevronDown,
+  ChevronRight,
+  Menu,
+  School,
+  LogOut,
+  User,
+  Key,
+  CheckCircle,
+  AlertTriangle,
+  Loader2,
+} from "lucide-react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
-import { NAVIGATION_BY_ROLE, ROLE_BADGE_CLASSES, ROLE_LABELS } from "@/constants/navigation";
+import {
+  NAVIGATION_BY_ROLE,
+  ROLE_BADGE_CLASSES,
+  ROLE_LABELS,
+} from "@/constants/navigation";
 import { APP_ROUTES, ROLE_DEFAULT_PATHS } from "@/constants/routes";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { Badge } from "@/app/components/ui/badge";
@@ -10,16 +26,20 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
 } from "@/app/components/ui/dropdown-menu";
 import { httpClient } from "@/services/httpClient";
 import { profileService } from "../../features/auth/services/profileService";
 
-const getActiveSemesterName = (semesters) => {
-  const activeSemester = semesters.find(
-    (semester) => String(semester.status || "").toUpperCase() === "ACTIVE",
+const getActiveSemesterName = (dashboardData) => {
+  const activeSemester = dashboardData?.activeSemester || {};
+
+  return (
+    activeSemester.name ||
+    activeSemester.semesterName ||
+    activeSemester.semester_name ||
+    "Chưa xác định học kỳ active"
   );
-  return (activeSemester || semesters[0])?.name || "";
 };
 
 const getResponseList = (response) => {
@@ -30,6 +50,56 @@ const getResponseList = (response) => {
 };
 
 const normalize = (value) => String(value || "").trim().toUpperCase();
+
+const normalizeNavText = (value) =>
+  String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .trim()
+    .toUpperCase();
+
+const isAdminSystemGroup = (item) =>
+  normalizeNavText(item?.label) === "HE THONG";
+
+const isReportNavItem = (item) => {
+  const label = normalizeNavText(item?.label);
+  const path = String(item?.path || "").toLowerCase();
+
+  return (
+    label === "BAO CAO" ||
+    label.includes("REPORT") ||
+    path.includes("report")
+  );
+};
+
+const filterNavigationForRole = (items, role) => {
+  if (role !== "Admin") {
+    return items;
+  }
+
+  return items
+    .map((item) => {
+      if (item.type === "group" && isAdminSystemGroup(item)) {
+        return {
+          ...item,
+          children: Array.isArray(item.children)
+            ? item.children.filter(isReportNavItem)
+            : [],
+        };
+      }
+
+      return item;
+    })
+    .filter((item) => {
+      if (item.type === "group" && isAdminSystemGroup(item)) {
+        return Array.isArray(item.children) && item.children.length > 0;
+      }
+
+      return true;
+    });
+};
 
 const toTimestamp = (value) => {
   if (!value) return 0;
@@ -44,9 +114,15 @@ const formatRelativeTime = (value) => {
 
   const diffMs = Date.now() - timestamp;
   if (diffMs < 60_000) return "Vừa xong";
-  if (diffMs < 3_600_000) return `${Math.max(1, Math.floor(diffMs / 60_000))} phút trước`;
-  if (diffMs < 86_400_000) return `${Math.floor(diffMs / 3_600_000)} giờ trước`;
-  if (diffMs < 604_800_000) return `${Math.floor(diffMs / 86_400_000)} ngày trước`;
+  if (diffMs < 3_600_000) {
+    return `${Math.max(1, Math.floor(diffMs / 60_000))} phút trước`;
+  }
+  if (diffMs < 86_400_000) {
+    return `${Math.floor(diffMs / 3_600_000)} giờ trước`;
+  }
+  if (diffMs < 604_800_000) {
+    return `${Math.floor(diffMs / 86_400_000)} ngày trước`;
+  }
 
   return new Intl.DateTimeFormat("vi-VN", {
     day: "2-digit",
@@ -67,13 +143,20 @@ const STATUS_LABELS = {
   CANCELLED: "Đã hủy",
 };
 
-const getStatusLabel = (status) => STATUS_LABELS[normalize(status)] || status || "Mới cập nhật";
+const getStatusLabel = (status) =>
+  STATUS_LABELS[normalize(status)] || status || "Mới cập nhật";
 
 const getNotificationTone = (status) => {
   const normalized = normalize(status);
-  if (["APPROVED", "RESOLVED", "COMPLETED"].includes(normalized)) return "success";
-  if (["REJECTED", "CANCELLED"].includes(normalized)) return "danger";
-  if (normalized === "IN_PROGRESS") return "info";
+  if (["APPROVED", "RESOLVED", "COMPLETED"].includes(normalized)) {
+    return "success";
+  }
+  if (["REJECTED", "CANCELLED"].includes(normalized)) {
+    return "danger";
+  }
+  if (normalized === "IN_PROGRESS") {
+    return "info";
+  }
   return "warning";
 };
 
@@ -176,15 +259,24 @@ const getNotificationTimestampValue = (item) =>
   item.requestedDate;
 
 const joinNonEmpty = (...values) =>
-  values.filter((value) => value !== null && value !== undefined && String(value).trim() !== "").join(" - ");
+  values
+    .filter((value) => value !== null && value !== undefined && String(value).trim() !== "")
+    .join(" - ");
 
 const buildBorrowNotification = (item, source, readNotificationIds) => {
   const id = `${source.id}-${item.id}`;
   const timestampValue = getNotificationTimestampValue(item);
-  const roomCode = item.approvedRoomCode || item.preferredRoomCode || item.requestedRoomCode;
+  const roomCode =
+    item.approvedRoomCode || item.preferredRoomCode || item.requestedRoomCode;
+
   const message = joinNonEmpty(
     item.requesterName || item.requesterUsername,
-    item.requestTitle || item.purposeNote || item.clubName || item.sectionCode || item.courseName || "Yêu cầu đặt phòng",
+    item.requestTitle ||
+      item.purposeNote ||
+      item.clubName ||
+      item.sectionCode ||
+      item.courseName ||
+      "Yêu cầu đặt phòng",
     roomCode ? `Phòng ${roomCode}` : "",
     getStatusLabel(item.status),
   );
@@ -204,7 +296,12 @@ const buildBorrowNotification = (item, source, readNotificationIds) => {
 const buildChangeNotification = (item, source, readNotificationIds) => {
   const id = `${source.id}-${item.id}`;
   const timestampValue = getNotificationTimestampValue(item);
-  const roomText = item.newRoomCode || item.requestedRoomCode || item.preferredRoomCode || item.oldRoomCode;
+  const roomText =
+    item.newRoomCode ||
+    item.requestedRoomCode ||
+    item.preferredRoomCode ||
+    item.oldRoomCode;
+
   const message = joinNonEmpty(
     item.requesterName || item.lecturerName,
     item.classCode || item.sectionCode || item.courseName || "Yêu cầu đổi phòng",
@@ -227,6 +324,7 @@ const buildChangeNotification = (item, source, readNotificationIds) => {
 const buildMaintenanceNotification = (item, source, readNotificationIds) => {
   const id = `${source.id}-${item.id}`;
   const timestampValue = getNotificationTimestampValue(item);
+
   const message = joinNonEmpty(
     item.requestCode || `#${item.id}`,
     item.roomCode || item.roomName,
@@ -250,9 +348,11 @@ const buildNotification = (item, source, readNotificationIds) => {
   if (source.kind === "change") {
     return buildChangeNotification(item, source, readNotificationIds);
   }
+
   if (source.kind === "maintenance") {
     return buildMaintenanceNotification(item, source, readNotificationIds);
   }
+
   return buildBorrowNotification(item, source, readNotificationIds);
 };
 
@@ -270,29 +370,33 @@ const getGroupKey = (group) => group.id ?? `group-${group.label}`;
 
 const getNavItemKey = (item, { role = "unknown", groupLabel = "" } = {}) => {
   if (item.id) return item.id;
+
   const slug = [role, groupLabel, item.label, item.path]
     .filter(Boolean)
     .join("-")
     .replace(/\s+/g, "-")
     .toLowerCase();
+
   return slug || `nav-${role}-${groupLabel}-${item.label}`;
 };
 
 const ROLE_PATH_GUARDS = {
-  ADMIN:     [/^\/$/, /^\/admin(\/|$)/],
-  STAFF:     [/^\/$/, /^\/staff(\/|$)/],
-  LECTURER:  [/^\/$/, /^\/lecturer(\/|$)/],
-  STUDENT:   [/^\/$/, /^\/student(\/|$)/],
-  FACILITY:  [/^\/$/, /^\/facility(\/|$)/],
-  EMPLOYEES: [/^\/$/, /^\/facility(\/|$)/]
+  ADMIN: [/^\/$/, /^\/admin(\/|$)/],
+  STAFF: [/^\/$/, /^\/staff(\/|$)/],
+  LECTURER: [/^\/$/, /^\/lecturer(\/|$)/],
+  STUDENT: [/^\/$/, /^\/student(\/|$)/],
+  FACILITY: [/^\/$/, /^\/facility(\/|$)/],
+  EMPLOYEES: [/^\/$/, /^\/facility(\/|$)/],
 };
 
 const AppLayout = () => {
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [activeSemesterName, setActiveSemesterName] = useState("");
+  const [activeSemesterName, setActiveSemesterName] = useState("Đang tải học kỳ");
+
   const [notifications, setNotifications] = useState([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [notificationsError, setNotificationsError] = useState("");
@@ -308,6 +412,72 @@ const AppLayout = () => {
     username: "",
     role: "",
   });
+
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [changePasswordForm, setChangePasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [changePasswordLoading, setChangePasswordLoading] = useState(false);
+  const [changePasswordError, setChangePasswordError] = useState("");
+  const [changePasswordSuccess, setChangePasswordSuccess] = useState("");
+
+  const menuItems = useMemo(() => {
+    const rawItems = user ? NAVIGATION_BY_ROLE[user.role] || [] : [];
+
+    return filterNavigationForRole(rawItems, user?.role);
+  }, [user?.role]);
+
+  const useGroupedSidebar = user?.role === "Admin";
+
+  const flatMenuItems = useMemo(() => {
+    const flat = [];
+
+    menuItems.forEach((item) => {
+      if (useGroupedSidebar && item.type === "group" && item.children) {
+        flat.push(...item.children);
+      } else if (item.path) {
+        flat.push(item);
+      }
+    });
+
+    return flat;
+  }, [menuItems, useGroupedSidebar]);
+
+  const activeMenuPath = useMemo(() => {
+    const matches = flatMenuItems
+      .filter((item) => item.path)
+      .filter((item) => {
+        if (defaultRootPaths.has(item.path)) {
+          return location.pathname === item.path;
+        }
+
+        return (
+          location.pathname === item.path ||
+          location.pathname.startsWith(`${item.path}/`)
+        );
+      })
+      .sort((a, b) => b.path.length - a.path.length);
+
+    return matches[0]?.path ?? null;
+  }, [location.pathname, flatMenuItems]);
+
+  const [expandedGroups, setExpandedGroups] = useState(new Set());
+
+  const toggleGroup = (groupKey) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+
+      if (next.has(groupKey)) {
+        next.delete(groupKey);
+      } else {
+        next.add(groupKey);
+      }
+
+      return next;
+    });
+  };
 
   const handleOpenProfile = async () => {
     setIsProfileOpen(true);
@@ -358,8 +528,14 @@ const AppLayout = () => {
       const nextUser = {
         ...currentUser,
         ...updatedProfile,
-        name: updatedProfile?.fullName || updatedProfile?.full_name || profileForm.fullName,
-        fullName: updatedProfile?.fullName || updatedProfile?.full_name || profileForm.fullName,
+        name:
+          updatedProfile?.fullName ||
+          updatedProfile?.full_name ||
+          profileForm.fullName,
+        fullName:
+          updatedProfile?.fullName ||
+          updatedProfile?.full_name ||
+          profileForm.fullName,
         email: updatedProfile?.email || profileForm.email,
       };
 
@@ -370,73 +546,102 @@ const AppLayout = () => {
     } catch (error) {
       console.error("Không cập nhật được hồ sơ cá nhân:", error);
       setProfileError(
-        error?.response?.data?.message || "Không cập nhật được hồ sơ cá nhân."
+        error?.response?.data?.message || "Không cập nhật được hồ sơ cá nhân.",
       );
     } finally {
       setProfileSaving(false);
     }
   };
 
-
-  const menuItems = useMemo(
-    () => (user ? NAVIGATION_BY_ROLE[user.role] || [] : []),
-    [user?.role],
-  );
-
-  const useGroupedSidebar = user?.role === "Admin";
-
-  const flatMenuItems = useMemo(() => {
-    const flat = [];
-    menuItems.forEach((item) => {
-      if (useGroupedSidebar && item.type === "group" && item.children) {
-        flat.push(...item.children);
-      } else if (item.path) {
-        flat.push(item);
-      }
+  const handleOpenChangePassword = () => {
+    setChangePasswordForm({
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
     });
-    return flat;
-  }, [menuItems, useGroupedSidebar]);
+    setChangePasswordError("");
+    setChangePasswordSuccess("");
+    setIsChangePasswordOpen(true);
+  };
 
-  const activeMenuPath = useMemo(() => {
-    const matches = flatMenuItems
-      .filter((item) => item.path)
-      .filter((item) => {
-        if (defaultRootPaths.has(item.path)) {
-          return location.pathname === item.path;
-        }
-        return (
-          location.pathname === item.path ||
-          location.pathname.startsWith(`${item.path}/`)
-        );
-      })
-      .sort((a, b) => b.path.length - a.path.length);
+  const handleChangePasswordInput = (field, value) => {
+    setChangePasswordForm((previous) => ({
+      ...previous,
+      [field]: value,
+    }));
+  };
 
-    return matches[0]?.path ?? null;
-  }, [location.pathname, flatMenuItems]);
+  const handleSubmitChangePassword = async (event) => {
+    event.preventDefault();
 
-  const [expandedGroups, setExpandedGroups] = useState(new Set());
+    const { currentPassword, newPassword, confirmPassword } = changePasswordForm;
 
-  const toggleGroup = (groupKey) => {
-    setExpandedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(groupKey)) {
-        next.delete(groupKey);
-      } else {
-        next.add(groupKey);
-      }
-      return next;
-    });
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setChangePasswordError("Vui lòng nhập đầy đủ thông tin mật khẩu.");
+      setChangePasswordSuccess("");
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setChangePasswordError("Mật khẩu mới phải có ít nhất 6 ký tự.");
+      setChangePasswordSuccess("");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setChangePasswordError("Xác nhận mật khẩu mới không khớp.");
+      setChangePasswordSuccess("");
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      setChangePasswordError("Mật khẩu mới không được trùng với mật khẩu hiện tại.");
+      setChangePasswordSuccess("");
+      return;
+    }
+
+    try {
+      setChangePasswordLoading(true);
+      setChangePasswordError("");
+      setChangePasswordSuccess("");
+
+      await httpClient.post("/api/auth/change-password", {
+        currentPassword,
+        newPassword,
+        confirmPassword,
+      });
+
+      setChangePasswordSuccess("Đổi mật khẩu thành công.");
+      setChangePasswordForm({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+    } catch (error) {
+      setChangePasswordError(
+        error?.response?.data?.message ||
+          "Không đổi được mật khẩu. Vui lòng kiểm tra lại mật khẩu hiện tại.",
+      );
+    } finally {
+      setChangePasswordLoading(false);
+    }
   };
 
   useEffect(() => {
     if (!useGroupedSidebar || !activeMenuPath) return;
+
     menuItems.forEach((item) => {
       if (item.type === "group" && item.children) {
-        const hasActiveChild = item.children.some((child) => child.path === activeMenuPath);
+        const hasActiveChild = item.children.some(
+          (child) => child.path === activeMenuPath,
+        );
+
         if (hasActiveChild) {
           const groupKey = getGroupKey(item);
+
           setExpandedGroups((prev) => {
             if (prev.has(groupKey)) return prev;
+
             const next = new Set(prev);
             next.add(groupKey);
             return next;
@@ -459,15 +664,14 @@ const AppLayout = () => {
 
     const fetchActiveSemester = async () => {
       try {
-        const response = await httpClient.get("/api/categories/semesters");
-        const semesters = Array.isArray(response.data)
-          ? response.data
-          : response.data?.data || [];
+        const response = await httpClient.get("/api/admin/dashboard");
+
         if (isMounted) {
-          setActiveSemesterName(getActiveSemesterName(semesters));
+          setActiveSemesterName(getActiveSemesterName(response.data));
         }
       } catch (error) {
         console.error("Không tải được học kỳ active:", error);
+
         if (isMounted) {
           setActiveSemesterName("Chưa xác định học kỳ active");
         }
@@ -489,6 +693,7 @@ const AppLayout = () => {
 
     const roleKey = getNotificationRoleKey(user);
     const sources = NOTIFICATION_SOURCES_BY_ROLE[roleKey] || [];
+
     if (sources.length === 0) {
       setNotifications([]);
       return undefined;
@@ -503,6 +708,7 @@ const AppLayout = () => {
       const results = await Promise.allSettled(
         sources.map(async (source) => {
           const response = await httpClient.get(source.endpoint);
+
           return getResponseList(response)
             .map((item) => buildNotification(item, source, readNotificationIds))
             .filter((item) => item.id);
@@ -518,13 +724,16 @@ const AppLayout = () => {
         .slice(0, 8);
 
       setNotifications(nextNotifications);
+
       if (results.some((result) => result.status === "rejected")) {
         setNotificationsError("Một vài thông báo chưa tải được.");
       }
+
       setNotificationsLoading(false);
     };
 
     void fetchNotifications();
+
     const intervalId = window.setInterval(fetchNotifications, 60_000);
 
     return () => {
@@ -537,10 +746,12 @@ const AppLayout = () => {
     if (!isAuthenticated || !user?.backendRole) return;
 
     const allowedMatchers = ROLE_PATH_GUARDS[user.backendRole] ?? [];
-    const isAllowed = allowedMatchers.some((matcher) => matcher.test(location.pathname));
+    const isAllowed = allowedMatchers.some((matcher) =>
+      matcher.test(location.pathname),
+    );
+
     if (!isAllowed) {
-      const roleHome =
-        ROLE_DEFAULT_PATHS[user.backendRole] ?? APP_ROUTES.home;
+      const roleHome = ROLE_DEFAULT_PATHS[user.backendRole] ?? APP_ROUTES.home;
       navigate(roleHome, { replace: true });
     }
   }, [isAuthenticated, location.pathname, navigate, user]);
@@ -562,8 +773,12 @@ const AppLayout = () => {
       notifications.forEach((notification) => next.add(notification.id));
       return next;
     });
+
     setNotifications((previous) =>
-      previous.map((notification) => ({ ...notification, unread: false })),
+      previous.map((notification) => ({
+        ...notification,
+        unread: false,
+      })),
     );
   };
 
@@ -573,11 +788,13 @@ const AppLayout = () => {
       next.add(notification.id);
       return next;
     });
+
     setNotifications((previous) =>
       previous.map((item) =>
         item.id === notification.id ? { ...item, unread: false } : item,
       ),
     );
+
     if (notification.path) {
       navigate(notification.path);
     }
@@ -586,16 +803,18 @@ const AppLayout = () => {
   const handleOpenNotificationList = () => {
     const roleKey = getNotificationRoleKey(user);
     const firstPath = NOTIFICATION_SOURCES_BY_ROLE[roleKey]?.[0]?.path;
+
     if (firstPath) {
       navigate(firstPath);
     }
   };
 
-  const unreadCount = notifications.filter((notification) => notification.unread).length;
+  const unreadCount = notifications.filter(
+    (notification) => notification.unread,
+  ).length;
 
   return (
     <div className="h-screen flex bg-gray-50 overflow-hidden font-sans">
-      {/* Mobile Overlay */}
       {isSidebarOpen && (
         <button
           className="fixed inset-0 bg-black/40 z-30 lg:hidden backdrop-blur-sm transition-opacity"
@@ -604,7 +823,6 @@ const AppLayout = () => {
         />
       )}
 
-      {/* Sidebar */}
       <aside
         className={`
           fixed lg:static inset-y-0 left-0 z-40 w-64 bg-white border-r border-gray-200 flex flex-col
@@ -612,22 +830,26 @@ const AppLayout = () => {
           ${isSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
         `}
       >
-        {/* Logo Section */}
         <div className="h-16 flex items-center px-6 border-b border-gray-100 flex-shrink-0 bg-white">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center shadow-lg shadow-blue-200">
               <School className="w-5 h-5 text-white" />
             </div>
             <div>
-              <span className="font-extrabold text-gray-900 text-base tracking-tight">UCAS</span>
-              <p className="text-[10px] text-blue-500 font-bold uppercase tracking-wider leading-none mt-0.5">Management</p>
+              <span className="font-extrabold text-gray-900 text-base tracking-tight">
+                UCAS
+              </span>
+              <p className="text-[10px] text-blue-500 font-bold uppercase tracking-wider leading-none mt-0.5">
+                Management
+              </p>
             </div>
           </div>
         </div>
 
-        {/* User Quick Info */}
         <div className="px-6 py-5 border-b border-gray-50 bg-gray-50/30">
-          <Badge className={`${ROLE_BADGE_CLASSES[user.role]} shadow-none border-0 px-3 py-1 text-[11px] font-bold`}>
+          <Badge
+            className={`${ROLE_BADGE_CLASSES[user.role]} shadow-none border-0 px-3 py-1 text-[11px] font-bold`}
+          >
             {ROLE_LABELS[user.role]}
           </Badge>
           <p className="text-xs text-gray-500 mt-2 font-medium truncate opacity-70">
@@ -635,17 +857,21 @@ const AppLayout = () => {
           </p>
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-4 px-3 custom-scrollbar">
           <ul className="space-y-1">
             {menuItems.map((item, idx) => {
               if (item.type === "divider") {
                 return (
                   <li
-                    key={getNavItemKey(item, { role: user.role, groupLabel: `divider-${idx}` })}
+                    key={getNavItemKey(item, {
+                      role: user.role,
+                      groupLabel: `divider-${idx}`,
+                    })}
                     className="pt-5 pb-2 px-4"
                   >
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em]">{item.label}</p>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em]">
+                      {item.label}
+                    </p>
                   </li>
                 );
               }
@@ -657,6 +883,7 @@ const AppLayout = () => {
                     role: user.role,
                     groupLabel: item.label,
                   });
+
                   return (
                     <li key={childKey}>
                       <Link
@@ -664,13 +891,17 @@ const AppLayout = () => {
                         onClick={() => setIsSidebarOpen(false)}
                         className={`
                           flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group relative
-                          ${active
-                            ? "bg-blue-600 text-white shadow-md shadow-blue-200 font-semibold"
-                            : "text-gray-600 hover:bg-blue-50 hover:text-blue-700"}
+                          ${
+                            active
+                              ? "bg-blue-600 text-white shadow-md shadow-blue-200 font-semibold"
+                              : "text-gray-600 hover:bg-blue-50 hover:text-blue-700"
+                          }
                         `}
                       >
                         <span className="text-sm flex-1">{child.label}</span>
-                        {active && <ChevronRight className="w-3.5 h-3.5 text-blue-200" />}
+                        {active && (
+                          <ChevronRight className="w-3.5 h-3.5 text-blue-200" />
+                        )}
                       </Link>
                     </li>
                   );
@@ -681,7 +912,9 @@ const AppLayout = () => {
                 const Icon = item.icon;
                 const groupKey = getGroupKey(item);
                 const isExpanded = expandedGroups.has(groupKey);
-                const hasActiveChild = item.children?.some((child) => isItemActive(child.path));
+                const hasActiveChild = item.children?.some((child) =>
+                  isItemActive(child.path),
+                );
 
                 return (
                   <li key={groupKey} className="space-y-1">
@@ -690,19 +923,34 @@ const AppLayout = () => {
                       onClick={() => toggleGroup(groupKey)}
                       className={`
                         w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 text-left font-medium
-                        ${hasActiveChild
-                          ? "bg-blue-50/70 text-blue-700 font-semibold shadow-sm"
-                          : "text-gray-600 hover:bg-blue-50/40 hover:text-blue-700"}
+                        ${
+                          hasActiveChild
+                            ? "bg-blue-50/70 text-blue-700 font-semibold shadow-sm"
+                            : "text-gray-600 hover:bg-blue-50/40 hover:text-blue-700"
+                        }
                       `}
                     >
-                      <Icon className={`w-[18px] h-[18px] flex-shrink-0 ${hasActiveChild ? "text-blue-600" : "text-gray-400"}`} />
+                      <Icon
+                        className={`w-[18px] h-[18px] flex-shrink-0 ${
+                          hasActiveChild ? "text-blue-600" : "text-gray-400"
+                        }`}
+                      />
                       <span className="text-sm flex-1">{item.label}</span>
                       {isExpanded ? (
-                        <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${hasActiveChild ? "text-blue-600" : "text-gray-400"}`} />
+                        <ChevronDown
+                          className={`w-4 h-4 transition-transform duration-200 ${
+                            hasActiveChild ? "text-blue-600" : "text-gray-400"
+                          }`}
+                        />
                       ) : (
-                        <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${hasActiveChild ? "text-blue-600" : "text-gray-400"}`} />
+                        <ChevronRight
+                          className={`w-4 h-4 transition-transform duration-200 ${
+                            hasActiveChild ? "text-blue-600" : "text-gray-400"
+                          }`}
+                        />
                       )}
                     </button>
+
                     {isExpanded && item.children && (
                       <ul className="mt-1 ml-6 pl-3 border-l border-gray-200 space-y-1">
                         {item.children.map((child) => {
@@ -711,6 +959,7 @@ const AppLayout = () => {
                             role: user.role,
                             groupLabel: item.label,
                           });
+
                           return (
                             <li key={childKey}>
                               <Link
@@ -718,9 +967,11 @@ const AppLayout = () => {
                                 onClick={() => setIsSidebarOpen(false)}
                                 className={`
                                   flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all duration-150 relative
-                                  ${active
-                                    ? "bg-blue-600 text-white font-semibold shadow-sm"
-                                    : "text-gray-500 hover:bg-blue-50 hover:text-blue-600"}
+                                  ${
+                                    active
+                                      ? "bg-blue-600 text-white font-semibold shadow-sm"
+                                      : "text-gray-500 hover:bg-blue-50 hover:text-blue-600"
+                                  }
                                 `}
                               >
                                 <span className="truncate">{child.label}</span>
@@ -734,10 +985,10 @@ const AppLayout = () => {
                 );
               }
 
-              // Flat sidebar item (all non-admin roles; also fallback if misconfigured)
               const Icon = item.icon;
               const active = isItemActive(item.path);
               const itemKey = getNavItemKey(item, { role: user.role });
+
               return (
                 <li key={itemKey}>
                   <Link
@@ -745,19 +996,33 @@ const AppLayout = () => {
                     onClick={() => setIsSidebarOpen(false)}
                     className={`
                       flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group relative
-                      ${active 
-                        ? "bg-blue-600 text-white shadow-md shadow-blue-200 font-semibold" 
-                        : "text-gray-600 hover:bg-blue-50 hover:text-blue-700"}
+                      ${
+                        active
+                          ? "bg-blue-600 text-white shadow-md shadow-blue-200 font-semibold"
+                          : "text-gray-600 hover:bg-blue-50 hover:text-blue-700"
+                      }
                     `}
                   >
-                    <Icon className={`w-[18px] h-[18px] flex-shrink-0 ${active ? "text-white" : "text-gray-400 group-hover:text-blue-600"}`} />
+                    <Icon
+                      className={`w-[18px] h-[18px] flex-shrink-0 ${
+                        active
+                          ? "text-white"
+                          : "text-gray-400 group-hover:text-blue-600"
+                      }`}
+                    />
                     <span className="text-sm flex-1">{item.label}</span>
                     {item.badge && (
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${item.badge === 'Gấp' ? 'bg-red-500' : 'bg-orange-500'} text-white`}>
+                      <span
+                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
+                          item.badge === "Gấp" ? "bg-red-500" : "bg-orange-500"
+                        } text-white`}
+                      >
                         {item.badge}
                       </span>
                     )}
-                    {active && <ChevronRight className="w-3.5 h-3.5 text-blue-200" />}
+                    {active && (
+                      <ChevronRight className="w-3.5 h-3.5 text-blue-200" />
+                    )}
                   </Link>
                 </li>
               );
@@ -765,23 +1030,24 @@ const AppLayout = () => {
           </ul>
         </nav>
 
-        {/* Bottom Profile Mini */}
         <div className="p-4 border-t border-gray-100 flex-shrink-0">
           <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 transition-colors">
             <div className="w-9 h-9 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center flex-shrink-0 font-bold border border-blue-200">
               {user.name.charAt(0)}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-gray-900 truncate">{user.name}</p>
-              <p className="text-[10px] text-gray-500 font-medium">{user.code}</p>
+              <p className="text-xs font-bold text-gray-900 truncate">
+                {user.name}
+              </p>
+              <p className="text-[10px] text-gray-500 font-medium">
+                {user.code}
+              </p>
             </div>
           </div>
         </div>
       </aside>
 
-      {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        {/* Header */}
         <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-8 flex-shrink-0 z-20">
           <div className="flex items-center gap-4">
             <button
@@ -791,12 +1057,13 @@ const AppLayout = () => {
             >
               <Menu className="w-5 h-5" />
             </button>
+
             <div className="hidden sm:block">
               <h2 className="text-sm font-bold text-gray-900">
                 Hệ thống Quản lý CSVC
               </h2>
               <div className="flex items-center gap-2 mt-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
                 <p className="text-[11px] text-gray-500 font-medium">
                   {activeSemesterName || "Đang tải học kỳ"}
                 </p>
@@ -805,10 +1072,12 @@ const AppLayout = () => {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Notifications */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="relative p-2.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all" aria-label="Notifications">
+                <button
+                  className="relative p-2.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                  aria-label="Notifications"
+                >
                   <Bell className="w-5 h-5" />
                   {unreadCount > 0 && (
                     <span className="absolute top-2 right-2 w-4 h-4 bg-red-500 text-white text-[9px] font-bold flex items-center justify-center rounded-full border-2 border-white animate-pulse">
@@ -817,12 +1086,21 @@ const AppLayout = () => {
                   )}
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-80 p-0 shadow-2xl border-gray-200">
+
+              <DropdownMenuContent
+                align="end"
+                className="w-80 p-0 shadow-2xl border-gray-200"
+              >
                 <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
                   <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-sm text-gray-900">Thông báo</h3>
-                    {notificationsLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />}
+                    <h3 className="font-bold text-sm text-gray-900">
+                      Thông báo
+                    </h3>
+                    {notificationsLoading && (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />
+                    )}
                   </div>
+
                   <button
                     className="text-[10px] font-bold text-blue-600 hover:underline disabled:text-gray-400 disabled:no-underline"
                     onClick={handleMarkNotificationsRead}
@@ -831,47 +1109,71 @@ const AppLayout = () => {
                     Đánh dấu đã đọc
                   </button>
                 </div>
+
                 {notificationsError && (
                   <div className="border-b border-amber-100 bg-amber-50 px-4 py-2 text-[11px] font-medium text-amber-700">
                     {notificationsError}
                   </div>
                 )}
+
                 <div className="max-h-[350px] overflow-y-auto">
                   {notificationsLoading && notifications.length === 0 ? (
                     <div className="flex items-center justify-center gap-2 p-8 text-sm text-gray-500">
                       <Loader2 className="h-4 w-4 animate-spin" />
                       Đang tải thông báo...
                     </div>
-                  ) : notifications.length > 0 ? notifications.map((notif) => {
-                    const toneClassName = notificationToneClasses[notif.type] || notificationToneClasses.info;
-                    const NotificationIcon = notif.type === "success" ? CheckCircle : AlertTriangle;
+                  ) : notifications.length > 0 ? (
+                    notifications.map((notif) => {
+                      const toneClassName =
+                        notificationToneClasses[notif.type] ||
+                        notificationToneClasses.info;
+                      const NotificationIcon =
+                        notif.type === "success" ? CheckCircle : AlertTriangle;
 
-                    return (
-                      <button
-                        type="button"
-                        key={notif.id}
-                        onClick={() => handleOpenNotification(notif)}
-                        className={`w-full p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer flex gap-3 text-left ${notif.unread ? "bg-blue-50/30" : ""}`}
-                      >
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${toneClassName}`}>
-                          <NotificationIcon className="w-4 h-4" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-xs font-bold text-gray-900 ${notif.unread ? "pr-2 relative" : ""}`}>
-                            {notif.title}
-                            {notif.unread && <span className="absolute right-0 top-1 w-1.5 h-1.5 bg-blue-600 rounded-full"></span>}
-                          </p>
-                          <p className="text-[11px] text-gray-600 mt-0.5 line-clamp-2 leading-relaxed">{notif.message}</p>
-                          <p className="text-[10px] text-gray-400 mt-2 font-medium">{notif.time}</p>
-                        </div>
-                      </button>
-                    );
-                  }) : (
+                      return (
+                        <button
+                          type="button"
+                          key={notif.id}
+                          onClick={() => handleOpenNotification(notif)}
+                          className={`w-full p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer flex gap-3 text-left ${
+                            notif.unread ? "bg-blue-50/30" : ""
+                          }`}
+                        >
+                          <div
+                            className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${toneClassName}`}
+                          >
+                            <NotificationIcon className="w-4 h-4" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p
+                              className={`text-xs font-bold text-gray-900 ${
+                                notif.unread ? "pr-2 relative" : ""
+                              }`}
+                            >
+                              {notif.title}
+                              {notif.unread && (
+                                <span className="absolute right-0 top-1 w-1.5 h-1.5 bg-blue-600 rounded-full" />
+                              )}
+                            </p>
+                            <p className="text-[11px] text-gray-600 mt-0.5 line-clamp-2 leading-relaxed">
+                              {notif.message}
+                            </p>
+                            <p className="text-[10px] text-gray-400 mt-2 font-medium">
+                              {notif.time}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })
+                  ) : (
                     <div className="p-8 text-center">
-                      <p className="text-sm text-gray-500">Không có thông báo mới</p>
+                      <p className="text-sm text-gray-500">
+                        Không có thông báo mới
+                      </p>
                     </div>
                   )}
                 </div>
+
                 <div className="p-2 border-t border-gray-100 text-center">
                   <button
                     className="text-xs font-semibold text-gray-500 hover:text-blue-600 py-1 w-full"
@@ -883,23 +1185,32 @@ const AppLayout = () => {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Profile Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger className="flex items-center gap-3 pl-2 pr-1 py-1 rounded-xl hover:bg-gray-50 transition-all border border-transparent hover:border-gray-100">
                 <div className="w-9 h-9 bg-blue-600 text-white rounded-xl flex items-center justify-center font-bold shadow-md shadow-blue-100">
                   {user.name.charAt(0)}
                 </div>
                 <div className="text-left hidden sm:block">
-                  <div className="text-xs font-bold text-gray-900 leading-none">{user.name}</div>
-                  <div className="text-[10px] text-blue-600 font-bold mt-1 uppercase tracking-tight">{ROLE_LABELS[user.role]}</div>
+                  <div className="text-xs font-bold text-gray-900 leading-none">
+                    {user.name}
+                  </div>
+                  <div className="text-[10px] text-blue-600 font-bold mt-1 uppercase tracking-tight">
+                    {ROLE_LABELS[user.role]}
+                  </div>
                 </div>
                 <ChevronDown className="w-4 h-4 text-gray-400 ml-1" />
               </DropdownMenuTrigger>
+
               <DropdownMenuContent align="end" className="w-56 p-2 shadow-2xl">
                 <div className="px-3 py-3 border-b border-gray-100 mb-1">
-                  <p className="text-xs font-bold text-gray-900">{user.name}</p>
-                  <p className="text-[11px] text-gray-500 truncate mt-0.5">{user.email}</p>
+                  <p className="text-xs font-bold text-gray-900">
+                    {user.name}
+                  </p>
+                  <p className="text-[11px] text-gray-500 truncate mt-0.5">
+                    {user.email}
+                  </p>
                 </div>
+
                 <DropdownMenuItem
                   onClick={handleOpenProfile}
                   className="rounded-lg gap-2 py-2 cursor-pointer"
@@ -907,16 +1218,21 @@ const AppLayout = () => {
                   <User className="w-4 h-4 text-gray-400" />
                   <span className="text-sm">Hồ sơ cá nhân</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem className="rounded-lg gap-2 py-2">
+
+                <DropdownMenuItem
+                  onSelect={handleOpenChangePassword}
+                  className="rounded-lg gap-2 py-2 cursor-pointer"
+                >
                   <Key className="w-4 h-4 text-gray-400" />
                   <span className="text-sm">Đổi mật khẩu</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem className="rounded-lg gap-2 py-2">
-                  <SettingsIcon className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm">Cài đặt</span>
-                </DropdownMenuItem>
+
                 <DropdownMenuSeparator className="my-1" />
-                <DropdownMenuItem onClick={handleLogout} className="rounded-lg gap-2 py-2 text-red-600 hover:bg-red-50 focus:bg-red-50 focus:text-red-600">
+
+                <DropdownMenuItem
+                  onClick={handleLogout}
+                  className="rounded-lg gap-2 py-2 text-red-600 hover:bg-red-50 focus:bg-red-50 focus:text-red-600"
+                >
                   <LogOut className="w-4 h-4" />
                   <span className="text-sm font-semibold">Đăng xuất</span>
                 </DropdownMenuItem>
@@ -925,16 +1241,131 @@ const AppLayout = () => {
           </div>
         </header>
 
+        {isChangePasswordOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+            <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+              <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900">
+                    Đổi mật khẩu
+                  </h2>
+                  <p className="text-sm text-gray-500">
+                    Cập nhật mật khẩu cho tài khoản đang đăng nhập
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsChangePasswordOpen(false)}
+                  className="rounded-lg px-3 py-1.5 text-sm font-semibold text-gray-500 hover:bg-gray-100"
+                >
+                  Đóng
+                </button>
+              </div>
+
+              <form
+                onSubmit={handleSubmitChangePassword}
+                className="space-y-4 px-6 py-5"
+              >
+                {changePasswordError && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+                    {changePasswordError}
+                  </div>
+                )}
+
+                {changePasswordSuccess && (
+                  <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                    {changePasswordSuccess}
+                  </div>
+                )}
+
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-gray-700">
+                    Mật khẩu hiện tại
+                  </label>
+                  <input
+                    type="password"
+                    value={changePasswordForm.currentPassword}
+                    onChange={(event) =>
+                      handleChangePasswordInput(
+                        "currentPassword",
+                        event.target.value,
+                      )
+                    }
+                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    placeholder="Nhập mật khẩu hiện tại"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-gray-700">
+                    Mật khẩu mới
+                  </label>
+                  <input
+                    type="password"
+                    value={changePasswordForm.newPassword}
+                    onChange={(event) =>
+                      handleChangePasswordInput("newPassword", event.target.value)
+                    }
+                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    placeholder="Tối thiểu 6 ký tự"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-gray-700">
+                    Xác nhận mật khẩu mới
+                  </label>
+                  <input
+                    type="password"
+                    value={changePasswordForm.confirmPassword}
+                    onChange={(event) =>
+                      handleChangePasswordInput(
+                        "confirmPassword",
+                        event.target.value,
+                      )
+                    }
+                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    placeholder="Nhập lại mật khẩu mới"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-3 border-t border-gray-100 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setIsChangePasswordOpen(false)}
+                    className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+                    disabled={changePasswordLoading}
+                  >
+                    Hủy
+                  </button>
+
+                  <button
+                    type="submit"
+                    className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                    disabled={changePasswordLoading}
+                  >
+                    {changePasswordLoading ? "Đang lưu..." : "Đổi mật khẩu"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
         {isProfileOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
             <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
               <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
                 <div>
-                  <h2 className="text-lg font-bold text-gray-900">Hồ sơ cá nhân</h2>
+                  <h2 className="text-lg font-bold text-gray-900">
+                    Hồ sơ cá nhân
+                  </h2>
                   <p className="text-sm text-gray-500">
                     Xem và cập nhật thông tin tài khoản của bạn
                   </p>
                 </div>
+
                 <button
                   type="button"
                   onClick={() => setIsProfileOpen(false)}
@@ -1025,6 +1456,7 @@ const AppLayout = () => {
                 >
                   Hủy
                 </button>
+
                 <button
                   type="button"
                   onClick={handleSaveProfile}
@@ -1038,14 +1470,12 @@ const AppLayout = () => {
           </div>
         )}
 
-        {/* Dynamic Content */}
         <main className="flex-1 overflow-auto bg-gray-50/30 custom-scrollbar relative">
-           <Outlet />
+          <Outlet />
         </main>
       </div>
     </div>
   );
-
 };
 
 export { AppLayout };

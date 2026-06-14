@@ -1,5 +1,5 @@
-import { jsx, jsxs } from "react/jsx-runtime";
-import { School, BookOpen, Calendar, AlertTriangle } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { School, BookOpen, Calendar, AlertTriangle, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import {
   BarChart,
@@ -11,126 +11,216 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  ResponsiveContainer
+  ResponsiveContainer,
 } from "recharts";
-const stats = [
-  {
-    title: "Total Classrooms",
-    value: "48",
-    description: "Active rooms available",
-    icon: School,
-    color: "bg-blue-500"
-  },
-  {
-    title: "Total Courses",
-    value: "156",
-    description: "Courses this semester",
-    icon: BookOpen,
-    color: "bg-green-500"
-  },
-  {
-    title: "Scheduled Classes",
-    value: "892",
-    description: "Total scheduled sessions",
-    icon: Calendar,
-    color: "bg-purple-500"
-  },
-  {
-    title: "Conflict Alerts",
-    value: "3",
-    description: "Requires attention",
-    icon: AlertTriangle,
-    color: "bg-red-500"
-  }
-];
-const roomUsageData = [
-  { day: "Mon", usage: 85 },
-  { day: "Tue", usage: 92 },
-  { day: "Wed", usage: 78 },
-  { day: "Thu", usage: 88 },
-  { day: "Fri", usage: 75 },
-  { day: "Sat", usage: 45 }
-];
-const utilizationData = [
-  { name: "High Utilization", value: 32, color: "#3b82f6" },
-  { name: "Medium Utilization", value: 12, color: "#10b981" },
-  { name: "Low Utilization", value: 4, color: "#f59e0b" }
-];
-const DashboardPage = () => {
-  return /* @__PURE__ */ jsxs("div", { className: "p-6 space-y-6", children: [
-    /* @__PURE__ */ jsxs("div", { children: [
-      /* @__PURE__ */ jsx("h1", { className: "text-2xl font-semibold text-gray-900", children: "Dashboard" }),
-      /* @__PURE__ */ jsx("p", { className: "text-gray-600 mt-1", children: "Overview of classroom scheduling system" })
-    ] }),
-    /* @__PURE__ */ jsx("div", { className: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6", children: stats.map((stat) => {
-      const Icon = stat.icon;
-      return /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsx(CardContent, { className: "p-6", children: /* @__PURE__ */ jsxs("div", { className: "flex items-start justify-between", children: [
-        /* @__PURE__ */ jsxs("div", { className: "flex-1", children: [
-          /* @__PURE__ */ jsx("p", { className: "text-sm text-gray-600", children: stat.title }),
-          /* @__PURE__ */ jsx("p", { className: "text-3xl font-bold text-gray-900 mt-2", children: stat.value }),
-          /* @__PURE__ */ jsx("p", { className: "text-xs text-gray-500 mt-1", children: stat.description })
-        ] }),
-        /* @__PURE__ */ jsx("div", { className: `${stat.color} w-12 h-12 rounded-lg flex items-center justify-center`, children: /* @__PURE__ */ jsx(Icon, { className: "w-6 h-6 text-white" }) })
-      ] }) }) }, stat.title);
-    }) }),
-    /* @__PURE__ */ jsxs("div", { className: "grid grid-cols-1 lg:grid-cols-2 gap-6", children: [
-      /* @__PURE__ */ jsxs(Card, { children: [
-        /* @__PURE__ */ jsx(CardHeader, { children: /* @__PURE__ */ jsx(CardTitle, { children: "Room Usage by Weekday" }) }),
-        /* @__PURE__ */ jsx(CardContent, { children: /* @__PURE__ */ jsx(ResponsiveContainer, { width: "100%", height: 300, children: /* @__PURE__ */ jsxs(BarChart, { data: roomUsageData, children: [
-          /* @__PURE__ */ jsx(CartesianGrid, { strokeDasharray: "3 3", stroke: "#e5e7eb" }),
-          /* @__PURE__ */ jsx(XAxis, { dataKey: "day", stroke: "#6b7280" }),
-          /* @__PURE__ */ jsx(YAxis, { stroke: "#6b7280" }),
-          /* @__PURE__ */ jsx(Tooltip, {}),
-          /* @__PURE__ */ jsx(Bar, { dataKey: "usage", fill: "#3b82f6", radius: [8, 8, 0, 0] })
-        ] }) }) })
-      ] }),
-      /* @__PURE__ */ jsxs(Card, { children: [
-        /* @__PURE__ */ jsx(CardHeader, { children: /* @__PURE__ */ jsx(CardTitle, { children: "Room Utilization Rate" }) }),
-        /* @__PURE__ */ jsx(CardContent, { children: /* @__PURE__ */ jsx(ResponsiveContainer, { width: "100%", height: 300, children: /* @__PURE__ */ jsxs(PieChart, { children: [
-          /* @__PURE__ */ jsx(
-            Pie,
-            {
-              data: utilizationData,
-              cx: "50%",
-              cy: "50%",
-              labelLine: false,
-              label: ({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`,
-              outerRadius: 100,
-              fill: "#8884d8",
-              dataKey: "value",
-              children: utilizationData.map((entry, index) => /* @__PURE__ */ jsx(Cell, { fill: entry.color }, `cell-${index}`))
-            }
-          ),
-          /* @__PURE__ */ jsx(Tooltip, {})
-        ] }) }) })
-      ] })
-    ] }),
-    /* @__PURE__ */ jsxs(Card, { children: [
-      /* @__PURE__ */ jsx(CardHeader, { children: /* @__PURE__ */ jsx(CardTitle, { children: "Today's Schedule Preview" }) }),
-      /* @__PURE__ */ jsx(CardContent, { children: /* @__PURE__ */ jsx("div", { className: "space-y-3", children: [
-        { time: "08:00 - 10:00", course: "CS101", room: "A-301", status: "ongoing" },
-        { time: "10:00 - 12:00", course: "MATH201", room: "B-105", status: "upcoming" },
-        { time: "14:00 - 16:00", course: "PHY301", room: "C-201", status: "upcoming" }
-      ].map((item, index) => /* @__PURE__ */ jsxs("div", { className: "flex items-center justify-between p-4 bg-gray-50 rounded-lg", children: [
-        /* @__PURE__ */ jsxs("div", { className: "flex items-center gap-4", children: [
-          /* @__PURE__ */ jsx("div", { className: "text-sm font-medium text-gray-900", children: item.time }),
-          /* @__PURE__ */ jsx("div", { className: "text-sm text-gray-600", children: item.course }),
-          /* @__PURE__ */ jsxs("div", { className: "text-sm text-gray-600", children: [
-            "Room: ",
-            item.room
-          ] })
-        ] }),
-        /* @__PURE__ */ jsx(
-          "div",
-          {
-            className: `px-3 py-1 rounded-full text-xs font-medium ${item.status === "ongoing" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`,
-            children: item.status === "ongoing" ? "Ongoing" : "Upcoming"
-          }
-        )
-      ] }, index)) }) })
-    ] })
-  ] });
+import { getAdminDashboard } from "@/features/admin/services/adminDashboardService";
+
+const formatNumber = (value) => {
+  const numberValue = Number(value || 0);
+  return new Intl.NumberFormat("vi-VN").format(numberValue);
 };
-export {
-  DashboardPage
+
+export const DashboardPage = () => {
+  const [dashboardData, setDashboardData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadDashboard = async () => {
+      try {
+        setLoading(true);
+        const data = await getAdminDashboard();
+
+        if (mounted) {
+          setDashboardData(data);
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadDashboard();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const stats = useMemo(() => {
+    const summary = dashboardData?.summary || {};
+
+    return [
+      {
+        title: "Tổng số phòng học",
+        value: formatNumber(summary.totalClassrooms),
+        description: "Phòng đang sẵn sàng sử dụng",
+        icon: School,
+        color: "bg-blue-500",
+      },
+      {
+        title: "Tổng số học phần",
+        value: formatNumber(summary.totalCourses),
+        description: "Học phần trong học kỳ",
+        icon: BookOpen,
+        color: "bg-green-500",
+      },
+      {
+        title: "Lớp đã xếp lịch",
+        value: formatNumber(summary.scheduledClasses),
+        description: "Tổng số buổi đã lên lịch",
+        icon: Calendar,
+        color: "bg-purple-500",
+      },
+      {
+        title: "Cảnh báo xung đột",
+        value: formatNumber(summary.conflictAlerts),
+        description: "Cần kiểm tra và xử lý",
+        icon: AlertTriangle,
+        color: "bg-red-500",
+      },
+    ];
+  }, [dashboardData]);
+
+  const roomUsageData = dashboardData?.roomUsageByWeekday || [];
+  const utilizationData = dashboardData?.roomUtilizationRate || [];
+  const todaySchedulePreview = dashboardData?.todaySchedulePreview || [];
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Bảng điều khiển</h1>
+          <p className="text-gray-600 mt-1">Tổng quan hệ thống xếp lịch phòng học</p>
+          <p className="text-sm text-gray-500 mt-2">
+            Học kỳ hiện tại:{" "}
+            <span className="font-medium text-gray-700">
+              {dashboardData?.activeSemester?.name || "Chưa xác định học kỳ active"}
+            </span>
+          </p>
+        </div>
+
+        {loading && (
+          <div className="flex items-center gap-2 text-sm text-blue-600">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Đang tải dữ liệu...
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {stats.map((stat) => {
+          const Icon = stat.icon;
+
+          return (
+            <Card key={stat.title}>
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-600">{stat.title}</p>
+                    <p className="text-3xl font-bold text-gray-900 mt-2">{stat.value}</p>
+                    <p className="text-xs text-gray-500 mt-1">{stat.description}</p>
+                  </div>
+
+                  <div className={`${stat.color} w-12 h-12 rounded-lg flex items-center justify-center`}>
+                    <Icon className="w-6 h-6 text-white" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Mức sử dụng phòng theo ngày trong tuần</CardTitle>
+          </CardHeader>
+
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={roomUsageData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="day" stroke="#6b7280" />
+                <YAxis stroke="#6b7280" />
+                <Tooltip />
+                <Bar dataKey="usage" fill="#3b82f6" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Tỷ lệ sử dụng phòng</CardTitle>
+          </CardHeader>
+
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={utilizationData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                  outerRadius={100}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {utilizationData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Lịch học hôm nay</CardTitle>
+        </CardHeader>
+
+        <CardContent>
+          {todaySchedulePreview.length === 0 ? (
+            <div className="p-4 bg-gray-50 rounded-lg text-sm text-gray-500">
+              Hôm nay chưa có lịch học nào.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {todaySchedulePreview.map((item, index) => (
+                <div
+                  key={`${item.time}-${item.course}-${index}`}
+                  className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="text-sm font-medium text-gray-900">{item.time}</div>
+                    <div className="text-sm text-gray-600">{item.course}</div>
+                    <div className="text-sm text-gray-600">Phòng: {item.room}</div>
+                  </div>
+
+                  <div
+                    className={`px-3 py-1 rounded-full text-xs font-medium ${
+                      item.status === "ongoing"
+                        ? "bg-green-100 text-green-700"
+                        : "bg-blue-100 text-blue-700"
+                    }`}
+                  >
+                    {item.status === "ongoing" ? "Đang diễn ra" : "Sắp diễn ra"}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
 };

@@ -7,6 +7,7 @@ const APP_ROUTES = {
   adminRooms: "/admin/rooms",
   adminCourses: "/admin/courses",
   adminLecturers: "/admin/lecturers",
+  adminStudents: "/admin/students",
   adminSections: "/admin/sections",
   adminTimetable: "/admin/timetable",
   adminTimetableApproval: "/admin/timetable-approval",
@@ -57,14 +58,17 @@ const APP_ROUTES = {
   /** @deprecated use studentTimetable */
   studentDashboard: "/student/timetable",
 
-  // Legacy aliases (backward compatibility only)
+  // Legacy aliases
   classrooms: "/admin/rooms",
   courses: "/admin/courses",
   lecturers: "/admin/lecturers",
+  students: "/admin/students",
   timetable: "/admin/timetable",
   autoAssignment: "/staff/auto-assignment",
   weeklySchedule: "/admin/timetable",
   reports: "/admin/reports",
+
+  // Giữ alias cũ để không lỗi import cũ, nhưng không hiển thị trong menu nữa
   userManagement: "/admin/users",
   settings: "/admin/settings",
 
