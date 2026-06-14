@@ -1,8 +1,8 @@
-import MaintenanceRequestForm from "@/features/shared/components/MaintenanceRequestForm";
+import MaintenanceRequestPage from "../components/maintenance/MaintenanceRequestPage";
 import { APP_ROUTES } from "@/constants/routes";
 
 const LecturerMaintenanceRequestPage = () => (
-  <MaintenanceRequestForm
+  <MaintenanceRequestPage
     apiBasePath="/api/lecturer/maintenance-requests"
     title="Yêu cầu sửa chữa"
     subtitle="Báo cáo sự cố cơ sở vật chất trong phòng học"

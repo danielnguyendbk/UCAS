@@ -1,2 +1,4 @@
-import StaffMaintenanceListPage from "./StaffMaintenanceListPage";
-export default StaffMaintenanceListPage;
+import { StaffLookupPage } from "@/app/pages/StaffLookupPage";
+export {
+  StaffLookupPage as default
+};
