@@ -35,7 +35,7 @@ const CoursesPage = () => {
         if (isMounted) setCourses(getResponseData(response));
       } catch (err) {
         if (isMounted) {
-          setError(err?.response?.data?.message || "Khong the tai danh sach mon hoc.");
+          setError(err?.response?.data?.message || "Không thể tải danh sách môn học.");
           setCourses([]);
         }
       } finally {
@@ -68,12 +68,12 @@ const CoursesPage = () => {
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Mon hoc</h1>
-          <p className="mt-1 text-gray-600">Danh muc mon hoc lay tu database.</p>
+          <h1 className="text-2xl font-semibold text-gray-900">Môn học</h1>
+          <p className="mt-1 text-gray-600">Danh mục môn học lấy từ database.</p>
         </div>
         <Button disabled className="bg-blue-600 hover:bg-blue-700">
           <Plus className="mr-2 h-4 w-4" />
-          Them mon hoc
+          Thêm môn học
         </Button>
       </div>
 
@@ -81,7 +81,7 @@ const CoursesPage = () => {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
           <Input
-            placeholder="Tim theo ma mon, ten mon, khoa..."
+            placeholder="Tìm theo mã môn, tên môn, khoa..."
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
             className="pl-10"
@@ -92,7 +92,7 @@ const CoursesPage = () => {
       {loading && (
         <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
           <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-blue-500" />
-          <p className="text-sm font-semibold text-gray-600">Dang tai mon hoc...</p>
+          <p className="text-sm font-semibold text-gray-600">Đang tải môn học...</p>
         </div>
       )}
 
@@ -109,13 +109,13 @@ const CoursesPage = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Ma mon</TableHead>
-                  <TableHead>Ten mon hoc</TableHead>
-                  <TableHead>Khoa/bo mon</TableHead>
-                  <TableHead className="text-center">Tin chi</TableHead>
-                  <TableHead>Loai phong</TableHead>
-                  <TableHead>Trang thai</TableHead>
-                  <TableHead className="text-right">Thao tac</TableHead>
+                  <TableHead>Mã môn</TableHead>
+                  <TableHead>Tên môn học</TableHead>
+                  <TableHead>Khoa/bộ môn</TableHead>
+                  <TableHead className="text-center">Tín chỉ</TableHead>
+                  <TableHead>Loại phòng</TableHead>
+                  <TableHead>Trạng thái</TableHead>
+                  <TableHead className="text-right">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -124,19 +124,19 @@ const CoursesPage = () => {
                     <TableCell className="font-semibold text-gray-900">
                       {course.courseCode || `MH-${course.id}`}
                     </TableCell>
-                    <TableCell>{course.name || "Chua cap nhat"}</TableCell>
+                    <TableCell>{course.name || "Chưa cập nhật"}</TableCell>
                     <TableCell>
-                      <div className="font-medium text-gray-800">{course.departmentName || "Chua cap nhat"}</div>
+                      <div className="font-medium text-gray-800">{course.departmentName || "Chưa cập nhật"}</div>
                       <div className="text-xs text-gray-500">{course.departmentCode || course.facultyCode || ""}</div>
                     </TableCell>
                     <TableCell className="text-center">{course.credits ?? "-"}</TableCell>
-                    <TableCell>{course.requiredRoomType || "Khong yeu cau"}</TableCell>
+                    <TableCell>{course.requiredRoomType || "Không yêu cầu"}</TableCell>
                     <TableCell>
-                      <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Dang dung</Badge>
+                      <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Đang dùng</Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button variant="outline" size="sm" disabled>Sua</Button>
+                        <Button variant="outline" size="sm" disabled>Sửa</Button>
                         <Button variant="outline" size="sm" disabled>Xem</Button>
                       </div>
                     </TableCell>
@@ -145,7 +145,7 @@ const CoursesPage = () => {
                   <TableRow>
                     <TableCell colSpan={7} className="h-28 text-center">
                       <BookOpen className="mx-auto mb-2 h-7 w-7 text-gray-300" />
-                      <p className="text-sm font-semibold text-gray-500">Khong co mon hoc phu hop.</p>
+                      <p className="text-sm font-semibold text-gray-500">Không có môn học phù hợp.</p>
                     </TableCell>
                   </TableRow>
                 )}
@@ -153,7 +153,7 @@ const CoursesPage = () => {
             </Table>
           </div>
           <div className="border-t border-gray-200 px-4 py-3 text-sm text-gray-600">
-            Hien thi {filteredCourses.length} / {courses.length} mon hoc
+            Hiển thị {filteredCourses.length} / {courses.length} môn học
           </div>
         </div>
       )}

@@ -12,9 +12,9 @@ const getResponseData = (response) => {
 };
 
 const getFacilities = (room) => [
-  room.hasProjector && "May chieu",
-  room.hasAc && "Dieu hoa",
-  room.roomType && `Loai: ${room.roomType}`,
+  room.hasProjector && "Máy chiếu",
+  room.hasAc && "Điều hòa",
+  room.roomType && `Loại: ${room.roomType}`,
 ].filter(Boolean);
 
 const ClassroomsPage = () => {
@@ -34,7 +34,7 @@ const ClassroomsPage = () => {
         if (isMounted) setClassrooms(getResponseData(response));
       } catch (err) {
         if (isMounted) {
-          setError(err?.response?.data?.message || "Khong the tai danh sach phong hoc.");
+          setError(err?.response?.data?.message || "Không thể tải danh sách phòng học.");
           setClassrooms([]);
         }
       } finally {
@@ -67,12 +67,12 @@ const ClassroomsPage = () => {
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Phong hoc</h1>
-          <p className="mt-1 text-gray-600">Du lieu phong hoc lay tu database.</p>
+          <h1 className="text-2xl font-semibold text-gray-900">Phòng học</h1>
+          <p className="mt-1 text-gray-600">Dữ liệu phòng học lấy từ database.</p>
         </div>
         <Button disabled className="bg-blue-600 hover:bg-blue-700">
           <Plus className="mr-2 h-4 w-4" />
-          Them phong
+          Thêm phòng
         </Button>
       </div>
 
@@ -80,7 +80,7 @@ const ClassroomsPage = () => {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
           <Input
-            placeholder="Tim theo phong, toa nha, loai phong..."
+            placeholder="Tìm theo phòng, tòa nhà, loại phòng..."
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
             className="pl-10"
@@ -91,7 +91,7 @@ const ClassroomsPage = () => {
       {loading && (
         <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
           <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-blue-500" />
-          <p className="text-sm font-semibold text-gray-600">Dang tai phong hoc...</p>
+          <p className="text-sm font-semibold text-gray-600">Đang tải phòng học...</p>
         </div>
       )}
 
@@ -104,7 +104,7 @@ const ClassroomsPage = () => {
 
       {!loading && !error && filteredClassrooms.length === 0 && (
         <div className="rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center">
-          <p className="text-sm font-semibold text-gray-500">Khong co phong hoc phu hop.</p>
+          <p className="text-sm font-semibold text-gray-500">Không có phòng học phù hợp.</p>
         </div>
       )}
 
@@ -112,7 +112,7 @@ const ClassroomsPage = () => {
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {filteredClassrooms.map((room) => {
             const facilities = getFacilities(room);
-            const roomLabel = room.roomName || room.roomNumber || `Phong ${room.id}`;
+            const roomLabel = room.roomName || room.roomNumber || `Phòng ${room.id}`;
             return (
               <Card key={room.id} className="transition-shadow hover:shadow-lg">
                 <CardContent className="p-6">
@@ -121,24 +121,24 @@ const ClassroomsPage = () => {
                       <h3 className="text-xl font-semibold text-gray-900">{roomLabel}</h3>
                       <div className="mt-1 flex items-center gap-1 text-sm text-gray-600">
                         <MapPin className="h-4 w-4" />
-                        {room.buildingName || room.buildingCode || "Chua co toa"} - Tang {room.floorNumber || "-"}
+                        {room.buildingName || room.buildingCode || "Chưa có tòa"} - Tầng {room.floorNumber || "-"}
                       </div>
                     </div>
                     <Badge className={room.active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}>
-                      {room.active ? "Dang dung" : "Tam dung"}
+                      {room.active ? "Đang dùng" : "Tạm dừng"}
                     </Badge>
                   </div>
 
                   <div className="space-y-3">
                     <div className="flex items-center gap-2 text-sm">
                       <Users className="h-4 w-4 text-gray-500" />
-                      <span className="font-medium text-gray-900">Suc chua:</span>
+                      <span className="font-medium text-gray-900">Sức chứa:</span>
                       <span className="text-gray-600">{room.capacity || 0} sinh vien</span>
                     </div>
                     <div className="flex items-start gap-2 text-sm">
                       <Monitor className="mt-0.5 h-4 w-4 text-gray-500" />
                       <div>
-                        <span className="font-medium text-gray-900">Thiet bi:</span>
+                        <span className="font-medium text-gray-900">Thiết bị:</span>
                         <div className="mt-1 flex flex-wrap gap-1">
                           {facilities.length > 0
                             ? facilities.map((facility) => (
@@ -146,15 +146,15 @@ const ClassroomsPage = () => {
                                 {facility}
                               </Badge>
                             ))
-                            : <span className="text-xs text-gray-400">Chua cap nhat</span>}
+                            : <span className="text-xs text-gray-400">Chưa cập nhật</span>}
                         </div>
                       </div>
                     </div>
                   </div>
 
                   <div className="mt-4 flex gap-2 border-t border-gray-200 pt-4">
-                    <Button variant="outline" size="sm" className="flex-1" disabled>Sua</Button>
-                    <Button variant="outline" size="sm" className="flex-1" disabled>Xem lich</Button>
+                    <Button variant="outline" size="sm" className="flex-1" disabled>Sửa</Button>
+                    <Button variant="outline" size="sm" className="flex-1" disabled>Xem lịch</Button>
                   </div>
                 </CardContent>
               </Card>

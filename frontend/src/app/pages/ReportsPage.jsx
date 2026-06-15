@@ -41,9 +41,9 @@ const ReportsPage = () => {
 
         const allFailed = [roomsResult, sectionsResult, examsResult, blocksResult]
           .every((result) => result.status === "rejected");
-        if (allFailed) setError("Khong the tai du lieu bao cao.");
+        if (allFailed) setError("Không thể tải dữ liệu báo cáo.");
       } catch (err) {
-        if (isMounted) setError(err?.response?.data?.message || "Khong the tai du lieu bao cao.");
+        if (isMounted) setError(err?.response?.data?.message || "Không thể tải dữ liệu báo cáo.");
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -64,40 +64,40 @@ const ReportsPage = () => {
     return [
       {
         id: "rooms",
-        title: "Thong ke phong hoc",
-        description: `${activeRooms} phong dang hoat dong / ${classrooms.length} phong`,
+        title: "Thống kê phòng học",
+        description: `${activeRooms} phòng đang hoạt động / ${classrooms.length} phòng`,
         value: activeRooms,
         icon: School,
         color: "bg-blue-500",
       },
       {
         id: "sections",
-        title: "Tong hop lop hoc phan",
-        description: `${assignedSections} lop da co phong / ${sections.length} lop hoc phan`,
+        title: "Tổng hợp lớp học phần",
+        description: `${assignedSections} lớp đã có phòng / ${sections.length} lớp học phần`,
         value: sections.length,
         icon: Calendar,
         color: "bg-emerald-500",
       },
       {
         id: "conflicts",
-        title: "Canh bao trung lich",
-        description: `${conflictSections} lop hoc phan can kiem tra`,
+        title: "Cảnh báo trùng lịch",
+        description: `${conflictSections} lớp học phần cần kiểm tra`,
         value: conflictSections,
         icon: TrendingUp,
         color: conflictSections > 0 ? "bg-red-500" : "bg-slate-500",
       },
       {
         id: "exams",
-        title: "Lich thi",
-        description: `${scheduledExams} lich thi dang xep / ${exams.length} lich thi`,
+        title: "Lịch thi",
+        description: `${scheduledExams} lịch thi đang xếp / ${exams.length} lịch thi`,
         value: exams.length,
         icon: FileText,
         color: "bg-indigo-500",
       },
       {
         id: "calendar",
-        title: "Lich hoc vu",
-        description: `${calendarBlocks.length} ngay nghi, tuan thi hoac su kien`,
+        title: "Lịch học vụ",
+        description: `${calendarBlocks.length} ngày nghỉ, tuần thi hoặc sự kiện`,
         value: calendarBlocks.length,
         icon: Calendar,
         color: "bg-amber-500",
@@ -108,14 +108,14 @@ const ReportsPage = () => {
   return (
     <div className="space-y-6 p-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Bao cao</h1>
-        <p className="mt-1 text-gray-600">Tong hop nhanh tu du lieu database hien co.</p>
+        <h1 className="text-2xl font-semibold text-gray-900">Báo cáo</h1>
+        <p className="mt-1 text-gray-600">Tổng hợp nhanh từ dữ liệu database hiện có.</p>
       </div>
 
       {loading && (
         <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
           <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-blue-500" />
-          <p className="text-sm font-semibold text-gray-600">Dang tai bao cao...</p>
+          <p className="text-sm font-semibold text-gray-600">Đang tải báo cáo...</p>
         </div>
       )}
 
@@ -153,7 +153,7 @@ const ReportsPage = () => {
                       </Button>
                       <Button disabled className="bg-blue-600 hover:bg-blue-700">
                         <Download className="mr-2 h-4 w-4" />
-                        Tai ve
+                        Tải về
                       </Button>
                     </div>
                   </div>

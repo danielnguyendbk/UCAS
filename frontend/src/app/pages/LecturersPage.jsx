@@ -28,7 +28,7 @@ const LecturersPage = () => {
         if (isMounted) setLecturers(getResponseData(response));
       } catch (err) {
         if (isMounted) {
-          setError(err?.response?.data?.message || "Khong the tai danh sach giang vien.");
+          setError(err?.response?.data?.message || "Không thể tải danh sách giảng viên.");
           setLecturers([]);
         }
       } finally {
@@ -62,12 +62,12 @@ const LecturersPage = () => {
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Giang vien</h1>
-          <p className="mt-1 text-gray-600">Danh sach giang vien lay tu database.</p>
+          <h1 className="text-2xl font-semibold text-gray-900">Giảng viên</h1>
+          <p className="mt-1 text-gray-600">Danh sách giảng viên lấy từ database.</p>
         </div>
         <Button disabled className="bg-blue-600 hover:bg-blue-700">
           <Plus className="mr-2 h-4 w-4" />
-          Them giang vien
+          Thêm giảng viên
         </Button>
       </div>
 
@@ -75,7 +75,7 @@ const LecturersPage = () => {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
           <Input
-            placeholder="Tim theo ten, ma giang vien, email, khoa..."
+            placeholder="Tìm theo tên, mã giảng viên, email, khoa..."
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
             className="pl-10"
@@ -86,7 +86,7 @@ const LecturersPage = () => {
       {loading && (
         <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
           <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-blue-500" />
-          <p className="text-sm font-semibold text-gray-600">Dang tai giang vien...</p>
+          <p className="text-sm font-semibold text-gray-600">Đang tải giảng viên...</p>
         </div>
       )}
 
@@ -100,7 +100,7 @@ const LecturersPage = () => {
       {!loading && !error && filteredLecturers.length === 0 && (
         <div className="rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center">
           <UserRound className="mx-auto mb-2 h-8 w-8 text-gray-300" />
-          <p className="text-sm font-semibold text-gray-500">Khong co giang vien phu hop.</p>
+          <p className="text-sm font-semibold text-gray-500">Không có giảng viên phù hợp.</p>
         </div>
       )}
 
@@ -115,33 +115,33 @@ const LecturersPage = () => {
                       {lecturer.name || lecturer.staffCode || `GV-${lecturer.id}`}
                     </h3>
                     <p className="mt-1 text-sm text-gray-600">
-                      {lecturer.departmentName || lecturer.departmentCode || "Chua co khoa"}
+                      {lecturer.departmentName || lecturer.departmentCode || "Chưa có khoa"}
                     </p>
                   </div>
-                  <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Dang dung</Badge>
+                  <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Đang dùng</Badge>
                 </div>
 
                 <div className="mb-4 space-y-2">
                   <div className="flex items-center gap-2 text-sm text-gray-600">
                     <Mail className="h-4 w-4" />
-                    <span className="truncate">{lecturer.email || "Chua cap nhat email"}</span>
+                    <span className="truncate">{lecturer.email || "Chưa cập nhật email"}</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-gray-600">
                     <Phone className="h-4 w-4" />
-                    <span>{lecturer.phone || "Chua cap nhat dien thoai"}</span>
+                    <span>{lecturer.phone || "Chưa cập nhật điện thoại"}</span>
                   </div>
                 </div>
 
                 <div className="border-t border-gray-200 pt-4">
                   <div className="mb-3 flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Ma giang vien</span>
+                    <span className="text-sm text-gray-600">Mã giảng viên</span>
                     <span className="font-mono text-sm font-semibold text-gray-900">
                       {lecturer.staffCode || "-"}
                     </span>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="flex-1" disabled>Sua</Button>
-                    <Button variant="outline" size="sm" className="flex-1" disabled>Lich day</Button>
+                    <Button variant="outline" size="sm" className="flex-1" disabled>Sửa</Button>
+                    <Button variant="outline" size="sm" className="flex-1" disabled>Lịch dạy</Button>
                   </div>
                 </div>
               </CardContent>

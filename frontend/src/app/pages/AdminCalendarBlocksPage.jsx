@@ -27,10 +27,10 @@ const getResponseData = (response) => {
 };
 
 const BLOCK_TYPE_LABEL = {
-  HOLIDAY: "Ngay nghi",
-  BREAK: "Nghi giua ky",
-  EXAM_WEEK: "Tuan thi",
-  EVENT: "Su kien",
+  HOLIDAY: "Ngày nghỉ",
+  BREAK: "Nghỉ giữa kỳ",
+  EXAM_WEEK: "Tuần thi",
+  EVENT: "Sự kiện",
 };
 
 const BLOCK_TYPE_BADGE = {
@@ -82,7 +82,7 @@ const AdminCalendarBlocksPage = () => {
       } catch (err) {
         if (isMounted) {
           setBlocks([]);
-          setError(err?.response?.data?.message || "Khong the tai lich hoc vu.");
+          setError(err?.response?.data?.message || "Không thể tải lịch học vụ.");
         }
       } finally {
         if (isMounted) setLoading(false);
@@ -125,17 +125,17 @@ const AdminCalendarBlocksPage = () => {
     <div className="space-y-6 p-6">
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Ngay nghi / Lich hoc vu</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Ngày nghỉ / Lịch học vụ</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Du lieu ngay nghi, tuan thi va su kien hoc vu lay tu database.
+            Dữ liệu ngày nghỉ, tuần thi và sự kiện học vụ lấy từ database.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button disabled className="bg-blue-600 hover:bg-blue-700">
             <Plus className="mr-2 h-4 w-4" />
-            Tao ngay nghi
+            Tạo ngày nghỉ
           </Button>
-          <Button disabled variant="outline">Tao tuan thi</Button>
+          <Button disabled variant="outline">Tạo tuần thi</Button>
           <Button variant="ghost" onClick={resetFilters}>
             <RefreshCw className="h-4 w-4" />
           </Button>
@@ -144,11 +144,11 @@ const AdminCalendarBlocksPage = () => {
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
         {[
-          { label: "Tong su kien", value: summary.total, color: "text-purple-600 bg-purple-50" },
-          { label: "Ngay nghi", value: summary.holiday, color: "text-amber-600 bg-amber-50" },
-          { label: "Nghi giua ky", value: summary.break, color: "text-sky-600 bg-sky-50" },
-          { label: "Tuan thi", value: summary.examWeek, color: "text-blue-600 bg-blue-50" },
-          { label: "Khong cho hoc", value: summary.blocked, color: "text-rose-600 bg-rose-50" },
+          { label: "Tổng sự kiện", value: summary.total, color: "text-purple-600 bg-purple-50" },
+          { label: "Ngày nghỉ", value: summary.holiday, color: "text-amber-600 bg-amber-50" },
+          { label: "Nghỉ giữa kỳ", value: summary.break, color: "text-sky-600 bg-sky-50" },
+          { label: "Tuần thi", value: summary.examWeek, color: "text-blue-600 bg-blue-50" },
+          { label: "Không cho học", value: summary.blocked, color: "text-rose-600 bg-rose-50" },
         ].map((item) => (
           <div key={item.label} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
             <span className="text-xs font-medium text-gray-500">{item.label}</span>
@@ -162,11 +162,11 @@ const AdminCalendarBlocksPage = () => {
       <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <div className="space-y-1">
-            <Label className="text-xs font-semibold text-gray-600">Hoc ky ap dung</Label>
+            <Label className="text-xs font-semibold text-gray-600">Học kỳ áp dụng</Label>
             <Select value={selectedSemester} onValueChange={setSelectedSemester}>
               <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tat ca hoc ky</SelectItem>
+                <SelectItem value="all">Tất cả học kỳ</SelectItem>
                 {semesters.map((semester) => (
                   <SelectItem key={semester.id} value={String(semester.id)}>{semester.name}</SelectItem>
                 ))}
@@ -174,11 +174,11 @@ const AdminCalendarBlocksPage = () => {
             </Select>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs font-semibold text-gray-600">Loai su kien</Label>
+            <Label className="text-xs font-semibold text-gray-600">Loại sự kiện</Label>
             <Select value={selectedType} onValueChange={setSelectedType}>
               <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tat ca loai</SelectItem>
+                <SelectItem value="all">Tất cả loại</SelectItem>
                 {Object.entries(BLOCK_TYPE_LABEL).map(([value, label]) => (
                   <SelectItem key={value} value={value}>{label}</SelectItem>
                 ))}
@@ -186,22 +186,22 @@ const AdminCalendarBlocksPage = () => {
             </Select>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs font-semibold text-gray-600">Quy dinh to chuc hoc</Label>
+            <Label className="text-xs font-semibold text-gray-600">Quy định tổ chức học</Label>
             <Select value={selectedAllowed} onValueChange={setSelectedAllowed}>
               <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tat ca quy dinh</SelectItem>
-                <SelectItem value="true">Cho phep hoc</SelectItem>
-                <SelectItem value="false">Khong cho phep hoc</SelectItem>
+              <SelectItem value="all">Tất cả quy định</SelectItem>
+                <SelectItem value="true">Cho phép học</SelectItem>
+                <SelectItem value="false">Không cho phép học</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs font-semibold text-gray-600">Tu ngay</Label>
+            <Label className="text-xs font-semibold text-gray-600">Từ ngày</Label>
             <Input type="date" value={filterStartDate} onChange={(event) => setFilterStartDate(event.target.value)} className="h-9 text-xs" />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs font-semibold text-gray-600">Den ngay</Label>
+            <Label className="text-xs font-semibold text-gray-600">Đến ngày</Label>
             <Input type="date" value={filterEndDate} onChange={(event) => setFilterEndDate(event.target.value)} className="h-9 text-xs" />
           </div>
         </div>
@@ -210,7 +210,7 @@ const AdminCalendarBlocksPage = () => {
       {loading && (
         <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
           <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-blue-500" />
-          <p className="text-sm font-semibold text-gray-600">Dang tai lich hoc vu...</p>
+          <p className="text-sm font-semibold text-gray-600">Đang tải lịch học vụ...</p>
         </div>
       )}
 
@@ -227,14 +227,14 @@ const AdminCalendarBlocksPage = () => {
             <Table>
               <TableHeader className="bg-gray-50/50">
                 <TableRow>
-                  <TableHead>Tieu de su kien</TableHead>
-                  <TableHead>Hoc ky</TableHead>
+                  <TableHead>Tiêu đề sự kiện</TableHead>
+                  <TableHead>Học kỳ</TableHead>
                   <TableHead>Loai</TableHead>
-                  <TableHead>Tu ngay</TableHead>
-                  <TableHead>Den ngay</TableHead>
-                  <TableHead>To chuc hoc</TableHead>
-                  <TableHead>Ghi chu</TableHead>
-                  <TableHead className="text-right">Thao tac</TableHead>
+                  <TableHead>Từ ngày</TableHead>
+                  <TableHead>Đến ngày</TableHead>
+                  <TableHead>Tổ chức học</TableHead>
+                  <TableHead>Ghi chú</TableHead>
+                  <TableHead className="text-right">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -251,16 +251,16 @@ const AdminCalendarBlocksPage = () => {
                     <TableCell className="text-xs font-medium text-gray-600">{String(block.endDate || "-")}</TableCell>
                     <TableCell className="text-xs">
                       <span className={isTeachingAllowed(block) ? "font-semibold text-emerald-600" : "font-semibold text-rose-600"}>
-                        {isTeachingAllowed(block) ? "Cho phep hoc" : "Khong cho hoc"}
+                        {isTeachingAllowed(block) ? "Cho phép học" : "Không cho học"}
                       </span>
                     </TableCell>
                     <TableCell className="max-w-xs truncate text-xs text-gray-500">{block.notes || "-"}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1.5">
-                        <Button variant="ghost" size="xs" disabled title="Chua co API cap nhat calendar block">
+                        <Button variant="ghost" size="xs" disabled title="Chưa có API cập nhật lịch học vụ">
                           <Edit className="h-3.5 w-3.5" />
                         </Button>
-                        <Button variant="ghost" size="xs" disabled title="Chua co API xoa calendar block">
+                        <Button variant="ghost" size="xs" disabled title="Chưa có API xóa lịch học vụ">
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
@@ -269,7 +269,7 @@ const AdminCalendarBlocksPage = () => {
                 )) : (
                   <TableRow>
                     <TableCell colSpan={8} className="h-32 text-center text-sm text-gray-400">
-                      Khong co su kien hoc vu phu hop.
+                      Không có sự kiện học vụ phù hợp.
                     </TableCell>
                   </TableRow>
                 )}

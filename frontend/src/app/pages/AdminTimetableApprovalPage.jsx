@@ -27,12 +27,12 @@ const getResponseData = (response) => {
 };
 
 const STATUS_LABEL = {
-  NO_SCHEDULE: "Chua co lich",
-  UNASSIGNED: "Chua phan phong",
-  ASSIGNED: "Da phan phong",
-  PENDING_APPROVAL: "Cho duyet",
-  PUBLISHED: "Da cong bo",
-  CONFLICT: "Co xung dot",
+  NO_SCHEDULE: "Chưa có lịch",
+  UNASSIGNED: "Chưa phân phòng",
+  ASSIGNED: "Đã phân phòng",
+  PENDING_APPROVAL: "Chờ duyệt",
+  PUBLISHED: "Đã công bố",
+  CONFLICT: "Có xung đột",
 };
 
 const STATUS_BADGE = {
@@ -99,7 +99,7 @@ const AdminTimetableApprovalPage = () => {
       } catch (err) {
         if (isMounted) {
           setSections([]);
-          setError(err?.response?.data?.message || "Khong the tai du lieu lop hoc phan.");
+          setError(err?.response?.data?.message || "Không thể tải dữ liệu lớp học phần.");
         }
       } finally {
         if (isMounted) setLoading(false);
@@ -155,19 +155,19 @@ const AdminTimetableApprovalPage = () => {
     <div className="space-y-6 p-6">
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Duyet va cong bo thoi khoa bieu</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Duyệt và công bố thời khóa biểu</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Doc danh sach lop hoc phan va trang thai phan phong tu database.
+            Đọc danh sách lớp học phần và trạng thái phân phòng từ database.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" disabled>
             <Check className="mr-2 h-4 w-4" />
-            Duyet hop le
+            Duyệt hợp lệ
           </Button>
           <Button disabled className="bg-blue-600 hover:bg-blue-700">
             <Calendar className="mr-2 h-4 w-4" />
-            Cong bo lich
+            Công bố lịch
           </Button>
           <Button variant="ghost" onClick={resetFilters}>
             <RefreshCw className="h-4 w-4" />
@@ -177,11 +177,11 @@ const AdminTimetableApprovalPage = () => {
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
         {[
-          { label: "Tong lop HP", value: summary.total, color: "text-purple-600 bg-purple-50" },
-          { label: "Chua phan phong", value: summary.unassigned, color: "text-amber-600 bg-amber-50" },
-          { label: "Da phan phong", value: summary.assigned, color: "text-blue-600 bg-blue-50" },
-          { label: "Co xung dot", value: summary.conflicts, color: "text-red-700 bg-red-50" },
-          { label: "Da cong bo", value: summary.published, color: "text-emerald-600 bg-emerald-50" },
+          { label: "Tổng lớp HP", value: summary.total, color: "text-purple-600 bg-purple-50" },
+          { label: "Chưa phân phòng", value: summary.unassigned, color: "text-amber-600 bg-amber-50" },
+          { label: "Đã phân phòng", value: summary.assigned, color: "text-blue-600 bg-blue-50" },
+          { label: "Có xung đột", value: summary.conflicts, color: "text-red-700 bg-red-50" },
+          { label: "Đã công bố", value: summary.published, color: "text-emerald-600 bg-emerald-50" },
         ].map((item) => (
           <div key={item.label} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
             <span className="text-xs font-medium text-gray-500">{item.label}</span>
@@ -195,11 +195,11 @@ const AdminTimetableApprovalPage = () => {
       <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-1">
-            <Label className="text-xs font-semibold text-gray-600">Hoc ky</Label>
+            <Label className="text-xs font-semibold text-gray-600">Học kỳ</Label>
             <Select value={selectedSemester} onValueChange={setSelectedSemester}>
               <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tat ca</SelectItem>
+                <SelectItem value="all">Tất cả</SelectItem>
                 {semesters.map((semester) => (
                   <SelectItem key={semester.id} value={String(semester.id)}>{semester.name}</SelectItem>
                 ))}
@@ -207,11 +207,11 @@ const AdminTimetableApprovalPage = () => {
             </Select>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs font-semibold text-gray-600">Trang thai</Label>
+            <Label className="text-xs font-semibold text-gray-600">Trạng thái</Label>
             <Select value={selectedStatus} onValueChange={setSelectedStatus}>
               <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tat ca</SelectItem>
+                <SelectItem value="all">Tất cả</SelectItem>
                 {Object.entries(STATUS_LABEL).map(([value, label]) => (
                   <SelectItem key={value} value={value}>{label}</SelectItem>
                 ))}
@@ -223,7 +223,7 @@ const AdminTimetableApprovalPage = () => {
             <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
               <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tat ca</SelectItem>
+                <SelectItem value="all">Tất cả</SelectItem>
                 {departments.map((department) => (
                   <SelectItem key={department.id} value={department.departmentCode || department.code || String(department.id)}>
                     {department.name || department.departmentName || department.departmentCode}
@@ -233,11 +233,11 @@ const AdminTimetableApprovalPage = () => {
             </Select>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs font-semibold text-gray-600">Lop hanh chinh</Label>
+            <Label className="text-xs font-semibold text-gray-600">Lớp hành chính</Label>
             <Select value={selectedClass} onValueChange={setSelectedClass}>
               <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tat ca</SelectItem>
+                <SelectItem value="all">Tất cả</SelectItem>
                 {classesList.map((classItem) => (
                   <SelectItem key={classItem.id} value={classItem.classCode || classItem.className || String(classItem.id)}>
                     {classItem.className || classItem.classCode}
@@ -250,7 +250,7 @@ const AdminTimetableApprovalPage = () => {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <Input
-            placeholder="Tim theo ma mon, ten mon, lop, giang vien, phong..."
+            placeholder="Tìm theo mã môn, tên môn, lớp, giảng viên, phòng..."
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
             className="h-9 pl-9"
@@ -261,7 +261,7 @@ const AdminTimetableApprovalPage = () => {
       {loading && (
         <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
           <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-blue-500" />
-          <p className="text-sm font-semibold text-gray-600">Dang tai lop hoc phan...</p>
+          <p className="text-sm font-semibold text-gray-600">Đang tải lớp học phần...</p>
         </div>
       )}
 
@@ -278,16 +278,16 @@ const AdminTimetableApprovalPage = () => {
             <Table>
               <TableHeader className="bg-gray-50/50">
                 <TableRow>
-                  <TableHead>Ma MH</TableHead>
-                  <TableHead>Ten mon hoc</TableHead>
-                  <TableHead>Lop hanh chinh</TableHead>
-                  <TableHead>Giang vien</TableHead>
+                  <TableHead>Mã MH</TableHead>
+                  <TableHead>Tên môn học</TableHead>
+                  <TableHead>Lớp hành chính</TableHead>
+                  <TableHead>Giảng viên</TableHead>
                   <TableHead>Thu</TableHead>
-                  <TableHead>Tiet</TableHead>
-                  <TableHead>Phong</TableHead>
+                  <TableHead>Tiết</TableHead>
+                  <TableHead>Phòng</TableHead>
                   <TableHead>SV</TableHead>
-                  <TableHead>Trang thai</TableHead>
-                  <TableHead className="text-right">Thao tac</TableHead>
+                  <TableHead>Trạng thái</TableHead>
+                  <TableHead className="text-right">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -301,7 +301,7 @@ const AdminTimetableApprovalPage = () => {
                       <TableCell className="text-xs text-gray-600">{section.lecturerName || "-"}</TableCell>
                       <TableCell className="text-xs text-gray-600">{section.day || "-"}</TableCell>
                       <TableCell className="text-xs text-gray-600">{section.slotStart && section.slotEnd ? `${section.slotStart}-${section.slotEnd}` : "-"}</TableCell>
-                      <TableCell className="text-xs font-semibold text-blue-600">{section.room || "Chua phan"}</TableCell>
+                      <TableCell className="text-xs font-semibold text-blue-600">{section.room || "Chưa phân"}</TableCell>
                       <TableCell className="text-xs text-gray-600">{section.studentCount ?? 0}</TableCell>
                       <TableCell>
                         <Badge className={STATUS_BADGE[status] || "bg-gray-100 text-gray-700 border-0"}>
@@ -310,11 +310,11 @@ const AdminTimetableApprovalPage = () => {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1.5">
-                          <Button variant="ghost" size="xs" disabled title="Chua co API chi tiet phe duyet">
+                          <Button variant="ghost" size="xs" disabled title="Chưa có API chi tiết phê duyệt">
                             <Eye className="h-3.5 w-3.5" />
                           </Button>
-                          <Button variant="ghost" size="xs" disabled>Duyet</Button>
-                          <Button variant="ghost" size="xs" disabled>Tu choi</Button>
+                          <Button variant="ghost" size="xs" disabled>Duyệt</Button>
+                          <Button variant="ghost" size="xs" disabled>Từ chối</Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -322,7 +322,7 @@ const AdminTimetableApprovalPage = () => {
                 }) : (
                   <TableRow>
                     <TableCell colSpan={10} className="h-32 text-center text-sm text-gray-400">
-                      Khong co lop hoc phan phu hop.
+                      Không có lớp học phần phù hợp.
                     </TableCell>
                   </TableRow>
                 )}

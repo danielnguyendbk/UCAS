@@ -88,10 +88,10 @@ const DashboardPage = () => {
 
         const allFailed = [roomsResult, coursesResult, lecturersResult, sectionsResult]
           .every((result) => result.status === "rejected");
-        if (allFailed) setError("Khong the tai du lieu dashboard.");
+        if (allFailed) setError("Không thể tải dữ liệu bảng điều khiển.");
       } catch (err) {
         if (isMounted) {
-          setError(err?.response?.data?.message || "Khong the tai du lieu dashboard.");
+          setError(err?.response?.data?.message || "Không thể tải dữ liệu bảng điều khiển.");
         }
       } finally {
         if (isMounted) setLoading(false);
@@ -109,30 +109,30 @@ const DashboardPage = () => {
     const conflicts = sections.filter(isConflictSection).length;
     return [
       {
-        title: "Phong hoc",
+        title: "Phòng học",
         value: classrooms.length,
-        description: "Phong dang co trong danh muc",
+        description: "Phòng đang có trong danh mục",
         icon: School,
         color: "bg-blue-500",
       },
       {
-        title: "Mon hoc",
+        title: "Môn học",
         value: courses.length,
-        description: "Mon hoc dang quan ly",
+        description: "Môn học đang quản lý",
         icon: BookOpen,
         color: "bg-emerald-500",
       },
       {
-        title: "Lop hoc phan",
+        title: "Lớp học phần",
         value: sections.length,
-        description: `${assigned} lop da co phong`,
+        description: `${assigned} lớp đã có phòng`,
         icon: Calendar,
         color: "bg-indigo-500",
       },
       {
-        title: "Giang vien",
+        title: "Giảng viên",
         value: lecturers.length,
-        description: `${conflicts} canh bao trung lich`,
+        description: `${conflicts} cảnh báo trùng lịch`,
         icon: Users,
         color: conflicts > 0 ? "bg-red-500" : "bg-slate-500",
       },
@@ -151,9 +151,9 @@ const DashboardPage = () => {
     const conflicts = sections.filter(isConflictSection).length;
     const unassigned = Math.max(sections.length - assigned - conflicts, 0);
     return [
-      { name: "Da phan phong", value: assigned, color: "#2563eb" },
-      { name: "Chua phan phong", value: unassigned, color: "#14b8a6" },
-      { name: "Trung lich", value: conflicts, color: "#ef4444" },
+      { name: "Đã phân phòng", value: assigned, color: "#2563eb" },
+      { name: "Chưa phân phòng", value: unassigned, color: "#14b8a6" },
+      { name: "Trùng lịch", value: conflicts, color: "#ef4444" },
     ];
   }, [sections]);
 
@@ -163,11 +163,11 @@ const DashboardPage = () => {
       .slice(0, 5)
       .map((section) => ({
         id: section.id,
-        time: section.schedule || [DAY_LABELS[getSectionDay(section)] || section.day, section.slotStart && `Tiet ${section.slotStart}`]
+        time: section.schedule || [DAY_LABELS[getSectionDay(section)] || section.day, section.slotStart && `Tiết ${section.slotStart}`]
           .filter(Boolean)
-          .join(" - ") || "Chua co lich",
+          .join(" - ") || "Chưa có lịch",
         course: section.courseName || section.classCode || `Lop ${section.id}`,
-        room: section.room || "Chua phan phong",
+        room: section.room || "Chưa phân phòng",
         status: normalizeStatus(section.allocationStatus || section.statusText || section.sectionStatus || "NO_SCHEDULE"),
       }))
   ), [sections]);
@@ -177,14 +177,14 @@ const DashboardPage = () => {
   return (
     <div className="space-y-6 p-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
-        <p className="mt-1 text-gray-600">Tong quan du lieu phong hoc, mon hoc va lop hoc phan tu database.</p>
+        <h1 className="text-2xl font-semibold text-gray-900">Bảng điều khiển</h1>
+        <p className="mt-1 text-gray-600">Tổng quan dữ liệu phòng học, môn học và lớp học phần từ database.</p>
       </div>
 
       {loading && (
         <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
           <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-blue-500" />
-          <p className="text-sm font-semibold text-gray-600">Dang tai dashboard...</p>
+          <p className="text-sm font-semibold text-gray-600">Đang tải bảng điều khiển...</p>
         </div>
       )}
 
@@ -222,7 +222,7 @@ const DashboardPage = () => {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle>Lop hoc phan theo ngay</CardTitle>
+                <CardTitle>Lớp học phần theo ngày</CardTitle>
               </CardHeader>
               <CardContent>
                 {sections.length > 0 ? (
@@ -237,7 +237,7 @@ const DashboardPage = () => {
                   </ResponsiveContainer>
                 ) : (
                   <div className="flex h-[300px] items-center justify-center rounded-lg border border-dashed border-gray-200 text-sm font-semibold text-gray-400">
-                    Chua co lop hoc phan de thong ke.
+                    Chưa có lớp học phần để thống kê.
                   </div>
                 )}
               </CardContent>
@@ -245,7 +245,7 @@ const DashboardPage = () => {
 
             <Card>
               <CardHeader>
-                <CardTitle>Tinh trang phan phong</CardTitle>
+                <CardTitle>Tình trạng phân phòng</CardTitle>
               </CardHeader>
               <CardContent>
                 {hasUtilizationData ? (
@@ -269,7 +269,7 @@ const DashboardPage = () => {
                   </ResponsiveContainer>
                 ) : (
                   <div className="flex h-[300px] items-center justify-center rounded-lg border border-dashed border-gray-200 text-sm font-semibold text-gray-400">
-                    Chua co du lieu phan phong.
+                    Chưa có dữ liệu phân phòng.
                   </div>
                 )}
               </CardContent>
@@ -278,7 +278,7 @@ const DashboardPage = () => {
 
           <Card>
             <CardHeader>
-              <CardTitle>Lich gan nhat</CardTitle>
+              <CardTitle>Lịch gần nhất</CardTitle>
             </CardHeader>
             <CardContent>
               {previewItems.length > 0 ? (
@@ -288,7 +288,7 @@ const DashboardPage = () => {
                       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-4">
                         <div className="text-sm font-medium text-gray-900">{item.time}</div>
                         <div className="text-sm text-gray-600">{item.course}</div>
-                        <div className="text-sm text-gray-600">Phong: {item.room}</div>
+                        <div className="text-sm text-gray-600">Phòng: {item.room}</div>
                       </div>
                       <div className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">
                         {item.status}
@@ -298,7 +298,7 @@ const DashboardPage = () => {
                 </div>
               ) : (
                 <div className="rounded-lg border border-dashed border-gray-200 p-8 text-center text-sm font-semibold text-gray-400">
-                  Chua co lich lop hoc phan.
+                  Chưa có lịch lớp học phần.
                 </div>
               )}
             </CardContent>

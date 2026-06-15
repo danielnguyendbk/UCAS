@@ -21,17 +21,17 @@ import {
 import { httpClient } from "../../services/httpClient";
 
 const ROLE_OPTIONS = [
-  { value: "ADMIN", label: "Admin" },
-  { value: "STAFF", label: "Staff" },
-  { value: "LECTURER", label: "Lecturer" },
-  { value: "FACILITY", label: "Facility" },
-  { value: "STUDENT", label: "Student" },
+  { value: "ADMIN", label: "Quản trị viên" },
+  { value: "STAFF", label: "Giáo vụ" },
+  { value: "LECTURER", label: "Giảng viên" },
+  { value: "FACILITY", label: "Nhân viên CSVC" },
+  { value: "STUDENT", label: "Sinh viên" },
 ];
 
 const STATUS_OPTIONS = [
-  { value: "ACTIVE", label: "Hoat dong" },
-  { value: "INACTIVE", label: "Chua kich hoat" },
-  { value: "LOCKED", label: "Da khoa" },
+  { value: "ACTIVE", label: "Hoạt động" },
+  { value: "INACTIVE", label: "Chưa kích hoạt" },
+  { value: "LOCKED", label: "Đã khóa" },
 ];
 
 const ROLE_BADGE = {
@@ -79,7 +79,7 @@ const UserManagementPage = () => {
         if (isMounted) setUsers(getResponseData(response));
       } catch (err) {
         if (isMounted) {
-          setError(err?.response?.data?.message || "Khong the tai danh sach tai khoan.");
+          setError(err?.response?.data?.message || "Không thể tải danh sách tài khoản.");
           setUsers([]);
         }
       } finally {
@@ -114,14 +114,14 @@ const UserManagementPage = () => {
     <div className="space-y-6 p-6">
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Quan ly tai khoan</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Quản lý tài khoản</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Danh sach tai khoan duoc doc tu database qua API admin.
+            Danh sách tài khoản được đọc từ database qua API admin.
           </p>
         </div>
         <Button disabled className="bg-blue-600 hover:bg-blue-700">
           <UserPlus className="mr-2 h-4 w-4" />
-          Them tai khoan
+          Thêm tài khoản
         </Button>
       </div>
 
@@ -129,7 +129,7 @@ const UserManagementPage = () => {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <Input
-            placeholder="Tim theo username, ho ten, email, ma ho so..."
+            placeholder="Tìm theo username, họ tên, email, mã hồ sơ..."
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
             className="h-9 pl-9"
@@ -138,10 +138,10 @@ const UserManagementPage = () => {
         <div className="w-full sm:w-52">
           <Select value={roleFilter} onValueChange={setRoleFilter}>
             <SelectTrigger className="h-9">
-              <SelectValue placeholder="Loc vai tro" />
+              <SelectValue placeholder="Lọc vai trò" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tat ca vai tro</SelectItem>
+              <SelectItem value="all">Tất cả vai trò</SelectItem>
               {ROLE_OPTIONS.map((role) => (
                 <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
               ))}
@@ -151,10 +151,10 @@ const UserManagementPage = () => {
         <div className="w-full sm:w-52">
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="h-9">
-              <SelectValue placeholder="Loc trang thai" />
+              <SelectValue placeholder="Lọc trạng thái" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tat ca trang thai</SelectItem>
+              <SelectItem value="all">Tất cả trạng thái</SelectItem>
               {STATUS_OPTIONS.map((status) => (
                 <SelectItem key={status.value} value={status.value}>{status.label}</SelectItem>
               ))}
@@ -166,7 +166,7 @@ const UserManagementPage = () => {
       {loading && (
         <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
           <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-blue-500" />
-          <p className="text-sm font-semibold text-gray-600">Dang tai tai khoan...</p>
+          <p className="text-sm font-semibold text-gray-600">Đang tải tài khoản...</p>
         </div>
       )}
 
@@ -183,13 +183,13 @@ const UserManagementPage = () => {
             <Table>
               <TableHeader className="bg-gray-50/60">
                 <TableRow>
-                  <TableHead>Ten dang nhap</TableHead>
-                  <TableHead>Ho ten / ma ho so</TableHead>
+                  <TableHead>Tên đăng nhập</TableHead>
+                  <TableHead>Họ tên / mã hồ sơ</TableHead>
                   <TableHead>Email</TableHead>
-                  <TableHead>Don vi</TableHead>
-                  <TableHead>Vai tro</TableHead>
-                  <TableHead>Trang thai</TableHead>
-                  <TableHead className="text-right">Thao tac</TableHead>
+                  <TableHead>Đơn vị</TableHead>
+                  <TableHead>Vai trò</TableHead>
+                  <TableHead>Trạng thái</TableHead>
+                  <TableHead className="text-right">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -219,13 +219,13 @@ const UserManagementPage = () => {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="xs" disabled title="Chua co API cap nhat user">
+                        <Button variant="ghost" size="xs" disabled title="Chưa có API cập nhật tài khoản">
                           <Edit2 className="h-3.5 w-3.5" />
                         </Button>
-                        <Button variant="ghost" size="xs" disabled title="Chua co API dat lai mat khau">
+                        <Button variant="ghost" size="xs" disabled title="Chưa có API đặt lại mật khẩu">
                           <KeyRound className="h-3.5 w-3.5" />
                         </Button>
-                        <Button variant="ghost" size="xs" disabled title="Chua co API khoa tai khoan">
+                        <Button variant="ghost" size="xs" disabled title="Chưa có API khóa tài khoản">
                           <Ban className="h-3.5 w-3.5" />
                         </Button>
                       </div>
@@ -234,7 +234,7 @@ const UserManagementPage = () => {
                 )) : (
                   <TableRow>
                     <TableCell colSpan={7} className="h-28 text-center text-sm text-gray-400">
-                      Khong tim thay tai khoan nao.
+                      Không tìm thấy tài khoản nào.
                     </TableCell>
                   </TableRow>
                 )}
@@ -242,7 +242,7 @@ const UserManagementPage = () => {
             </Table>
           </div>
           <div className="border-t border-gray-100 px-4 py-3 text-xs text-gray-500">
-            Hien thi {filteredUsers.length} / {users.length} tai khoan
+            Hiển thị {filteredUsers.length} / {users.length} tài khoản
           </div>
         </div>
       )}

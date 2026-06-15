@@ -29,10 +29,10 @@ const getResponseData = (response) => {
 const settledData = (result) => (result.status === "fulfilled" ? getResponseData(result.value) : []);
 
 const STATUS_LABEL = {
-  DRAFT: "Nhap",
-  SCHEDULED: "Da xep lich",
-  CANCELLED: "Da huy",
-  COMPLETED: "Da hoan thanh",
+  DRAFT: "Nháp",
+  SCHEDULED: "Đã xếp lịch",
+  CANCELLED: "Đã hủy",
+  COMPLETED: "Đã hoàn thành",
 };
 
 const STATUS_BADGE = {
@@ -108,7 +108,7 @@ const AdminExamsPage = () => {
       } catch (err) {
         if (isMounted) {
           setExams([]);
-          setError(err?.response?.data?.message || "Khong the tai lich thi.");
+          setError(err?.response?.data?.message || "Không thể tải lịch thi.");
         }
       } finally {
         if (isMounted) setLoading(false);
@@ -168,19 +168,19 @@ const AdminExamsPage = () => {
     <div className="space-y-6 p-6">
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Quan ly lich thi</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Quản lý lịch thi</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Tra cuu lich thi tu database theo hoc ky, mon hoc, phong thi va giam thi.
+            Tra cứu lịch thi từ database theo học kỳ, môn học, phòng thi và giám thị.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button disabled className="bg-blue-600 hover:bg-blue-700">
             <Upload className="mr-2 h-4 w-4" />
-            Import lich thi
+            Import lịch thi
           </Button>
           <Button disabled variant="outline">
             <FileSpreadsheet className="mr-2 h-4 w-4" />
-            Xuat mau Excel
+            Xuất mẫu Excel
           </Button>
           <Button variant="ghost" onClick={resetFilters}>
             <RefreshCw className="h-4 w-4" />
@@ -190,11 +190,11 @@ const AdminExamsPage = () => {
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
         {[
-          { label: "Tong lich thi", value: summary.total, color: "text-purple-600 bg-purple-50" },
-          { label: "Nhap", value: summary.draft, color: "text-amber-600 bg-amber-50" },
-          { label: "Da xep lich", value: summary.scheduled, color: "text-blue-600 bg-blue-50" },
-          { label: "Da hoan thanh", value: summary.completed, color: "text-emerald-600 bg-emerald-50" },
-          { label: "Da huy", value: summary.cancelled, color: "text-gray-600 bg-gray-50" },
+          { label: "Tổng lịch thi", value: summary.total, color: "text-purple-600 bg-purple-50" },
+          { label: "Nháp", value: summary.draft, color: "text-amber-600 bg-amber-50" },
+          { label: "Đã xếp lịch", value: summary.scheduled, color: "text-blue-600 bg-blue-50" },
+          { label: "Đã hoàn thành", value: summary.completed, color: "text-emerald-600 bg-emerald-50" },
+          { label: "Đã hủy", value: summary.cancelled, color: "text-gray-600 bg-gray-50" },
         ].map((item) => (
           <div key={item.label} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
             <span className="text-xs font-medium text-gray-500">{item.label}</span>
@@ -208,11 +208,11 @@ const AdminExamsPage = () => {
       <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7">
           <div className="space-y-1">
-            <Label className="text-xs font-semibold text-gray-600">Hoc ky</Label>
+            <Label className="text-xs font-semibold text-gray-600">Học kỳ</Label>
             <Select value={selectedSemester} onValueChange={setSelectedSemester}>
               <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tat ca</SelectItem>
+                <SelectItem value="all">Tất cả</SelectItem>
                 {semesters.map((semester) => (
                   <SelectItem key={semester.id} value={String(semester.id)}>{semester.name}</SelectItem>
                 ))}
@@ -224,7 +224,7 @@ const AdminExamsPage = () => {
             <Select value={selectedDept} onValueChange={setSelectedDept}>
               <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tat ca</SelectItem>
+                <SelectItem value="all">Tất cả</SelectItem>
                 {departments.map((department) => (
                   <SelectItem key={department.id} value={String(department.id)}>
                     {department.name || department.departmentName || department.departmentCode}
@@ -234,11 +234,11 @@ const AdminExamsPage = () => {
             </Select>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs font-semibold text-gray-600">Lop hanh chinh</Label>
+            <Label className="text-xs font-semibold text-gray-600">Lớp hành chính</Label>
             <Select value={selectedClass} onValueChange={setSelectedClass}>
               <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tat ca</SelectItem>
+                <SelectItem value="all">Tất cả</SelectItem>
                 {classesList.map((classItem) => (
                   <SelectItem key={classItem.id} value={classItem.classCode || classItem.className || String(classItem.id)}>
                     {classItem.className || classItem.classCode}
@@ -248,11 +248,11 @@ const AdminExamsPage = () => {
             </Select>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs font-semibold text-gray-600">Mon hoc</Label>
+            <Label className="text-xs font-semibold text-gray-600">Môn học</Label>
             <Select value={selectedCourse} onValueChange={setSelectedCourse}>
               <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tat ca</SelectItem>
+                <SelectItem value="all">Tất cả</SelectItem>
                 {coursesList.map((course) => (
                   <SelectItem key={course.id} value={String(course.id)}>{course.name}</SelectItem>
                 ))}
@@ -260,11 +260,11 @@ const AdminExamsPage = () => {
             </Select>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs font-semibold text-gray-600">Phong thi</Label>
+            <Label className="text-xs font-semibold text-gray-600">Phòng thi</Label>
             <Select value={selectedRoom} onValueChange={setSelectedRoom}>
               <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tat ca</SelectItem>
+                <SelectItem value="all">Tất cả</SelectItem>
                 {classroomsList.map((room) => (
                   <SelectItem key={room.id} value={String(room.id)}>{room.roomName || room.roomNumber}</SelectItem>
                 ))}
@@ -272,11 +272,11 @@ const AdminExamsPage = () => {
             </Select>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs font-semibold text-gray-600">Giam thi</Label>
+            <Label className="text-xs font-semibold text-gray-600">Giám thị</Label>
             <Select value={selectedProctor} onValueChange={setSelectedProctor}>
               <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tat ca</SelectItem>
+                <SelectItem value="all">Tất cả</SelectItem>
                 {lecturersList.map((lecturer) => (
                   <SelectItem key={lecturer.id} value={String(lecturer.id)}>{lecturer.name}</SelectItem>
                 ))}
@@ -284,11 +284,11 @@ const AdminExamsPage = () => {
             </Select>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs font-semibold text-gray-600">Trang thai</Label>
+            <Label className="text-xs font-semibold text-gray-600">Trạng thái</Label>
             <Select value={selectedStatus} onValueChange={setSelectedStatus}>
               <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tat ca</SelectItem>
+                <SelectItem value="all">Tất cả</SelectItem>
                 {Object.entries(STATUS_LABEL).map(([value, label]) => (
                   <SelectItem key={value} value={value}>{label}</SelectItem>
                 ))}
@@ -300,7 +300,7 @@ const AdminExamsPage = () => {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <Input
-            placeholder="Tim theo ma mon, ten mon, lop, phong thi, giam thi..."
+            placeholder="Tìm theo mã môn, tên môn, lớp, phòng thi, giám thị..."
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
             className="h-9 pl-9 text-xs"
@@ -311,7 +311,7 @@ const AdminExamsPage = () => {
       {loading && (
         <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
           <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-blue-500" />
-          <p className="text-sm font-semibold text-gray-600">Dang tai lich thi...</p>
+          <p className="text-sm font-semibold text-gray-600">Đang tải lịch thi...</p>
         </div>
       )}
 
@@ -328,17 +328,17 @@ const AdminExamsPage = () => {
             <Table>
               <TableHeader className="bg-gray-50/50">
                 <TableRow>
-                  <TableHead>Ma mon</TableHead>
-                  <TableHead>Ten mon hoc</TableHead>
+                  <TableHead>Mã môn</TableHead>
+                  <TableHead>Tên môn học</TableHead>
                   <TableHead>Lop</TableHead>
-                  <TableHead>Ngay thi</TableHead>
-                  <TableHead>Thoi gian</TableHead>
-                  <TableHead>Phong thi</TableHead>
-                  <TableHead>Toa nha</TableHead>
-                  <TableHead>So SV</TableHead>
-                  <TableHead>Giam thi</TableHead>
-                  <TableHead>Trang thai</TableHead>
-                  <TableHead className="text-right">Thao tac</TableHead>
+                  <TableHead>Ngày thi</TableHead>
+                  <TableHead>Thời gian</TableHead>
+                  <TableHead>Phòng thi</TableHead>
+                  <TableHead>Tòa nhà</TableHead>
+                  <TableHead>Số SV</TableHead>
+                  <TableHead>Giám thị</TableHead>
+                  <TableHead>Trạng thái</TableHead>
+                  <TableHead className="text-right">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -360,10 +360,10 @@ const AdminExamsPage = () => {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="xs" disabled title="Chua co API chi tiet lich thi">
+                        <Button variant="ghost" size="xs" disabled title="Chưa có API chi tiết lịch thi">
                           <Eye className="h-3.5 w-3.5" />
                         </Button>
-                        <Button variant="ghost" size="xs" disabled title="Chua co API cap nhat lich thi">
+                        <Button variant="ghost" size="xs" disabled title="Chưa có API cập nhật lịch thi">
                           <Edit2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
@@ -372,7 +372,7 @@ const AdminExamsPage = () => {
                 )) : (
                   <TableRow>
                     <TableCell colSpan={11} className="h-32 text-center text-sm text-gray-400">
-                      Khong co lich thi phu hop.
+                      Không có lịch thi phù hợp.
                     </TableCell>
                   </TableRow>
                 )}
