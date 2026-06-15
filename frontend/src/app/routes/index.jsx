@@ -3,7 +3,6 @@ import { AppLayout } from "@/app/layouts/AppLayout";
 import { APP_ROUTES, ROLE_DEFAULT_PATHS } from "@/constants/routes";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { LoginPage } from "@/features/auth/pages/LoginPage";
-import AdminAutoAssignmentPage from "@/features/admin/pages/AutoAssignmentPage";
 import AdminClassroomsPage from "@/features/admin/pages/ClassroomsPage";
 import AdminCoursesPage from "@/features/admin/pages/CoursesPage";
 import AdminDashboardPage from "@/features/admin/pages/DashboardPage";
@@ -36,6 +35,7 @@ import StaffLookupPage from "@/features/staff/pages/StaffLookupPage";
 import StaffRoomChangeListPage from "@/features/staff/pages/StaffRoomChangeListPage";
 import StaffMaintenanceListPage from "@/features/staff/pages/StaffMaintenanceListPage";
 import StaffSchedulePage from "@/features/staff/pages/StaffSchedulePage";
+import StaffAutoAssignmentPage from "@/features/staff/pages/StaffAutoAssignmentPage";
 import StudentSchedulePage from "@/features/student/pages/StudentSchedulePage";
 import StudentBookingPage from "@/features/student/pages/StudentBookingPage";
 import StudentBookingHistoryPage from "@/features/student/pages/StudentBookingHistoryPage";
@@ -46,7 +46,6 @@ import TimetablePage from "@/features/timetable/pages/TimetablePage";
 import { Info } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { useNavigate } from "react-router";
-import { AutoAssignmentPage } from "@/app/pages/AutoAssignmentPage";
 
 const RoleHomeRedirect = () => {
   const { user } = useAuth();
@@ -103,7 +102,7 @@ const appRouter = createBrowserRouter([
       { path: "staff/dashboard", Component: StaffDashboardPage },
       { path: "staff/timetable", Component: AdminWeeklySchedulePage }, // shared weekly schedule viewer
       { path: "staff/timetable-import", element: <Navigate to={`${APP_ROUTES.staffAutoAssignment}?tab=import`} replace /> },
-      { path: "staff/auto-assignment", Component: AutoAssignmentPage },
+      { path: "staff/auto-assignment", Component: StaffAutoAssignmentPage },
       { path: "staff/conflicts", element: <Navigate to={`${APP_ROUTES.staffAutoAssignment}?tab=conflicts`} replace /> },
       { path: "staff/approval-submit", element: <Navigate to={`${APP_ROUTES.staffAutoAssignment}?tab=submit`} replace /> },
       { path: "staff/room-change-list", Component: StaffRoomChangeListPage },
