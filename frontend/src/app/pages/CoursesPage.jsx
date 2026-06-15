@@ -1,154 +1,164 @@
-import { jsx, jsxs } from "react/jsx-runtime";
+import { useEffect, useMemo, useState } from "react";
+import { AlertCircle, BookOpen, Loader2, Plus, Search } from "lucide-react";
+import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-import { Badge } from "../components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger
-} from "../components/ui/dialog";
-import { Label } from "../components/ui/label";
 import {
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
-  TableRow
+  TableRow,
 } from "../components/ui/table";
-import { Search, Plus } from "lucide-react";
-import { useState } from "react";
-const initialCourses = [
-  { id: 1, code: "CS101", name: "Introduction to Programming", department: "Computer Science", credits: 3, students: 45, status: "Active" },
-  { id: 2, code: "MATH201", name: "Calculus II", department: "Mathematics", credits: 4, students: 60, status: "Active" },
-  { id: 3, code: "PHY301", name: "Quantum Mechanics", department: "Physics", credits: 3, students: 35, status: "Active" },
-  { id: 4, code: "ENG102", name: "Technical Writing", department: "English", credits: 2, students: 50, status: "Active" },
-  { id: 5, code: "BIO201", name: "Cell Biology", department: "Biology", credits: 3, students: 40, status: "Active" },
-  { id: 6, code: "CHEM301", name: "Organic Chemistry", department: "Chemistry", credits: 4, students: 38, status: "Active" }
-];
+import { httpClient } from "../../services/httpClient";
+
+const getResponseData = (response) => {
+  const payload = response?.data?.data ?? response?.data ?? [];
+  return Array.isArray(payload) ? payload : [];
+};
+
 const CoursesPage = () => {
-  const [courses, setCourses] = useState(initialCourses);
+  const [courses, setCourses] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [newCourse, setNewCourse] = useState({
-    code: "",
-    name: "",
-    department: "",
-    credits: ""
-  });
-  const filteredCourses = courses.filter(
-    (course) => course.code.toLowerCase().includes(searchTerm.toLowerCase()) || course.name.toLowerCase().includes(searchTerm.toLowerCase()) || course.department.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-  const handleAddCourse = () => {
-    if (!newCourse.code.trim() || !newCourse.name.trim() || !newCourse.department.trim() || !newCourse.credits) {
-      return;
-    }
-    const course = {
-      id: courses.length + 1,
-      code: newCourse.code.trim().toUpperCase(),
-      name: newCourse.name.trim(),
-      department: newCourse.department.trim(),
-      credits: Number(newCourse.credits),
-      students: 0,
-      status: "Active"
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCourses = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const response = await httpClient.get("/api/categories/courses");
+        if (isMounted) setCourses(getResponseData(response));
+      } catch (err) {
+        if (isMounted) {
+          setError(err?.response?.data?.message || "Khong the tai danh sach mon hoc.");
+          setCourses([]);
+        }
+      } finally {
+        if (isMounted) setLoading(false);
+      }
     };
-    setCourses([course, ...courses]);
-    setNewCourse({ code: "", name: "", department: "", credits: "" });
-    setIsAddDialogOpen(false);
-  };
-  return /* @__PURE__ */ jsxs("div", { className: "p-6 space-y-6", children: [
-    /* @__PURE__ */ jsxs("div", { className: "flex items-center justify-between", children: [
-      /* @__PURE__ */ jsxs("div", { children: [
-        /* @__PURE__ */ jsx("h1", { className: "text-2xl font-semibold text-gray-900", children: "Courses" }),
-        /* @__PURE__ */ jsx("p", { className: "text-gray-600 mt-1", children: "Manage course catalog and information" })
-      ] }),
-      /* @__PURE__ */ jsxs(Dialog, { open: isAddDialogOpen, onOpenChange: setIsAddDialogOpen, children: [
-        /* @__PURE__ */ jsx(DialogTrigger, { asChild: true, children: /* @__PURE__ */ jsxs(Button, { className: "bg-blue-600 hover:bg-blue-700", children: [
-          /* @__PURE__ */ jsx(Plus, { className: "w-4 h-4 mr-2" }),
-          "Add New Course"
-        ] }) }),
-        /* @__PURE__ */ jsxs(DialogContent, { children: [
-          /* @__PURE__ */ jsxs(DialogHeader, { children: [
-            /* @__PURE__ */ jsx(DialogTitle, { children: "Add New Course" }),
-            /* @__PURE__ */ jsx(DialogDescription, { children: "Create a new course in catalog." })
-          ] }),
-          /* @__PURE__ */ jsxs("div", { className: "space-y-4 py-2", children: [
-            /* @__PURE__ */ jsxs("div", { className: "grid grid-cols-2 gap-3", children: [
-              /* @__PURE__ */ jsxs("div", { className: "space-y-2", children: [
-                /* @__PURE__ */ jsx(Label, { htmlFor: "course-code", children: "Course Code" }),
-                /* @__PURE__ */ jsx(Input, { id: "course-code", placeholder: "CS401", value: newCourse.code, onChange: (e) => setNewCourse({ ...newCourse, code: e.target.value }) })
-              ] }),
-              /* @__PURE__ */ jsxs("div", { className: "space-y-2", children: [
-                /* @__PURE__ */ jsx(Label, { htmlFor: "credits", children: "Credits" }),
-                /* @__PURE__ */ jsx(Input, { id: "credits", type: "number", min: "1", placeholder: "3", value: newCourse.credits, onChange: (e) => setNewCourse({ ...newCourse, credits: e.target.value }) })
-              ] })
-            ] }),
-            /* @__PURE__ */ jsxs("div", { className: "space-y-2", children: [
-              /* @__PURE__ */ jsx(Label, { htmlFor: "course-name", children: "Course Name" }),
-              /* @__PURE__ */ jsx(Input, { id: "course-name", placeholder: "Machine Learning Fundamentals", value: newCourse.name, onChange: (e) => setNewCourse({ ...newCourse, name: e.target.value }) })
-            ] }),
-            /* @__PURE__ */ jsxs("div", { className: "space-y-2", children: [
-              /* @__PURE__ */ jsx(Label, { htmlFor: "department", children: "Department" }),
-              /* @__PURE__ */ jsx(Input, { id: "department", placeholder: "Computer Science", value: newCourse.department, onChange: (e) => setNewCourse({ ...newCourse, department: e.target.value }) })
-            ] })
-          ] }),
-          /* @__PURE__ */ jsxs(DialogFooter, { children: [
-            /* @__PURE__ */ jsx(Button, { variant: "outline", onClick: () => setIsAddDialogOpen(false), children: "Cancel" }),
-            /* @__PURE__ */ jsx(Button, { className: "bg-blue-600 hover:bg-blue-700", onClick: handleAddCourse, children: "Create Course" })
-          ] })
-        ] })
-      ] })
-    ] }),
-    /* @__PURE__ */ jsxs("div", { className: "bg-white rounded-lg shadow-sm border border-gray-200", children: [
-      /* @__PURE__ */ jsx("div", { className: "p-4 border-b border-gray-200", children: /* @__PURE__ */ jsxs("div", { className: "relative", children: [
-        /* @__PURE__ */ jsx(Search, { className: "absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" }),
-        /* @__PURE__ */ jsx(
-          Input,
-          {
-            placeholder: "Search courses...",
-            value: searchTerm,
-            onChange: (e) => setSearchTerm(e.target.value),
-            className: "pl-10"
-          }
-        )
-      ] }) }),
-      /* @__PURE__ */ jsx("div", { className: "overflow-x-auto", children: /* @__PURE__ */ jsxs(Table, { children: [
-        /* @__PURE__ */ jsx(TableHeader, { children: /* @__PURE__ */ jsxs(TableRow, { children: [
-          /* @__PURE__ */ jsx(TableHead, { children: "Course Code" }),
-          /* @__PURE__ */ jsx(TableHead, { children: "Course Name" }),
-          /* @__PURE__ */ jsx(TableHead, { children: "Department" }),
-          /* @__PURE__ */ jsx(TableHead, { className: "text-center", children: "Credits" }),
-          /* @__PURE__ */ jsx(TableHead, { className: "text-center", children: "Students" }),
-          /* @__PURE__ */ jsx(TableHead, { children: "Status" }),
-          /* @__PURE__ */ jsx(TableHead, { className: "text-right", children: "Actions" })
-        ] }) }),
-        /* @__PURE__ */ jsx(TableBody, { children: filteredCourses.map((course) => /* @__PURE__ */ jsxs(TableRow, { children: [
-          /* @__PURE__ */ jsx(TableCell, { className: "font-medium", children: course.code }),
-          /* @__PURE__ */ jsx(TableCell, { children: course.name }),
-          /* @__PURE__ */ jsx(TableCell, { children: course.department }),
-          /* @__PURE__ */ jsx(TableCell, { className: "text-center", children: course.credits }),
-          /* @__PURE__ */ jsx(TableCell, { className: "text-center", children: course.students }),
-          /* @__PURE__ */ jsx(TableCell, { children: /* @__PURE__ */ jsx(Badge, { className: "bg-green-100 text-green-700 hover:bg-green-100", children: course.status }) }),
-          /* @__PURE__ */ jsx(TableCell, { className: "text-right", children: /* @__PURE__ */ jsxs("div", { className: "flex justify-end gap-2", children: [
-            /* @__PURE__ */ jsx(Button, { variant: "outline", size: "sm", children: "Edit" }),
-            /* @__PURE__ */ jsx(Button, { variant: "outline", size: "sm", children: "View" })
-          ] }) })
-        ] }, course.id)) })
-      ] }) }),
-      /* @__PURE__ */ jsx("div", { className: "flex items-center justify-between px-4 py-3 border-t border-gray-200", children: /* @__PURE__ */ jsxs("div", { className: "text-sm text-gray-600", children: [
-        "Showing ",
-        filteredCourses.length,
-        " of ",
-        courses.length,
-        " courses"
-      ] }) })
-    ] })
-  ] });
+
+    loadCourses();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const filteredCourses = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return courses;
+    return courses.filter((course) => {
+      const text = [
+        course.courseCode,
+        course.name,
+        course.departmentName,
+        course.departmentCode,
+        course.requiredRoomType,
+      ].join(" ").toLowerCase();
+      return text.includes(query);
+    });
+  }, [courses, searchTerm]);
+
+  return (
+    <div className="space-y-6 p-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Mon hoc</h1>
+          <p className="mt-1 text-gray-600">Danh muc mon hoc lay tu database.</p>
+        </div>
+        <Button disabled className="bg-blue-600 hover:bg-blue-700">
+          <Plus className="mr-2 h-4 w-4" />
+          Them mon hoc
+        </Button>
+      </div>
+
+      <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+          <Input
+            placeholder="Tim theo ma mon, ten mon, khoa..."
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            className="pl-10"
+          />
+        </div>
+      </div>
+
+      {loading && (
+        <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
+          <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-blue-500" />
+          <p className="text-sm font-semibold text-gray-600">Dang tai mon hoc...</p>
+        </div>
+      )}
+
+      {!loading && error && (
+        <div className="rounded-xl border border-red-100 bg-red-50 p-8 text-center">
+          <AlertCircle className="mx-auto mb-3 h-8 w-8 text-red-400" />
+          <p className="text-sm font-bold text-red-700">{error}</p>
+        </div>
+      )}
+
+      {!loading && !error && (
+        <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Ma mon</TableHead>
+                  <TableHead>Ten mon hoc</TableHead>
+                  <TableHead>Khoa/bo mon</TableHead>
+                  <TableHead className="text-center">Tin chi</TableHead>
+                  <TableHead>Loai phong</TableHead>
+                  <TableHead>Trang thai</TableHead>
+                  <TableHead className="text-right">Thao tac</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredCourses.length > 0 ? filteredCourses.map((course) => (
+                  <TableRow key={course.id}>
+                    <TableCell className="font-semibold text-gray-900">
+                      {course.courseCode || `MH-${course.id}`}
+                    </TableCell>
+                    <TableCell>{course.name || "Chua cap nhat"}</TableCell>
+                    <TableCell>
+                      <div className="font-medium text-gray-800">{course.departmentName || "Chua cap nhat"}</div>
+                      <div className="text-xs text-gray-500">{course.departmentCode || course.facultyCode || ""}</div>
+                    </TableCell>
+                    <TableCell className="text-center">{course.credits ?? "-"}</TableCell>
+                    <TableCell>{course.requiredRoomType || "Khong yeu cau"}</TableCell>
+                    <TableCell>
+                      <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Dang dung</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" size="sm" disabled>Sua</Button>
+                        <Button variant="outline" size="sm" disabled>Xem</Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )) : (
+                  <TableRow>
+                    <TableCell colSpan={7} className="h-28 text-center">
+                      <BookOpen className="mx-auto mb-2 h-7 w-7 text-gray-300" />
+                      <p className="text-sm font-semibold text-gray-500">Khong co mon hoc phu hop.</p>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="border-t border-gray-200 px-4 py-3 text-sm text-gray-600">
+            Hien thi {filteredCourses.length} / {courses.length} mon hoc
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
-export {
-  CoursesPage
-};
+
+export { CoursesPage };

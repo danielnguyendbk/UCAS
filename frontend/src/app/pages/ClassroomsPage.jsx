@@ -1,158 +1,169 @@
-import { jsx, jsxs } from "react/jsx-runtime";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger
-} from "../components/ui/dialog";
-import { Label } from "../components/ui/label";
-import { Users, MapPin, Monitor, Plus, Search } from "lucide-react";
-const initialClassrooms = [
-  { id: 1, name: "A-301", capacity: 50, building: "A", floor: 3, facilities: ["Projector", "Whiteboard"], utilization: 85 },
-  { id: 2, name: "A-302", capacity: 45, building: "A", floor: 3, facilities: ["Projector", "Computer"], utilization: 72 },
-  { id: 3, name: "B-105", capacity: 60, building: "B", floor: 1, facilities: ["Smart Board", "AC"], utilization: 92 },
-  { id: 4, name: "B-106", capacity: 55, building: "B", floor: 1, facilities: ["Projector"], utilization: 68 },
-  { id: 5, name: "C-201", capacity: 40, building: "C", floor: 2, facilities: ["Projector", "Whiteboard", "AC"], utilization: 78 },
-  { id: 6, name: "C-202", capacity: 35, building: "C", floor: 2, facilities: ["Smart Board"], utilization: 45 }
-];
+import { AlertCircle, Loader2, MapPin, Monitor, Plus, Search, Users } from "lucide-react";
+import { httpClient } from "../../services/httpClient";
+
+const getResponseData = (response) => {
+  const payload = response?.data?.data ?? response?.data ?? [];
+  return Array.isArray(payload) ? payload : [];
+};
+
+const getFacilities = (room) => [
+  room.hasProjector && "May chieu",
+  room.hasAc && "Dieu hoa",
+  room.roomType && `Loai: ${room.roomType}`,
+].filter(Boolean);
+
 const ClassroomsPage = () => {
-  const [classrooms, setClassrooms] = useState(initialClassrooms);
+  const [classrooms, setClassrooms] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [newClassroom, setNewClassroom] = useState({
-    name: "",
-    capacity: "",
-    building: "",
-    floor: "",
-    facilities: ""
-  });
-  const filteredClassrooms = classrooms.filter(
-    (room) => room.name.toLowerCase().includes(searchTerm.toLowerCase()) || room.building.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-  const handleAddClassroom = () => {
-    if (!newClassroom.name.trim() || !newClassroom.capacity || !newClassroom.building.trim() || !newClassroom.floor) {
-      return;
-    }
-    const facilities = newClassroom.facilities.split(",").map((f) => f.trim()).filter(Boolean);
-    const nextRoom = {
-      id: classrooms.length + 1,
-      name: newClassroom.name.trim(),
-      capacity: Number(newClassroom.capacity),
-      building: newClassroom.building.trim().toUpperCase(),
-      floor: Number(newClassroom.floor),
-      facilities,
-      utilization: 0
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadClassrooms = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const response = await httpClient.get("/api/categories/classrooms");
+        if (isMounted) setClassrooms(getResponseData(response));
+      } catch (err) {
+        if (isMounted) {
+          setError(err?.response?.data?.message || "Khong the tai danh sach phong hoc.");
+          setClassrooms([]);
+        }
+      } finally {
+        if (isMounted) setLoading(false);
+      }
     };
-    setClassrooms([nextRoom, ...classrooms]);
-    setNewClassroom({ name: "", capacity: "", building: "", floor: "", facilities: "" });
-    setIsAddDialogOpen(false);
-  };
-  return /* @__PURE__ */ jsxs("div", { className: "p-6 space-y-6", children: [
-    /* @__PURE__ */ jsxs("div", { className: "flex items-center justify-between", children: [
-      /* @__PURE__ */ jsxs("div", { children: [
-        /* @__PURE__ */ jsx("h1", { className: "text-2xl font-semibold text-gray-900", children: "Classrooms" }),
-        /* @__PURE__ */ jsx("p", { className: "text-gray-600 mt-1", children: "Manage classroom inventory and facilities" })
-      ] }),
-      /* @__PURE__ */ jsxs(Dialog, { open: isAddDialogOpen, onOpenChange: setIsAddDialogOpen, children: [
-        /* @__PURE__ */ jsx(DialogTrigger, { asChild: true, children: /* @__PURE__ */ jsxs(Button, { className: "bg-blue-600 hover:bg-blue-700", children: [
-          /* @__PURE__ */ jsx(Plus, { className: "w-4 h-4 mr-2" }),
-          "Add New Classroom"
-        ] }) }),
-        /* @__PURE__ */ jsxs(DialogContent, { children: [
-          /* @__PURE__ */ jsxs(DialogHeader, { children: [
-            /* @__PURE__ */ jsx(DialogTitle, { children: "Add New Classroom" }),
-            /* @__PURE__ */ jsx(DialogDescription, { children: "Create a new classroom with capacity and facilities." })
-          ] }),
-          /* @__PURE__ */ jsxs("div", { className: "space-y-4 py-2", children: [
-            /* @__PURE__ */ jsxs("div", { className: "space-y-2", children: [
-              /* @__PURE__ */ jsx(Label, { htmlFor: "classroom-name", children: "Room Name" }),
-              /* @__PURE__ */ jsx(Input, { id: "classroom-name", placeholder: "A-305", value: newClassroom.name, onChange: (e) => setNewClassroom({ ...newClassroom, name: e.target.value }) })
-            ] }),
-            /* @__PURE__ */ jsxs("div", { className: "grid grid-cols-2 gap-3", children: [
-              /* @__PURE__ */ jsxs("div", { className: "space-y-2", children: [
-                /* @__PURE__ */ jsx(Label, { htmlFor: "building", children: "Building" }),
-                /* @__PURE__ */ jsx(Input, { id: "building", placeholder: "A", value: newClassroom.building, onChange: (e) => setNewClassroom({ ...newClassroom, building: e.target.value }) })
-              ] }),
-              /* @__PURE__ */ jsxs("div", { className: "space-y-2", children: [
-                /* @__PURE__ */ jsx(Label, { htmlFor: "floor", children: "Floor" }),
-                /* @__PURE__ */ jsx(Input, { id: "floor", type: "number", min: "1", placeholder: "3", value: newClassroom.floor, onChange: (e) => setNewClassroom({ ...newClassroom, floor: e.target.value }) })
-              ] })
-            ] }),
-            /* @__PURE__ */ jsxs("div", { className: "space-y-2", children: [
-              /* @__PURE__ */ jsx(Label, { htmlFor: "capacity", children: "Capacity" }),
-              /* @__PURE__ */ jsx(Input, { id: "capacity", type: "number", min: "1", placeholder: "50", value: newClassroom.capacity, onChange: (e) => setNewClassroom({ ...newClassroom, capacity: e.target.value }) })
-            ] }),
-            /* @__PURE__ */ jsxs("div", { className: "space-y-2", children: [
-              /* @__PURE__ */ jsx(Label, { htmlFor: "facilities", children: "Facilities (comma separated)" }),
-              /* @__PURE__ */ jsx(Input, { id: "facilities", placeholder: "Projector, AC, Whiteboard", value: newClassroom.facilities, onChange: (e) => setNewClassroom({ ...newClassroom, facilities: e.target.value }) })
-            ] })
-          ] }),
-          /* @__PURE__ */ jsxs(DialogFooter, { children: [
-            /* @__PURE__ */ jsx(Button, { variant: "outline", onClick: () => setIsAddDialogOpen(false), children: "Cancel" }),
-            /* @__PURE__ */ jsx(Button, { className: "bg-blue-600 hover:bg-blue-700", onClick: handleAddClassroom, children: "Create Classroom" })
-          ] })
-        ] })
-      ] })
-    ] }),
-    /* @__PURE__ */ jsx("div", { className: "bg-white rounded-lg shadow-sm border border-gray-200 p-4", children: /* @__PURE__ */ jsxs("div", { className: "relative", children: [
-      /* @__PURE__ */ jsx(Search, { className: "absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" }),
-      /* @__PURE__ */ jsx(Input, { placeholder: "Search room by name or building...", value: searchTerm, onChange: (e) => setSearchTerm(e.target.value), className: "pl-10" })
-    ] }) }),
-    /* @__PURE__ */ jsx("div", { className: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6", children: filteredClassrooms.map((room) => /* @__PURE__ */ jsx(Card, { className: "hover:shadow-lg transition-shadow", children: /* @__PURE__ */ jsxs(CardContent, { className: "p-6", children: [
-      /* @__PURE__ */ jsxs("div", { className: "flex items-start justify-between mb-4", children: [
-        /* @__PURE__ */ jsxs("div", { children: [
-          /* @__PURE__ */ jsx("h3", { className: "text-xl font-semibold text-gray-900", children: room.name }),
-          /* @__PURE__ */ jsxs("div", { className: "flex items-center gap-1 text-sm text-gray-600 mt-1", children: [
-            /* @__PURE__ */ jsx(MapPin, { className: "w-4 h-4" }),
-            "Building ",
-            room.building,
-            ", Floor ",
-            room.floor
-          ] })
-        ] }),
-        /* @__PURE__ */ jsxs(
-          Badge,
-          {
-            className: room.utilization > 80 ? "bg-green-100 text-green-700" : room.utilization > 60 ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-700",
-            children: [
-              room.utilization,
-              "% Used"
-            ]
-          }
-        )
-      ] }),
-      /* @__PURE__ */ jsxs("div", { className: "space-y-3", children: [
-        /* @__PURE__ */ jsxs("div", { className: "flex items-center gap-2 text-sm", children: [
-          /* @__PURE__ */ jsx(Users, { className: "w-4 h-4 text-gray-500" }),
-          /* @__PURE__ */ jsx("span", { className: "text-gray-900 font-medium", children: "Capacity:" }),
-          /* @__PURE__ */ jsxs("span", { className: "text-gray-600", children: [
-            room.capacity,
-            " students"
-          ] })
-        ] }),
-        /* @__PURE__ */ jsxs("div", { className: "flex items-start gap-2 text-sm", children: [
-          /* @__PURE__ */ jsx(Monitor, { className: "w-4 h-4 text-gray-500 mt-0.5" }),
-          /* @__PURE__ */ jsxs("div", { children: [
-            /* @__PURE__ */ jsx("span", { className: "text-gray-900 font-medium", children: "Facilities:" }),
-            /* @__PURE__ */ jsx("div", { className: "flex flex-wrap gap-1 mt-1", children: room.facilities.map((facility, index) => /* @__PURE__ */ jsx(Badge, { variant: "outline", className: "text-xs", children: facility }, index)) })
-          ] })
-        ] })
-      ] }),
-      /* @__PURE__ */ jsxs("div", { className: "mt-4 pt-4 border-t border-gray-200 flex gap-2", children: [
-        /* @__PURE__ */ jsx(Button, { variant: "outline", size: "sm", className: "flex-1", children: "Edit" }),
-        /* @__PURE__ */ jsx(Button, { variant: "outline", size: "sm", className: "flex-1", children: "View Schedule" })
-      ] })
-    ] }) }, room.id)) })
-  ] });
+
+    loadClassrooms();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const filteredClassrooms = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return classrooms;
+    return classrooms.filter((room) => {
+      const text = [
+        room.roomName,
+        room.roomNumber,
+        room.buildingCode,
+        room.buildingName,
+        room.roomType,
+      ].join(" ").toLowerCase();
+      return text.includes(query);
+    });
+  }, [classrooms, searchTerm]);
+
+  return (
+    <div className="space-y-6 p-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Phong hoc</h1>
+          <p className="mt-1 text-gray-600">Du lieu phong hoc lay tu database.</p>
+        </div>
+        <Button disabled className="bg-blue-600 hover:bg-blue-700">
+          <Plus className="mr-2 h-4 w-4" />
+          Them phong
+        </Button>
+      </div>
+
+      <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+          <Input
+            placeholder="Tim theo phong, toa nha, loai phong..."
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            className="pl-10"
+          />
+        </div>
+      </div>
+
+      {loading && (
+        <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
+          <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-blue-500" />
+          <p className="text-sm font-semibold text-gray-600">Dang tai phong hoc...</p>
+        </div>
+      )}
+
+      {!loading && error && (
+        <div className="rounded-xl border border-red-100 bg-red-50 p-8 text-center">
+          <AlertCircle className="mx-auto mb-3 h-8 w-8 text-red-400" />
+          <p className="text-sm font-bold text-red-700">{error}</p>
+        </div>
+      )}
+
+      {!loading && !error && filteredClassrooms.length === 0 && (
+        <div className="rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center">
+          <p className="text-sm font-semibold text-gray-500">Khong co phong hoc phu hop.</p>
+        </div>
+      )}
+
+      {!loading && !error && filteredClassrooms.length > 0 && (
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {filteredClassrooms.map((room) => {
+            const facilities = getFacilities(room);
+            const roomLabel = room.roomName || room.roomNumber || `Phong ${room.id}`;
+            return (
+              <Card key={room.id} className="transition-shadow hover:shadow-lg">
+                <CardContent className="p-6">
+                  <div className="mb-4 flex items-start justify-between">
+                    <div>
+                      <h3 className="text-xl font-semibold text-gray-900">{roomLabel}</h3>
+                      <div className="mt-1 flex items-center gap-1 text-sm text-gray-600">
+                        <MapPin className="h-4 w-4" />
+                        {room.buildingName || room.buildingCode || "Chua co toa"} - Tang {room.floorNumber || "-"}
+                      </div>
+                    </div>
+                    <Badge className={room.active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}>
+                      {room.active ? "Dang dung" : "Tam dung"}
+                    </Badge>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Users className="h-4 w-4 text-gray-500" />
+                      <span className="font-medium text-gray-900">Suc chua:</span>
+                      <span className="text-gray-600">{room.capacity || 0} sinh vien</span>
+                    </div>
+                    <div className="flex items-start gap-2 text-sm">
+                      <Monitor className="mt-0.5 h-4 w-4 text-gray-500" />
+                      <div>
+                        <span className="font-medium text-gray-900">Thiet bi:</span>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {facilities.length > 0
+                            ? facilities.map((facility) => (
+                              <Badge key={facility} variant="outline" className="text-xs">
+                                {facility}
+                              </Badge>
+                            ))
+                            : <span className="text-xs text-gray-400">Chua cap nhat</span>}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex gap-2 border-t border-gray-200 pt-4">
+                    <Button variant="outline" size="sm" className="flex-1" disabled>Sua</Button>
+                    <Button variant="outline" size="sm" className="flex-1" disabled>Xem lich</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 };
-export {
-  ClassroomsPage
-};
+
+export { ClassroomsPage };
