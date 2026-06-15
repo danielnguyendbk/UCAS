@@ -1,121 +1,61 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { AlertCircle, Edit2, Eye, FileSpreadsheet, Loader2, RefreshCw, Search, Upload } from "lucide-react";
+import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
 import {
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
-  TableRow
+  TableRow,
 } from "../components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter
-} from "../components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "../components/ui/select";
-import { Label } from "../components/ui/label";
-import { Badge } from "../components/ui/badge";
-import { 
-  AlertTriangle, 
-  RefreshCw, 
-  Search, 
-  FileSpreadsheet, 
-  Upload, 
-  Info, 
-  Eye, 
-  Edit2,
-  Calendar
-} from "lucide-react";
 import { httpClient } from "@/services/httpClient";
 
-const mockExams = [
-  {
-    id: 1,
-    courseCode: "INT1334",
-    courseName: "Kỹ thuật lập trình",
-    groupCode: "01",
-    classCodes: "D24HTTT01",
-    examDate: "2026-06-15",
-    examShift: "Ca 1",
-    examTime: "07:30 - 09:30",
-    roomCode: "302-A2",
-    buildingCode: "A2",
-    studentCount: 65,
-    proctorName: "Nguyễn Văn A",
-    status: "PUBLISHED"
-  },
-  {
-    id: 2,
-    courseCode: "INT1408",
-    courseName: "Cơ sở dữ liệu",
-    groupCode: "04",
-    classCodes: "D24CNTT02",
-    examDate: "2026-06-16",
-    examShift: "Ca 2",
-    examTime: "10:00 - 12:00",
-    roomCode: "105-A3",
-    buildingCode: "A3",
-    studentCount: 78,
-    proctorName: "Trần Thị B",
-    status: "ASSIGNED"
-  },
-  {
-    id: 3,
-    courseCode: "INT1306",
-    courseName: "Cấu trúc dữ liệu và giải thuật",
-    groupCode: "02",
-    classCodes: "D24ATTT01",
-    examDate: "2026-06-17",
-    examShift: "Ca 3",
-    examTime: "13:30 - 15:30",
-    roomCode: "",
-    buildingCode: "",
-    studentCount: 52,
-    proctorName: "",
-    status: "UNASSIGNED"
-  },
-  {
-    id: 4,
-    courseCode: "INT1310",
-    courseName: "Mạng máy tính",
-    groupCode: "03",
-    classCodes: "D24CNTT03",
-    examDate: "2026-06-18",
-    examShift: "Ca 4",
-    examTime: "16:00 - 18:00",
-    roomCode: "404-A3",
-    buildingCode: "A3",
-    studentCount: 80,
-    proctorName: "Lê Văn D",
-    status: "CONFLICT"
-  }
-];
+const getResponseData = (response) => {
+  const payload = response?.data?.data ?? response?.data ?? [];
+  return Array.isArray(payload) ? payload : [];
+};
+
+const settledData = (result) => (result.status === "fulfilled" ? getResponseData(result.value) : []);
+
+const STATUS_LABEL = {
+  DRAFT: "Nhap",
+  SCHEDULED: "Da xep lich",
+  CANCELLED: "Da huy",
+  COMPLETED: "Da hoan thanh",
+};
+
+const STATUS_BADGE = {
+  DRAFT: "bg-amber-100 text-amber-800 border-0",
+  SCHEDULED: "bg-blue-100 text-blue-800 border-0",
+  CANCELLED: "bg-gray-100 text-gray-800 border-0",
+  COMPLETED: "bg-emerald-100 text-emerald-800 border-0",
+};
+
+const formatTimeRange = (exam) => [exam.startTime, exam.endTime]
+  .filter(Boolean)
+  .map((value) => String(value).slice(0, 5))
+  .join(" - ") || "-";
 
 const AdminExamsPage = () => {
-  const [exams, setExams] = useState(mockExams);
-  const [searchTerm, setSearchTerm] = useState("");
-
-  // Live filter categories
+  const [exams, setExams] = useState([]);
   const [semesters, setSemesters] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [classesList, setClassesList] = useState([]);
   const [coursesList, setCoursesList] = useState([]);
   const [classroomsList, setClassroomsList] = useState([]);
   const [lecturersList, setLecturersList] = useState([]);
-  const [loadingFilters, setLoadingFilters] = useState(false);
-
-  // Selected filters
+  const [searchTerm, setSearchTerm] = useState("");
   const [selectedSemester, setSelectedSemester] = useState("all");
   const [selectedDept, setSelectedDept] = useState("all");
   const [selectedClass, setSelectedClass] = useState("all");
@@ -123,346 +63,324 @@ const AdminExamsPage = () => {
   const [selectedRoom, setSelectedRoom] = useState("all");
   const [selectedProctor, setSelectedProctor] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
-
-  // Alert dialog
-  const [isAlertOpen, setIsAlertOpen] = useState(false);
-  const [alertContent, setAlertContent] = useState({ title: "", endpoint: "" });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     let isMounted = true;
-    const fetchExamFilters = async () => {
-      setLoadingFilters(true);
-      try {
-        const [sem, dep, cls, crs, rms, lct] = await Promise.all([
-          httpClient.get("/api/categories/semesters").catch(() => ({ data: [] })),
-          httpClient.get("/api/categories/departments").catch(() => ({ data: [] })),
-          httpClient.get("/api/categories/classes").catch(() => ({ data: [] })),
-          httpClient.get("/api/categories/courses").catch(() => ({ data: [] })),
-          httpClient.get("/api/categories/classrooms").catch(() => ({ data: [] })),
-          httpClient.get("/api/categories/lecturers").catch(() => ({ data: [] }))
-        ]);
-        if (isMounted) {
-          setSemesters(sem.data?.data || sem.data || []);
-          setDepartments(dep.data?.data || dep.data || []);
-          setClassesList(cls.data?.data || cls.data || []);
-          setCoursesList(crs.data?.data || crs.data || []);
-          setClassroomsList(rms.data?.data || rms.data || []);
-          setLecturersList(lct.data?.data || lct.data || []);
-        }
-      } catch (err) {
-        console.error("Lỗi khi tải bộ lọc lịch thi:", err);
-      } finally {
-        if (isMounted) {
-          setLoadingFilters(false);
-        }
-      }
+
+    const loadFilters = async () => {
+      const [sem, dep, cls, crs, rms, lct] = await Promise.allSettled([
+        httpClient.get("/api/categories/semesters"),
+        httpClient.get("/api/categories/departments"),
+        httpClient.get("/api/categories/classes"),
+        httpClient.get("/api/categories/courses"),
+        httpClient.get("/api/categories/classrooms"),
+        httpClient.get("/api/categories/lecturers"),
+      ]);
+      if (!isMounted) return;
+      setSemesters(settledData(sem));
+      setDepartments(settledData(dep));
+      setClassesList(settledData(cls));
+      setCoursesList(settledData(crs));
+      setClassroomsList(settledData(rms));
+      setLecturersList(settledData(lct));
     };
-    fetchExamFilters();
-    return () => { isMounted = false; };
+
+    loadFilters();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  const handleTriggerAction = (title, endpoint) => {
-    setAlertContent({ title, endpoint });
-    setIsAlertOpen(true);
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadExams = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const params = {};
+        if (selectedSemester !== "all") params.semesterId = selectedSemester;
+        if (selectedStatus !== "all") params.status = selectedStatus;
+        const response = await httpClient.get("/api/admin/exams", { params });
+        if (isMounted) setExams(getResponseData(response));
+      } catch (err) {
+        if (isMounted) {
+          setExams([]);
+          setError(err?.response?.data?.message || "Khong the tai lich thi.");
+        }
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    loadExams();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedSemester, selectedStatus]);
+
+  const filteredExams = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    return exams.filter((exam) => {
+      const matchesDept = selectedDept === "all" || String(exam.departmentId) === selectedDept;
+      const matchesClass = selectedClass === "all" || String(exam.classCodes || "").includes(selectedClass);
+      const matchesCourse = selectedCourse === "all" || String(exam.courseId) === selectedCourse;
+      const matchesRoom = selectedRoom === "all" || String(exam.classroomId) === selectedRoom;
+      const matchesProctor = selectedProctor === "all" || String(exam.proctorId || "") === selectedProctor;
+      const searchable = [
+        exam.courseCode,
+        exam.courseName,
+        exam.sectionCode,
+        exam.classCodes,
+        exam.roomCode,
+        exam.roomName,
+        exam.buildingCode,
+        exam.proctorName,
+        exam.examType,
+      ].join(" ").toLowerCase();
+      return matchesDept && matchesClass && matchesCourse && matchesRoom && matchesProctor
+        && (!query || searchable.includes(query));
+    });
+  }, [exams, searchTerm, selectedClass, selectedCourse, selectedDept, selectedProctor, selectedRoom]);
+
+  const summary = useMemo(() => ({
+    total: exams.length,
+    draft: exams.filter((exam) => exam.status === "DRAFT").length,
+    scheduled: exams.filter((exam) => exam.status === "SCHEDULED").length,
+    completed: exams.filter((exam) => exam.status === "COMPLETED").length,
+    cancelled: exams.filter((exam) => exam.status === "CANCELLED").length,
+  }), [exams]);
+
+  const resetFilters = () => {
+    setSearchTerm("");
+    setSelectedSemester("all");
+    setSelectedDept("all");
+    setSelectedClass("all");
+    setSelectedCourse("all");
+    setSelectedRoom("all");
+    setSelectedProctor("all");
+    setSelectedStatus("all");
   };
 
-  const filteredExams = exams.filter((e) => {
-    const matchesSearch = 
-      e.courseCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      e.courseName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      e.classCodes.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      e.roomCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      e.proctorName.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesStatus = selectedStatus === "all" || e.status === selectedStatus;
-    
-    return matchesSearch && matchesStatus;
-  });
-
   return (
-    <div className="p-6 space-y-6">
-      {/* Title */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-6 p-6">
+      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Quản lý lịch thi</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Tra cứu và quản lý lịch thi theo học kỳ, môn học, phòng thi và giám thị
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Quan ly lich thi</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Tra cuu lich thi tu database theo hoc ky, mon hoc, phong thi va giam thi.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            className="bg-blue-600 hover:bg-blue-700 text-white"
-            onClick={() => handleTriggerAction("Import lịch thi Excel", "POST /api/admin/exams/import")}
-          >
-            <Upload className="w-4 h-4 mr-2" /> Import lịch thi
+          <Button disabled className="bg-blue-600 hover:bg-blue-700">
+            <Upload className="mr-2 h-4 w-4" />
+            Import lich thi
           </Button>
-          <Button
-            variant="outline"
-            className="border-blue-200 text-blue-700 hover:bg-blue-50"
-            onClick={() => handleTriggerAction("Tải Excel mẫu", "GET /api/admin/exams/template")}
-          >
-            <FileSpreadsheet className="w-4 h-4 mr-2" /> Xuất mẫu Excel
+          <Button disabled variant="outline">
+            <FileSpreadsheet className="mr-2 h-4 w-4" />
+            Xuat mau Excel
           </Button>
-          <Button
-            variant="ghost"
-            onClick={() => handleTriggerAction("Xuất danh sách lịch thi Excel", "GET /api/admin/exams/export")}
-          >
-            Xuất Excel
-          </Button>
-          <Button
-            variant="ghost"
-            className="p-2"
-            onClick={() => {
-              setSearchTerm("");
-              setSelectedStatus("all");
-            }}
-          >
-            <RefreshCw className="w-4 h-4" />
+          <Button variant="ghost" onClick={resetFilters}>
+            <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {/* Warning Alert Banner */}
-      <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-800 leading-relaxed shadow-sm">
-        <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-        <div>
-          <span className="font-bold">Hệ thống chưa hỗ trợ quản lý lịch thi (Thiếu API):</span> Backend hiện tại không có controller xử lý xếp lịch thi (`/api/admin/exams`). Lịch thi hiển thị dưới đây đang chạy ở chế độ **giả lập**.
-        </div>
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+        {[
+          { label: "Tong lich thi", value: summary.total, color: "text-purple-600 bg-purple-50" },
+          { label: "Nhap", value: summary.draft, color: "text-amber-600 bg-amber-50" },
+          { label: "Da xep lich", value: summary.scheduled, color: "text-blue-600 bg-blue-50" },
+          { label: "Da hoan thanh", value: summary.completed, color: "text-emerald-600 bg-emerald-50" },
+          { label: "Da huy", value: summary.cancelled, color: "text-gray-600 bg-gray-50" },
+        ].map((item) => (
+          <div key={item.label} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+            <span className="text-xs font-medium text-gray-500">{item.label}</span>
+            <span className={`mt-2 block w-max rounded-lg px-2 py-0.5 text-2xl font-bold ${item.color}`}>
+              {item.value}
+            </span>
+          </div>
+        ))}
       </div>
 
-      {/* 7-Selector Filters & Search */}
-      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-          {/* Semester Filter */}
+      <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7">
           <div className="space-y-1">
-            <Label className="text-xs font-semibold text-gray-600">Học kỳ</Label>
+            <Label className="text-xs font-semibold text-gray-600">Hoc ky</Label>
             <Select value={selectedSemester} onValueChange={setSelectedSemester}>
               <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tất cả</SelectItem>
-                {semesters.map((sem) => (
-                  <SelectItem key={sem.id} value={String(sem.id)}>{sem.name}</SelectItem>
+                <SelectItem value="all">Tat ca</SelectItem>
+                {semesters.map((semester) => (
+                  <SelectItem key={semester.id} value={String(semester.id)}>{semester.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-
-          {/* Department Filter */}
           <div className="space-y-1">
             <Label className="text-xs font-semibold text-gray-600">Khoa</Label>
             <Select value={selectedDept} onValueChange={setSelectedDept}>
               <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tất cả</SelectItem>
-                {departments.map((d) => (
-                  <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
+                <SelectItem value="all">Tat ca</SelectItem>
+                {departments.map((department) => (
+                  <SelectItem key={department.id} value={String(department.id)}>
+                    {department.name || department.departmentName || department.departmentCode}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-
-          {/* Class Filter */}
           <div className="space-y-1">
-            <Label className="text-xs font-semibold text-gray-600">Lớp hành chính</Label>
+            <Label className="text-xs font-semibold text-gray-600">Lop hanh chinh</Label>
             <Select value={selectedClass} onValueChange={setSelectedClass}>
               <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tất cả</SelectItem>
-                {classesList.map((c) => (
-                  <SelectItem key={c.id} value={String(c.id)}>{c.className}</SelectItem>
+                <SelectItem value="all">Tat ca</SelectItem>
+                {classesList.map((classItem) => (
+                  <SelectItem key={classItem.id} value={classItem.classCode || classItem.className || String(classItem.id)}>
+                    {classItem.className || classItem.classCode}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-
-          {/* Course Filter */}
           <div className="space-y-1">
-            <Label className="text-xs font-semibold text-gray-600">Môn học</Label>
+            <Label className="text-xs font-semibold text-gray-600">Mon hoc</Label>
             <Select value={selectedCourse} onValueChange={setSelectedCourse}>
               <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tất cả</SelectItem>
-                {coursesList.map((crs) => (
-                  <SelectItem key={crs.id} value={String(crs.id)}>{crs.name}</SelectItem>
+                <SelectItem value="all">Tat ca</SelectItem>
+                {coursesList.map((course) => (
+                  <SelectItem key={course.id} value={String(course.id)}>{course.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-
-          {/* Exam Room Filter */}
           <div className="space-y-1">
-            <Label className="text-xs font-semibold text-gray-600">Phòng thi</Label>
+            <Label className="text-xs font-semibold text-gray-600">Phong thi</Label>
             <Select value={selectedRoom} onValueChange={setSelectedRoom}>
               <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tất cả</SelectItem>
-                {classroomsList.map((rm) => (
-                  <SelectItem key={rm.id} value={String(rm.id)}>{rm.roomName || rm.roomNumber}</SelectItem>
+                <SelectItem value="all">Tat ca</SelectItem>
+                {classroomsList.map((room) => (
+                  <SelectItem key={room.id} value={String(room.id)}>{room.roomName || room.roomNumber}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-
-          {/* Proctor Filter */}
           <div className="space-y-1">
-            <Label className="text-xs font-semibold text-gray-600">Giám thị</Label>
+            <Label className="text-xs font-semibold text-gray-600">Giam thi</Label>
             <Select value={selectedProctor} onValueChange={setSelectedProctor}>
               <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tất cả</SelectItem>
-                {lecturersList.map((l) => (
-                  <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>
+                <SelectItem value="all">Tat ca</SelectItem>
+                {lecturersList.map((lecturer) => (
+                  <SelectItem key={lecturer.id} value={String(lecturer.id)}>{lecturer.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-
-          {/* Status Filter */}
           <div className="space-y-1">
-            <Label className="text-xs font-semibold text-gray-600">Trạng thái</Label>
+            <Label className="text-xs font-semibold text-gray-600">Trang thai</Label>
             <Select value={selectedStatus} onValueChange={setSelectedStatus}>
               <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tất cả</SelectItem>
-                <SelectItem value="UNASSIGNED">Chưa xếp phòng</SelectItem>
-                <SelectItem value="ASSIGNED">Đã xếp phòng</SelectItem>
-                <SelectItem value="CONFLICT">Có xung đột</SelectItem>
-                <SelectItem value="PUBLISHED">Đã công bố</SelectItem>
-                <SelectItem value="CANCELLED">Đã hủy</SelectItem>
+                <SelectItem value="all">Tat ca</SelectItem>
+                {Object.entries(STATUS_LABEL).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
         </div>
 
-        {/* Search Bar */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <Input
-            placeholder="Tìm theo mã môn, tên môn, lớp, phòng thi, giám thị..."
+            placeholder="Tim theo ma mon, ten mon, lop, phong thi, giam thi..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-9 h-9 text-xs"
+            onChange={(event) => setSearchTerm(event.target.value)}
+            className="h-9 pl-9 text-xs"
           />
         </div>
       </div>
 
-      {/* Main Table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader className="bg-gray-50/50">
-              <TableRow>
-                <TableHead className="text-xs font-bold text-gray-700">Mã môn</TableHead>
-                <TableHead className="text-xs font-bold text-gray-700">Tên môn học</TableHead>
-                <TableHead className="text-xs font-bold text-gray-700">Nhóm/Tổ</TableHead>
-                <TableHead className="text-xs font-bold text-gray-700">Lớp hành chính</TableHead>
-                <TableHead className="text-xs font-bold text-gray-700 font-semibold">Ngày thi</TableHead>
-                <TableHead className="text-xs font-bold text-gray-700">Ca thi</TableHead>
-                <TableHead className="text-xs font-bold text-gray-700">Thời gian</TableHead>
-                <TableHead className="text-xs font-bold text-gray-700">Phòng thi</TableHead>
-                <TableHead className="text-xs font-bold text-gray-700">Tòa nhà</TableHead>
-                <TableHead className="text-xs font-bold text-gray-700">Số SV</TableHead>
-                <TableHead className="text-xs font-bold text-gray-700">Giám thị</TableHead>
-                <TableHead className="text-xs font-bold text-gray-700">Trạng thái</TableHead>
-                <TableHead className="text-xs font-bold text-gray-750 text-right">Thao tác</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredExams.length > 0 ? (
-                filteredExams.map((ex) => (
-                  <TableRow key={ex.id} className="hover:bg-gray-50/40">
-                    <TableCell className="font-semibold text-xs text-gray-900">{ex.courseCode}</TableCell>
-                    <TableCell className="text-xs text-gray-700">{ex.courseName}</TableCell>
-                    <TableCell className="text-xs text-gray-600 font-medium">{ex.groupCode}</TableCell>
-                    <TableCell className="text-xs text-gray-600">{ex.classCodes}</TableCell>
-                    <TableCell className="text-xs text-gray-600 font-medium">{ex.examDate}</TableCell>
-                    <TableCell className="text-xs text-gray-600">{ex.examShift}</TableCell>
-                    <TableCell className="text-xs text-gray-500">{ex.examTime}</TableCell>
-                    <TableCell className="text-xs text-blue-600 font-semibold">{ex.roomCode || <span className="italic text-gray-400 font-normal">Chưa xếp</span>}</TableCell>
-                    <TableCell className="text-xs text-gray-500">{ex.buildingCode || "-"}</TableCell>
-                    <TableCell className="text-xs text-gray-600 font-medium">{ex.studentCount}</TableCell>
-                    <TableCell className="text-xs text-gray-600">{ex.proctorName || <span className="italic text-gray-400">Chưa xếp</span>}</TableCell>
+      {loading && (
+        <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
+          <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-blue-500" />
+          <p className="text-sm font-semibold text-gray-600">Dang tai lich thi...</p>
+        </div>
+      )}
+
+      {!loading && error && (
+        <div className="rounded-xl border border-red-100 bg-red-50 p-8 text-center">
+          <AlertCircle className="mx-auto mb-3 h-8 w-8 text-red-400" />
+          <p className="text-sm font-bold text-red-700">{error}</p>
+        </div>
+      )}
+
+      {!loading && !error && (
+        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader className="bg-gray-50/50">
+                <TableRow>
+                  <TableHead>Ma mon</TableHead>
+                  <TableHead>Ten mon hoc</TableHead>
+                  <TableHead>Lop</TableHead>
+                  <TableHead>Ngay thi</TableHead>
+                  <TableHead>Thoi gian</TableHead>
+                  <TableHead>Phong thi</TableHead>
+                  <TableHead>Toa nha</TableHead>
+                  <TableHead>So SV</TableHead>
+                  <TableHead>Giam thi</TableHead>
+                  <TableHead>Trang thai</TableHead>
+                  <TableHead className="text-right">Thao tac</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredExams.length > 0 ? filteredExams.map((exam) => (
+                  <TableRow key={exam.id} className="hover:bg-gray-50/40">
+                    <TableCell className="text-xs font-semibold text-gray-900">{exam.courseCode}</TableCell>
+                    <TableCell className="text-xs text-gray-700">{exam.courseName}</TableCell>
+                    <TableCell className="text-xs text-gray-600">{exam.classCodes || exam.sectionCode || "-"}</TableCell>
+                    <TableCell className="text-xs font-medium text-gray-600">{String(exam.examDate || "-")}</TableCell>
+                    <TableCell className="text-xs text-gray-500">{formatTimeRange(exam)}</TableCell>
+                    <TableCell className="text-xs font-semibold text-blue-600">{exam.roomCode || exam.roomName || "-"}</TableCell>
+                    <TableCell className="text-xs text-gray-500">{exam.buildingCode || "-"}</TableCell>
+                    <TableCell className="text-xs font-medium text-gray-600">{exam.studentCount ?? "-"}</TableCell>
+                    <TableCell className="text-xs text-gray-600">{exam.proctorName || "-"}</TableCell>
                     <TableCell>
-                      <Badge className={
-                        ex.status === "PUBLISHED" ? "bg-emerald-100 text-emerald-800 border-0" :
-                        ex.status === "ASSIGNED" ? "bg-blue-100 text-blue-800 border-0" :
-                        ex.status === "UNASSIGNED" ? "bg-amber-100 text-amber-800 border-0" :
-                        ex.status === "CONFLICT" ? "bg-red-100 text-red-800 border-0" :
-                        "bg-gray-100 text-gray-800 border-0"
-                      }>
-                        {ex.status === "PUBLISHED" ? "Đã công bố" :
-                         ex.status === "ASSIGNED" ? "Đã xếp phòng" :
-                         ex.status === "UNASSIGNED" ? "Chưa xếp phòng" :
-                         ex.status === "CONFLICT" ? "Có xung đột" : "Đã hủy"}
+                      <Badge className={STATUS_BADGE[exam.status] || "bg-gray-100 text-gray-800 border-0"}>
+                        {STATUS_LABEL[exam.status] || exam.status}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="xs"
-                          className="h-7 text-xs text-gray-500 hover:text-blue-600"
-                          onClick={() => handleTriggerAction(`Xem chi tiết lịch thi: ${ex.courseName}`, `GET /api/admin/exams/${ex.id}`)}
-                        >
-                          Chi tiết
+                        <Button variant="ghost" size="xs" disabled title="Chua co API chi tiet lich thi">
+                          <Eye className="h-3.5 w-3.5" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="xs"
-                          className="h-7 text-xs text-gray-500 hover:text-blue-600"
-                          onClick={() => handleTriggerAction(`Sửa lịch thi: ${ex.courseName}`, `PUT /api/admin/exams/${ex.id}`)}
-                        >
-                          Sửa
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="xs"
-                          className="h-7 text-xs text-gray-500 hover:text-blue-600"
-                          onClick={() => handleTriggerAction(`Xem trạng thái phòng thi: ${ex.roomCode}`, `GET /api/categories/classrooms/${ex.roomCode}`)}
-                        >
-                          Xem phòng
+                        <Button variant="ghost" size="xs" disabled title="Chua co API cap nhat lich thi">
+                          <Edit2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={13} className="h-32 text-center text-gray-400 italic">
-                    Không tìm thấy lịch thi nào trùng khớp.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                )) : (
+                  <TableRow>
+                    <TableCell colSpan={11} className="h-32 text-center text-sm text-gray-400">
+                      Khong co lich thi phu hop.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </div>
-      </div>
-
-      {/* Developer Alert Modal */}
-      <Dialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-amber-700">
-              <AlertTriangle className="h-5.5 w-5.5 text-amber-600" />
-              Chức năng đang phát triển
-            </DialogTitle>
-            <DialogDescription className="pt-2 leading-relaxed text-sm">
-              Hành động <strong className="text-gray-900">"{alertContent.title}"</strong> chưa thể hoàn thành vì hệ thống backend **thiếu API** sau:
-              <div className="mt-3 p-3 bg-gray-50 font-mono text-xs rounded border border-gray-200 text-gray-700 break-all select-all">
-                {alertContent.endpoint}
-              </div>
-              <p className="mt-3 text-gray-500 text-xs">
-                Vui lòng cấu hình API endpoint này ở phía backend Spring Boot của dự án UCAS để kích hoạt tương tác lưu trữ lịch thi thực tế.
-              </p>
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-4">
-            <Button onClick={() => setIsAlertOpen(false)} className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto">
-              Đồng ý
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      )}
     </div>
   );
 };
