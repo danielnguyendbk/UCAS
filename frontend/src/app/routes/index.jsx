@@ -12,6 +12,7 @@ import AdminSettingsPage from "@/features/admin/pages/SettingsPage";
 import AdminSectionsPage from "@/features/admin/pages/SectionsPage";
 import AdminUserManagementPage from "@/features/admin/pages/UserManagementPage";
 import AdminWeeklySchedulePage from "@/features/admin/pages/WeeklySchedulePage";
+import AdminAutoAssignmentPage from "@/features/admin/pages/AutoAssignmentPage";
 import AdminTimetableApprovalPage from "@/features/admin/pages/TimetableApprovalPage";
 import AdminCalendarBlocksPage from "@/features/admin/pages/CalendarBlocksPage";
 import AdminExamsPage from "@/features/admin/pages/ExamsPage";
@@ -90,6 +91,7 @@ const appRouter = createBrowserRouter([
       { path: "admin/lecturers", Component: AdminLecturersPage },
       { path: "admin/sections", Component: AdminSectionsPage },
       { path: "admin/timetable", Component: AdminWeeklySchedulePage }, // shared weekly schedule viewer
+      { path: "admin/auto-assignment", Component: AdminAutoAssignmentPage },
       { path: "admin/timetable-approval", Component: AdminTimetableApprovalPage },
       { path: "admin/calendar-blocks", Component: AdminCalendarBlocksPage },
       { path: "admin/exams", Component: AdminExamsPage },

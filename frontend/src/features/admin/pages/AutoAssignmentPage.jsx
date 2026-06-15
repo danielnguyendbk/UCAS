@@ -1,4 +1,3 @@
-import { AutoAssignmentPage } from "@/app/pages/AutoAssignmentPage";
-export {
-  AutoAssignmentPage as default
-};
+import StaffAutoAssignmentPage from "@/features/staff/pages/StaffAutoAssignmentPage";
+
+export default StaffAutoAssignmentPage;

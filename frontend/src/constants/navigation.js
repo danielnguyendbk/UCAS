@@ -18,7 +18,7 @@ const ROLE_LABELS = {
   Admin: "Quản trị viên",
   Staff: "Giáo vụ",
   Lecturer: "Giảng viên",
-  Employee: "Nhân viên",
+  Employee: "Nhân viên CSVC",
   Student: "Sinh viên",
 };
 
@@ -30,7 +30,6 @@ const ROLE_BADGE_CLASSES = {
   Student: "bg-green-100 text-green-700",
 };
 
-/** Admin only: collapsible sidebar groups (type: "group"). */
 const NAVIGATION_BY_ROLE = {
   Admin: [
     {
@@ -41,7 +40,7 @@ const NAVIGATION_BY_ROLE = {
       children: [
         {
           id: "admin-dashboard",
-          label: "Tổng quan",
+          label: "Bảng điều khiển",
           path: APP_ROUTES.adminDashboard,
         },
       ],
@@ -64,18 +63,23 @@ const NAVIGATION_BY_ROLE = {
       icon: Calendar,
       children: [
         {
-          id: "admin-timetable",
+          id: "admin-timetable-view",
           label: "Thời khóa biểu toàn trường",
           path: APP_ROUTES.adminTimetable,
         },
         {
+          id: "admin-auto-assignment",
+          label: "Phân phòng tự động",
+          path: APP_ROUTES.adminAutoAssignment,
+        },
+        {
           id: "admin-timetable-approval",
-          label: "Duyệt lịch",
+          label: "Duyệt và công bố lịch",
           path: APP_ROUTES.adminTimetableApproval,
         },
         {
           id: "admin-calendar-blocks",
-          label: "Ngày nghỉ / Lịch học vụ",
+          label: "Ngày nghỉ và lịch học vụ",
           path: APP_ROUTES.adminCalendarBlocks,
         },
       ],
@@ -89,7 +93,7 @@ const NAVIGATION_BY_ROLE = {
         { id: "admin-rooms", label: "Phòng học", path: APP_ROUTES.adminRooms },
         {
           id: "admin-facility-staff",
-          label: "Nhân viên CSVC",
+          label: "Nhân viên cơ sở vật chất",
           path: APP_ROUTES.adminFacilityStaff,
         },
       ],
@@ -112,14 +116,18 @@ const NAVIGATION_BY_ROLE = {
         { id: "admin-reports", label: "Báo cáo", path: APP_ROUTES.adminReports },
         {
           id: "admin-users",
-          label: "Quản lý tài khoản",
+          label: "Tài khoản người dùng",
           path: APP_ROUTES.adminUsers,
+        },
+        {
+          id: "admin-settings",
+          label: "Cài đặt hệ thống",
+          path: APP_ROUTES.adminSettings,
         },
       ],
     },
   ],
 
-  /** Flat sidebar — no collapsible groups. */
   Staff: [
     {
       id: "staff-dashboard",
@@ -175,13 +183,13 @@ const NAVIGATION_BY_ROLE = {
     {
       id: "facility-issues",
       icon: Building2,
-      label: "Lịch sử / sự cố sửa chữa",
+      label: "Lịch sử sự cố sửa chữa",
       path: APP_ROUTES.facilityIssues,
     },
     {
       id: "facility-open-close",
       icon: Key,
-      label: "Mở / khóa phòng",
+      label: "Mở khóa phòng",
       path: APP_ROUTES.facilityOpenClose,
     },
     {
