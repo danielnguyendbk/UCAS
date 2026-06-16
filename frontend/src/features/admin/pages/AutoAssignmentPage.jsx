@@ -1,3 +1,4 @@
-import StaffAutoAssignmentPage from "@/features/staff/pages/StaffAutoAssignmentPage";
-
-export default StaffAutoAssignmentPage;
+import { AutoAssignmentPage } from "@/app/pages/AutoAssignmentPage";
+export {
+  AutoAssignmentPage as default
+};

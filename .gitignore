@@ -67,3 +67,31 @@ venv/
 # Backend runtime files
 *.sqlite3
 *.db
+
+# Backend build output
+backend/target/
+target/
+
+# Frontend build output / dependencies
+frontend/node_modules/
+frontend/dist/
+node_modules/
+dist/
+
+# Local secrets / env
+.env
+.env.*
+*.env
+backend/.env
+frontend/.env
+frontend/.env.local
+backend/src/main/resources/application-local.yml
+application-local.yml
+
+# Temporary backup
+trash/backend/
+
+
+backend/target/
+target/
+*.class
