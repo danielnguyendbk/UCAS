@@ -2,7 +2,7 @@ spring:
   application:
     name: qlphonghoc
   datasource:
-    url: jdbc:mysql://localhost:3306/QLPHONGHOC1?useSSL=false&serverTimezone=Asia/Bangkok&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://localhost:3306/QLPHONGHOC?useSSL=false&serverTimezone=Asia/Bangkok&allowPublicKeyRetrieval=true
     username: daniel
     password: Thai06112005
   jpa:
