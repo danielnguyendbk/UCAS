@@ -51,7 +51,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.HEAD, "/api/maintenance-files/**").permitAll()
                         .requestMatchers("/api/auth/me", "/api/auth/change-password").authenticated()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/api/staff/class-sections/**").hasAnyRole("STAFF", "ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/staff/class-sections", "/api/staff/class-sections/**").hasAnyRole("STAFF", "ADMIN", "FACILITY")
                         .requestMatchers("/api/staff/**").hasAnyRole("STAFF", "ADMIN")
                         .requestMatchers("/api/lecturer/**").hasRole("LECTURER")
                         .requestMatchers("/api/student/**").hasRole("STUDENT")

@@ -1,21 +1,12 @@
-import { useState, useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  Search,
-  Download,
-  Printer,
-  RefreshCw,
-  AlertTriangle,
-  Info,
-  ChevronLeft,
-  ChevronRight,
-  AlertCircle,
-  LayoutGrid,
-  List,
-  X,
+  Building2,
+  CalendarDays,
+  DoorOpen,
+  Layers3,
+  MapPin,
+  Users,
 } from "lucide-react";
-import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
-import { Badge } from "../components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -23,844 +14,756 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../components/ui/table";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { httpClient } from "../../services/httpClient";
-import { RoomTimetableGridView } from "../components/RoomTimetableGridView";
 
-// ─────────────────────────────────────────────
-// Helpers – Status
-// ─────────────────────────────────────────────
-const STATUS_CONFIG = {
-  NO_SCHEDULE:      { label: "Chưa có lịch",     cls: "bg-orange-50 text-orange-700 border-orange-200" },
-  UNASSIGNED:       { label: "Chưa phân phòng",   cls: "bg-amber-50 text-amber-700 border-amber-200" },
-  ASSIGNED:         { label: "Đã phân phòng",     cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  PENDING_APPROVAL: { label: "Chờ duyệt",         cls: "bg-purple-50 text-purple-700 border-purple-200" },
-  PUBLISHED:        { label: "Đã công bố",        cls: "bg-green-50 text-green-700 border-green-200" },
-  CONFLICT:         { label: "Có xung đột",       cls: "bg-red-50 text-red-700 border-red-200" },
-  CANCELLED:        { label: "Đã hủy",            cls: "bg-gray-100 text-gray-500 border-gray-200" },
-  ACTIVE:           { label: "Hoạt động",         cls: "bg-blue-50 text-blue-700 border-blue-200" },
-  COMPLETED:        { label: "Hoàn tất",          cls: "bg-teal-50 text-teal-700 border-teal-200" },
-};
+const DAY_CODES = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+const PERIODS = Array.from({ length: 16 }, (_, index) => index + 1);
 
-const getStatusCfg = (status) =>
-  STATUS_CONFIG[status] ?? { label: status || "---", cls: "bg-gray-100 text-gray-600 border-gray-200" };
-
-// ─────────────────────────────────────────────
-// Helpers – Day label
-// ─────────────────────────────────────────────
 const DAY_LABELS = {
-  MON: "Thứ 2", TUE: "Thứ 3", WED: "Thứ 4",
-  THU: "Thứ 5", FRI: "Thứ 6", SAT: "Thứ 7", SUN: "CN",
-};
-const getDayLabel = (day) => DAY_LABELS[day] || day || "---";
-
-// ─────────────────────────────────────────────
-// Helpers – Section group derivation
-// ─────────────────────────────────────────────
-const deriveGroup = (sectionCode, courseCode) => {
-  if (!sectionCode) return "---";
-  if (courseCode && sectionCode.startsWith(courseCode)) {
-    const suffix = sectionCode.slice(courseCode.length).replace(/^[-.]/, "");
-    return suffix || sectionCode;
-  }
-  return sectionCode;
+  MON: "Thứ 2",
+  TUE: "Thứ 3",
+  WED: "Thứ 4",
+  THU: "Thứ 5",
+  FRI: "Thứ 6",
+  SAT: "Thứ 7",
+  SUN: "Chủ Nhật",
 };
 
-// ─────────────────────────────────────────────
-// Helpers – Course code extraction from classCode
-// classCode patterns:
-//   INT1334-01           -> courseCode=INT1334, group=01
-//   INT1303-04-03        -> courseCode=INT1303, group=04-03
-//   CS101.L11            -> courseCode=CS101, group=L11   (legacy)
-// ─────────────────────────────────────────────
+const STATUS_META = {
+  ASSIGNED: {
+    label: "Đã phân phòng",
+    dot: "bg-sky-500",
+    block: "border-sky-200 bg-sky-50 text-sky-950 hover:bg-sky-100",
+    accent: "border-l-sky-500",
+  },
+  UNASSIGNED: {
+    label: "Chưa phân phòng",
+    dot: "bg-amber-500",
+    block: "border-amber-200 bg-amber-50 text-amber-950 hover:bg-amber-100",
+    accent: "border-l-amber-500",
+  },
+  CONFLICT: {
+    label: "Có xung đột",
+    dot: "bg-red-500",
+    block: "border-red-200 bg-red-50 text-red-950 hover:bg-red-100",
+    accent: "border-l-red-500",
+  },
+  PUBLISHED: {
+    label: "Đã công bố",
+    dot: "bg-emerald-500",
+    block: "border-emerald-200 bg-emerald-50 text-emerald-950 hover:bg-emerald-100",
+    accent: "border-l-emerald-500",
+  },
+};
+
+const VIEW_MODES = [
+  { value: "room", label: "Theo phòng" },
+  { value: "section", label: "Theo lớp học phần" },
+  { value: "lecturer", label: "Theo giảng viên" },
+];
+
+const DEFAULT_SEMESTER_LABEL = "Học kỳ 2 - Năm học 2025 - 2026";
+
+const unwrapList = (response) => {
+  const payload = response?.data ?? response;
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  return [];
+};
+
+const normalize = (value) => String(value || "").trim().toUpperCase();
+
+const formatDate = (value) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+  }).format(date);
+};
+
+const addDays = (date, days) => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
+const startOfMonday = (date) => {
+  const value = new Date(date);
+  const day = value.getDay();
+  const offset = day === 0 ? -6 : 1 - day;
+  value.setHours(0, 0, 0, 0);
+  return addDays(value, offset);
+};
+
+const toDate = (value) => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const getSemesterLabel = (semester) => {
+  if (!semester) return DEFAULT_SEMESTER_LABEL;
+  const name = semester.name || semester.semesterName || DEFAULT_SEMESTER_LABEL;
+  const year = semester.academicYear || semester.academicYearName || "";
+  return year && !name.includes(year) ? `${name} - Năm học ${year}` : name;
+};
+
+const buildWeekOptions = (semester) => {
+  const start = toDate(semester?.startDate);
+  const end = toDate(semester?.endDate);
+  const baseStart = start ? startOfMonday(start) : startOfMonday(new Date());
+  const totalWeeks =
+    start && end
+      ? Math.max(1, Math.ceil((end.getTime() - baseStart.getTime() + 1) / (7 * 24 * 60 * 60 * 1000)))
+      : 20;
+
+  return Array.from({ length: Math.min(Math.max(totalWeeks, 16), 30) }, (_, index) => {
+    const weekNo = index + 1;
+    const weekStart = addDays(baseStart, index * 7);
+    const weekEnd = addDays(weekStart, 6);
+    return {
+      value: String(weekNo),
+      weekNo,
+      start: weekStart,
+      end: weekEnd,
+      label: `Tuần ${weekNo} (${formatDate(weekStart)} - ${formatDate(weekEnd)})`,
+    };
+  });
+};
+
+const resolveCurrentWeek = (weekOptions) => {
+  if (weekOptions.length === 0) return "1";
+  const now = new Date();
+  const found = weekOptions.find((week) => now >= week.start && now <= week.end);
+  if (found) return found.value;
+  if (now < weekOptions[0].start) return weekOptions[0].value;
+  return weekOptions[weekOptions.length - 1].value;
+};
+
+const cleanRoomName = (roomCode) => {
+  const value = String(roomCode || "").trim();
+  const match = value.match(/^([A-Z]+)-([A-Z]+\d+)$/i);
+  if (match) return match[2].toUpperCase();
+  return value || "Chưa phân phòng";
+};
+
+const getBuildingFromRoom = (roomCode) => {
+  const value = String(roomCode || "");
+  if (!value || value === "---") return "";
+  return value.includes("-") ? value.split("-")[0] : value.charAt(0);
+};
+
+const getRoomCodeFromClassroom = (room) => {
+  const buildingCode = room.buildingCode || room.building_code || "";
+  const roomNumber = room.roomNumber || room.room_number || room.roomName || room.room_name || "";
+  if (!buildingCode || !roomNumber) return "";
+  return `${buildingCode}-${roomNumber}`;
+};
+
 const extractCourseAndGroup = (classCode, courseCodeHint) => {
   if (!classCode) return { courseCode: courseCodeHint || "---", sectionGroup: "---" };
-
-  // If backend already sent courseCode separately, use it
   if (courseCodeHint) {
-    return {
-      courseCode: courseCodeHint,
-      sectionGroup: deriveGroup(classCode, courseCodeHint),
-    };
+    const suffix = String(classCode).replace(courseCodeHint, "").replace(/^[.\-L]+/, "");
+    return { courseCode: courseCodeHint, sectionGroup: suffix || classCode };
   }
-
-  // Legacy pattern: COURSECODE.LGROUP
-  if (classCode.includes(".L")) {
-    const [cc, grp] = classCode.split(".L");
-    return { courseCode: cc, sectionGroup: grp || classCode };
-  }
-
-  // Pattern: LETTERS+DIGITS-group  e.g. INT1334-01
-  const match = classCode.match(/^([A-Z]+\d+)[-.](.+)$/);
+  const match = String(classCode).match(/^([A-Z]+\d+)(?:\.L|[-.])(.+)$/i);
   if (match) return { courseCode: match[1], sectionGroup: match[2] };
-
   return { courseCode: classCode, sectionGroup: "---" };
 };
 
-// ─────────────────────────────────────────────
-// Map raw API item → display row
-// ─────────────────────────────────────────────
-const mapItem = (item) => {
-  const { courseCode, sectionGroup } = extractCourseAndGroup(
-    item.classCode,
-    item.courseCode,
-  );
-  const room = item.room || "---";
-  const buildingCode = room !== "---" ? room.split("-")[0] : "---";
+const getDisplayStatus = (item) => {
+  const allocation = normalize(item.allocationStatus);
+  const section = normalize(item.sectionStatus);
+  if (allocation === "CONFLICT") return "CONFLICT";
+  if (allocation === "UNASSIGNED" || allocation === "NO_SCHEDULE") return "UNASSIGNED";
+  if (allocation === "PUBLISHED" || section === "PUBLISHED") return "PUBLISHED";
+  return "ASSIGNED";
+};
+
+const mapScheduleItem = (item) => {
+  const { courseCode, sectionGroup } = extractCourseAndGroup(item.classCode, item.courseCode);
+  const room = item.room || "";
+  const slotStart = Number(item.slotStart ?? item.slotStartNo ?? item.slot ?? 0);
+  const slotEnd = Number(item.slotEnd ?? item.slotEndNo ?? item.slot ?? slotStart);
 
   return {
-    _raw: item,
     id: item.id,
     courseCode,
     sectionGroup,
-    courseName: item.courseName || item.name || "---",
-    classCodes: item.classCodes || item.classNames || item.className || "---",
-    lecturer: item.lecturerName || "---",
-    students: item.studentCount ?? 0,
-    department: item.departmentCode || item.facultyCode || "---",
-    day: getDayLabel(item.dayCode || item.day),
-    dayCode: item.dayCode || item.day || "",
-    slotLabel:
-      item.slotStart && item.slotEnd
-        ? `Tiết ${item.slotStart}–${item.slotEnd}`
-        : item.schedule || "---",
-    timeLabel: item.schedule || "---",
-    weekLabel: item.fromWeekNo && item.toWeekNo
-      ? `Tuần ${item.fromWeekNo}–${item.toWeekNo}`
-      : item.weekNo
-      ? `Tuần ${item.weekNo}`
-      : "---",
+    courseName: item.courseName || item.name || "Chưa có tên môn",
+    classCode: item.classCode || "",
+    classCodes: item.classCodes || item.classNames || item.className || "",
+    lecturer: item.lecturerName || "Chưa phân công",
     room,
-    building: item.buildingCode || item.buildingName || buildingCode,
-    allocationStatus: item.allocationStatus || "NO_SCHEDULE",
-    sectionStatus: item.sectionStatus || item.status || "ACTIVE",
+    roomLabel: cleanRoomName(room),
+    building: item.buildingCode || getBuildingFromRoom(room),
+    dayCode: item.dayCode || item.day || "",
+    slotStart,
+    slotEnd: Math.max(slotEnd, slotStart),
     semesterId: item.semesterId,
-    lecturerId: item.lecturerId,
-    slotStartId: item.slotStartId ?? null,
-    slotEndId: item.slotEndId ?? null,
-    slotStart: item.slotStart ?? null,
-    slotEnd: item.slotEnd ?? null,
+    status: getDisplayStatus(item),
+    fromWeekNo: item.fromWeekNo ?? item.from_week_no ?? null,
+    toWeekNo: item.toWeekNo ?? item.to_week_no ?? null,
   };
 };
 
-// ─────────────────────────────────────────────
-// Placeholder modal
-// ─────────────────────────────────────────────
-const PlaceholderModal = ({ title, onClose }) => (
-  <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md border border-gray-100">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-        <div className="flex items-center gap-2">
-          <Info className="w-5 h-5 text-blue-500" />
-          <h3 className="font-semibold text-gray-800">{title}</h3>
+const getSectionsEndpoint = (backendRole) =>
+  backendRole === "ADMIN" ? "/api/admin/class-sections" : "/api/staff/class-sections";
+
+const isInSelectedWeek = (item, selectedWeek) => {
+  const weekNo = Number(selectedWeek);
+  if (!Number.isFinite(weekNo)) return true;
+  const fromWeek = Number(item.fromWeekNo || 1);
+  const toWeek = Number(item.toWeekNo || 999);
+  return weekNo >= fromWeek && weekNo <= toWeek;
+};
+
+const Toggle = ({ checked, onChange, label }) => (
+  <button
+    type="button"
+    onClick={() => onChange(!checked)}
+    className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50"
+    aria-pressed={checked}
+  >
+    <span
+      className={`relative h-5 w-9 rounded-full transition ${
+        checked ? "bg-blue-600" : "bg-slate-300"
+      }`}
+    >
+      <span
+        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${
+          checked ? "left-4" : "left-0.5"
+        }`}
+      />
+    </span>
+    <span className="whitespace-nowrap">{label}</span>
+  </button>
+);
+
+const LoadingSkeleton = () => (
+  <div className="space-y-4">
+    {[0, 1].map((index) => (
+      <div key={index} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="mb-4 h-5 w-40 animate-pulse rounded bg-slate-200" />
+        <div className="grid grid-cols-8 gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200">
+          {Array.from({ length: 56 }, (_, cell) => (
+            <div key={cell} className="h-10 animate-pulse bg-slate-50" />
+          ))}
         </div>
-        <button
-          onClick={onClose}
-          className="text-gray-400 hover:text-gray-600 rounded-full p-1 hover:bg-gray-100"
-        >
-          <X className="w-4 h-4" />
-        </button>
       </div>
-      <div className="px-5 py-6 text-center">
-        <div className="w-14 h-14 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
-          <Info className="w-7 h-7 text-blue-400" />
-        </div>
-        <p className="text-sm font-medium text-gray-700 mb-1">Chức năng đang phát triển</p>
-        <p className="text-xs text-gray-500 leading-relaxed">
-          Chức năng <strong>"{title}"</strong> đang được phát triển theo lộ trình nghiệp vụ mới và sẽ sớm sẵn sàng trong phiên bản kế tiếp.
-        </p>
-      </div>
-      <div className="px-5 pb-4 flex justify-center">
-        <Button size="sm" variant="outline" onClick={onClose} className="px-6">
-          Đóng
-        </Button>
-      </div>
-    </div>
+    ))}
   </div>
 );
 
-// ─────────────────────────────────────────────
-// Main page
-// ─────────────────────────────────────────────
-export const WeeklySchedulePage = () => {
-  const { user } = useAuth();
-  const role = user?.role || "Admin"; // Admin | Staff | Employee (Facility)
-  const isFacility = role === "Employee" || role === "Facility";
-  const isAdminOrStaff = role === "Admin" || role === "Staff";
+const EmptyState = () => (
+  <div className="rounded-lg border border-dashed border-slate-300 bg-white px-6 py-14 text-center shadow-sm">
+    <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+      <CalendarDays className="h-6 w-6" />
+    </div>
+    <h3 className="text-base font-bold text-slate-900">Không có lịch phù hợp với bộ lọc hiện tại</h3>
+    <p className="mt-2 text-sm text-slate-500">
+      Hãy đổi tuần học, tòa nhà hoặc phòng học để xem lịch khác.
+    </p>
+  </div>
+);
 
-  const [rows, setRows] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [semestersList, setSemestersList] = useState([]);
-  const [lecturersList, setLecturersList] = useState([]);
-  const [classesList, setClassesList] = useState([]);
-  const [departmentsList, setDepartmentsList] = useState([]);
-  const [timeSlotsList, setTimeSlotsList] = useState([]);
-
-  // Filters
-  const [search, setSearch] = useState("");
-  const [filterSemester, setFilterSemester] = useState("all");
-  const [filterWeek, setFilterWeek] = useState("all");
-  const [filterDay, setFilterDay] = useState("all");
-  const [filterDepartment, setFilterDepartment] = useState("all");
-  const [filterClass, setFilterClass] = useState("all");
-  const [filterLecturer, setFilterLecturer] = useState("all");
-  const [filterBuilding, setFilterBuilding] = useState("all");
-  const [filterRoom, setFilterRoom] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
-
-  // UI
-  const [viewMode, setViewMode] = useState(isFacility ? "grid" : "list"); // "list" | "grid"
-  const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 10;
-  const [placeholderModal, setPlaceholderModal] = useState({ open: false, title: "" });
-
-  // ── Fetch ─────────────────────────────────
-  useEffect(() => {
-    fetchAll();
-  }, []);
-
-  const fetchAll = async () => {
-    setIsLoading(true);
-    try {
-      const [sectionsRes, semRes, lecRes, classRes, depRes, slotsRes] = await Promise.allSettled([
-        httpClient.get("/api/admin/class-sections"),
-        httpClient.get("/api/categories/semesters"),
-        httpClient.get("/api/categories/lecturers"),
-        httpClient.get("/api/categories/classes"),
-        httpClient.get("/api/categories/departments"),
-        httpClient.get("/api/categories/time-slots"),
-      ]);
-
-      // Sections
-      if (sectionsRes.status === "fulfilled") {
-        const raw = Array.isArray(sectionsRes.value.data)
-          ? sectionsRes.value.data
-          : sectionsRes.value.data?.data || [];
-        setRows(raw.map(mapItem));
-      }
-
-      if (semRes.status === "fulfilled") {
-        const sems = semRes.value.data?.data || semRes.value.data || [];
-        setSemestersList(sems);
-        // Auto-select active semester
-        const active = sems.find((s) => s.status?.toUpperCase() === "ACTIVE");
-        if (active) setFilterSemester(active.id.toString());
-      }
-      if (lecRes.status === "fulfilled")
-        setLecturersList(lecRes.value.data?.data || lecRes.value.data || []);
-      if (classRes.status === "fulfilled")
-        setClassesList(classRes.value.data?.data || classRes.value.data || []);
-      if (depRes.status === "fulfilled")
-        setDepartmentsList(depRes.value.data?.data || depRes.value.data || []);
-      if (slotsRes.status === "fulfilled") {
-        const slots = slotsRes.value.data?.data || slotsRes.value.data || [];
-        setTimeSlotsList(Array.isArray(slots) ? slots : []);
-      }
-    } catch (err) {
-      console.error("Lỗi tải dữ liệu thời khóa biểu:", err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // ── Derived dynamic options ───────────────
-  const buildingOptions = useMemo(() => {
-    const set = new Set(rows.map((r) => r.building).filter((b) => b && b !== "---"));
-    return [...set].sort();
-  }, [rows]);
-
-  const roomOptions = useMemo(() => {
-    const set = new Set(rows.map((r) => r.room).filter((r) => r && r !== "---"));
-    return [...set].sort();
-  }, [rows]);
-
-  const weekOptions = useMemo(() => {
-    return Array.from({ length: 20 }, (_, index) => index + 1);
-  }, []);
-
-  const selectedWeekIndex = weekOptions.findIndex(
-    (week) => week.toString() === filterWeek,
-  );
-
-  const goToWeekOffset = (offset) => {
-    const nextIndex = selectedWeekIndex + offset;
-    if (nextIndex < 0 || nextIndex >= weekOptions.length) return;
-    setFilterWeek(weekOptions[nextIndex].toString());
-    resetPage();
-  };
-
-  // ── Filter ────────────────────────────────
-  const filtered = useMemo(() => {
-    const kw = search.trim().toLowerCase();
-    return rows.filter((r) => {
-      if (kw && ![r.courseCode, r.courseName, r.sectionGroup, r.classCodes, r.lecturer, r.room]
-        .some((v) => v?.toLowerCase().includes(kw))) return false;
-      if (filterSemester !== "all" && r.semesterId?.toString() !== filterSemester) return false;
-      
-      // Filter Week
-      if (filterWeek !== "all") {
-        const targetWeek = parseInt(filterWeek, 10);
-        if (r._raw.fromWeekNo && r._raw.toWeekNo) {
-          const from = parseInt(r._raw.fromWeekNo, 10);
-          const to = parseInt(r._raw.toWeekNo, 10);
-          if (targetWeek < from || targetWeek > to) return false;
-        } else if (r._raw.weekNo) {
-          if (parseInt(r._raw.weekNo, 10) !== targetWeek) return false;
-        } else {
-          if (!r.weekLabel?.includes(filterWeek)) return false;
-        }
-      }
-
-      if (filterStatus !== "all" && r.allocationStatus !== filterStatus && r.sectionStatus !== filterStatus) return false;
-      if (filterDay !== "all" && r.dayCode !== filterDay) return false;
-      if (filterDepartment !== "all" && r.department !== filterDepartment) return false;
-      if (filterClass !== "all" && !r.classCodes?.toLowerCase().includes(filterClass.toLowerCase())) return false;
-      if (filterLecturer !== "all" && r.lecturerId?.toString() !== filterLecturer) return false;
-      if (filterBuilding !== "all" && r.building !== filterBuilding) return false;
-      if (filterRoom !== "all" && r.room !== filterRoom) return false;
-      return true;
-    });
-  }, [rows, search, filterSemester, filterWeek, filterStatus, filterDay, filterDepartment, filterClass, filterLecturer, filterBuilding, filterRoom]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const paginated = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-
-  const resetPage = () => setCurrentPage(1);
-
-  // ── Actions ───────────────────────────────
-  const openPlaceholder = (title) => setPlaceholderModal({ open: true, title });
-
-  if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] gap-3">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-        <p className="text-sm text-gray-500 font-medium">Đang tải thời khóa biểu...</p>
-      </div>
-    );
-  }
-
-  // Highlight filters for building and room if Facility staff
-  const getSelectTriggerClass = (isHighlighted) => {
-    return `h-9 text-sm rounded-lg bg-gray-50 border-gray-100 ${
-      isHighlighted ? "border-blue-300 ring-1 ring-blue-100 font-medium text-blue-900" : ""
-    }`;
-  };
+const LessonBlock = ({ item }) => {
+  const status = STATUS_META[item.status] || STATUS_META.ASSIGNED;
+  const rowSpan = Math.max(1, item.slotEnd - item.slotStart + 1);
 
   return (
-    <div className="p-5 md:p-8 space-y-6">
-      {/* ── HEADER ─────────────────────────── */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div
+      className={`m-1 overflow-hidden rounded-md border border-l-4 p-2 text-[11px] leading-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${status.block} ${status.accent}`}
+      style={{ minHeight: `${rowSpan * 38}px` }}
+      title={`${item.courseName} - ${item.lecturer}`}
+    >
+      <div className="line-clamp-2 font-bold">{item.courseName}</div>
+      <div className="mt-0.5 font-semibold">({item.courseCode})</div>
+      <div>Nhóm: {item.sectionGroup}</div>
+      <div className="truncate">GV: {item.lecturer}</div>
+      <div>Phòng: {item.roomLabel}</div>
+      {item.classCodes && <div className="truncate">Mã lớp: {item.classCodes}</div>}
+    </div>
+  );
+};
+
+const DayHeader = ({ code, selectedWeek }) => {
+  const index = DAY_CODES.indexOf(code);
+  const date = selectedWeek?.start ? addDays(selectedWeek.start, index) : null;
+
+  return (
+    <div className="sticky top-0 z-20 border-b border-slate-200 bg-slate-50 px-3 py-3 text-center">
+      <div className="text-sm font-bold text-slate-800">{DAY_LABELS[code]}</div>
+      <div className="text-xs text-slate-500">{date ? formatDate(date) : "--/--"}</div>
+    </div>
+  );
+};
+
+const TimetableGrid = ({ title, subtitle, items, selectedWeek, compact }) => {
+  const itemsByDay = useMemo(() => {
+    return items.reduce((accumulator, item) => {
+      const dayKey = normalize(item.dayCode);
+      if (!accumulator[dayKey]) accumulator[dayKey] = [];
+      accumulator[dayKey].push(item);
+      return accumulator;
+    }, {});
+  }, [items]);
+
+  const minDayWidth = compact ? "minmax(142px,1fr)" : "minmax(172px,1fr)";
+  const rowHeight = compact ? 40 : 46;
+
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-            Thời khóa biểu toàn trường
+          <h2 className="text-base font-extrabold text-slate-950">{title}</h2>
+          <p className="mt-0.5 text-xs font-medium text-slate-500">{subtitle}</p>
+        </div>
+        <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+          <DoorOpen className="h-3.5 w-3.5" />
+          {items.length} lịch học
+        </div>
+      </div>
+
+      <div className="overflow-auto">
+        <div
+          className="grid min-w-[1120px]"
+          style={{
+            gridTemplateColumns: `72px repeat(7, ${minDayWidth})`,
+            gridTemplateRows: `44px repeat(16, ${rowHeight}px)`,
+          }}
+        >
+          <div className="sticky left-0 top-0 z-30 border-b border-r border-slate-200 bg-blue-600 px-3 py-3 text-center text-sm font-bold text-white">
+            Tiết
+          </div>
+
+          {DAY_CODES.map((code) => (
+            <DayHeader key={code} code={code} selectedWeek={selectedWeek} />
+          ))}
+
+          {PERIODS.map((period) => (
+            <div
+              key={`period-${period}`}
+              className="sticky left-0 z-10 border-b border-r border-slate-200 bg-blue-600 px-2 py-2 text-center text-sm font-bold text-white"
+              style={{ gridColumn: 1, gridRow: period + 1 }}
+            >
+              Tiết {period}
+            </div>
+          ))}
+
+          {DAY_CODES.map((dayCode, dayIndex) =>
+            PERIODS.map((period) => (
+              <div
+                key={`${dayCode}-${period}`}
+                className="border-b border-r border-slate-200 bg-white"
+                style={{ gridColumn: dayIndex + 2, gridRow: period + 1 }}
+              />
+            )),
+          )}
+
+          {DAY_CODES.flatMap((dayCode, dayIndex) =>
+            (itemsByDay[dayCode] || []).map((item) => (
+              <div
+                key={`${item.id}-${dayCode}-${item.slotStart}`}
+                className="z-10"
+                style={{
+                  gridColumn: dayIndex + 2,
+                  gridRow: `${Math.max(1, item.slotStart) + 1} / span ${Math.max(
+                    1,
+                    item.slotEnd - item.slotStart + 1,
+                  )}`,
+                }}
+              >
+                <LessonBlock item={item} />
+              </div>
+            )),
+          )}
+        </div>
+      </div>
+    </section>
+  );
+};
+
+const WeeklySchedulePage = () => {
+  const { user } = useAuth();
+  const backendRole = user?.backendRole || user?.role || "STAFF";
+  const [semesters, setSemesters] = useState([]);
+  const [buildings, setBuildings] = useState([]);
+  const [classrooms, setClassrooms] = useState([]);
+  const [rows, setRows] = useState([]);
+  const [selectedSemester, setSelectedSemester] = useState("");
+  const [selectedWeek, setSelectedWeek] = useState("1");
+  const [selectedBuilding, setSelectedBuilding] = useState("A");
+  const [selectedRoom, setSelectedRoom] = useState("all");
+  const [viewMode, setViewMode] = useState("room");
+  const [assignedOnly, setAssignedOnly] = useState(false);
+  const [showConflicts, setShowConflicts] = useState(true);
+  const [loadingMeta, setLoadingMeta] = useState(true);
+  const [loadingRows, setLoadingRows] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+    const loadMeta = async () => {
+      setLoadingMeta(true);
+      setError("");
+      try {
+        const [semesterResponse, buildingResponse, classroomResponse] = await Promise.all([
+          httpClient.get("/api/categories/semesters"),
+          httpClient.get("/api/categories/buildings"),
+          httpClient.get("/api/categories/classrooms"),
+        ]);
+
+        if (!mounted) return;
+        const nextSemesters = unwrapList(semesterResponse);
+        const nextBuildings = unwrapList(buildingResponse);
+        const nextClassrooms = unwrapList(classroomResponse);
+
+        setSemesters(nextSemesters);
+        setBuildings(nextBuildings);
+        setClassrooms(nextClassrooms);
+
+        const defaultSemester =
+          nextSemesters.find((semester) => getSemesterLabel(semester) === DEFAULT_SEMESTER_LABEL) ||
+          nextSemesters[0];
+        const defaultBuilding =
+          nextBuildings.find((building) => normalize(building.code) === "A") || nextBuildings[0];
+
+        if (defaultSemester?.id) setSelectedSemester(String(defaultSemester.id));
+        if (defaultBuilding?.code) setSelectedBuilding(defaultBuilding.code);
+      } catch {
+        if (mounted) {
+          setError("Không tải được dữ liệu bộ lọc thời khóa biểu.");
+        }
+      } finally {
+        if (mounted) setLoadingMeta(false);
+      }
+    };
+
+    loadMeta();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const selectedSemesterData = useMemo(
+    () => semesters.find((semester) => String(semester.id) === String(selectedSemester)),
+    [semesters, selectedSemester],
+  );
+
+  const weekOptions = useMemo(() => buildWeekOptions(selectedSemesterData), [selectedSemesterData]);
+
+  useEffect(() => {
+    setSelectedWeek(resolveCurrentWeek(weekOptions));
+  }, [weekOptions]);
+
+  useEffect(() => {
+    if (!selectedSemester) return;
+    let mounted = true;
+    const loadRows = async () => {
+      setLoadingRows(true);
+      setError("");
+      try {
+        const response = await httpClient.get(getSectionsEndpoint(backendRole), {
+          params: { semesterId: selectedSemester },
+        });
+        if (mounted) {
+          setRows(unwrapList(response).map(mapScheduleItem));
+        }
+      } catch {
+        if (mounted) {
+          setRows([]);
+          setError("Không tải được dữ liệu thời khóa biểu toàn trường.");
+        }
+      } finally {
+        if (mounted) setLoadingRows(false);
+      }
+    };
+
+    loadRows();
+    return () => {
+      mounted = false;
+    };
+  }, [backendRole, selectedSemester]);
+
+  useEffect(() => {
+    setSelectedRoom("all");
+  }, [selectedBuilding]);
+
+  const buildingOptions = useMemo(() => {
+    const mapped = buildings
+      .map((building) => ({
+        id: building.id || building.code,
+        code: building.code || building.buildingCode || "",
+        name: building.name || building.buildingName || "",
+      }))
+      .filter((building) => building.code);
+
+    if (mapped.length > 0) return mapped;
+    return ["A", "B", "C"].map((code) => ({ id: code, code, name: `Tòa ${code}` }));
+  }, [buildings]);
+
+  const roomOptions = useMemo(() => {
+    const roomsFromCategory = classrooms
+      .map((room) => {
+        const code = getRoomCodeFromClassroom(room);
+        return code ? { code, label: cleanRoomName(code), building: getBuildingFromRoom(code) } : null;
+      })
+      .filter(Boolean);
+
+    const roomsFromRows = rows
+      .filter((row) => row.room)
+      .map((row) => ({ code: row.room, label: cleanRoomName(row.room), building: row.building }));
+
+    const unique = new Map();
+    [...roomsFromCategory, ...roomsFromRows].forEach((room) => {
+      if (normalize(room.building) === normalize(selectedBuilding)) unique.set(room.code, room);
+    });
+
+    return Array.from(unique.values()).sort((a, b) => a.label.localeCompare(b.label, "vi"));
+  }, [classrooms, rows, selectedBuilding]);
+
+  const selectedWeekData = useMemo(
+    () => weekOptions.find((week) => week.value === selectedWeek) || weekOptions[0],
+    [selectedWeek, weekOptions],
+  );
+
+  const filteredRows = useMemo(() => {
+    return rows.filter((row) => {
+      if (!row.dayCode || row.slotStart <= 0) return false;
+      if (selectedSemester && String(row.semesterId) !== String(selectedSemester)) return false;
+      if (!isInSelectedWeek(row, selectedWeek)) return false;
+      if (normalize(row.building) !== normalize(selectedBuilding)) return false;
+      if (selectedRoom !== "all" && row.room !== selectedRoom) return false;
+      if (assignedOnly && row.status !== "ASSIGNED" && row.status !== "PUBLISHED") return false;
+      if (!showConflicts && row.status === "CONFLICT") return false;
+      return true;
+    });
+  }, [assignedOnly, rows, selectedBuilding, selectedRoom, selectedSemester, selectedWeek, showConflicts]);
+
+  const groups = useMemo(() => {
+    if (selectedRoom !== "all") {
+      return [
+        {
+          key: selectedRoom,
+          title: `Phòng ${cleanRoomName(selectedRoom)}`,
+          subtitle: `Tòa ${selectedBuilding} • ${selectedWeekData?.label || "Tuần học"}`,
+          items: filteredRows,
+        },
+      ];
+    }
+
+    if (viewMode === "section") {
+      const grouped = new Map();
+      filteredRows.forEach((row) => {
+        const key = row.classCode || row.classCodes || row.courseCode;
+        if (!grouped.has(key)) grouped.set(key, []);
+        grouped.get(key).push(row);
+      });
+      return Array.from(grouped.entries()).map(([key, items]) => ({
+        key,
+        title: `Lớp học phần ${key}`,
+        subtitle: `${items[0]?.courseName || "Môn học"} • ${selectedWeekData?.label || "Tuần học"}`,
+        items,
+      }));
+    }
+
+    if (viewMode === "lecturer") {
+      const grouped = new Map();
+      filteredRows.forEach((row) => {
+        const key = row.lecturer || "Chưa phân công";
+        if (!grouped.has(key)) grouped.set(key, []);
+        grouped.get(key).push(row);
+      });
+      return Array.from(grouped.entries()).map(([key, items]) => ({
+        key,
+        title: `Giảng viên ${key}`,
+        subtitle: `${items.length} lịch học • ${selectedWeekData?.label || "Tuần học"}`,
+        items,
+      }));
+    }
+
+    const allRoomCodes = roomOptions.map((room) => room.code);
+    const roomsWithSchedule = filteredRows.map((row) => row.room).filter(Boolean);
+    const roomCodes = Array.from(new Set([...allRoomCodes, ...roomsWithSchedule])).sort((a, b) =>
+      cleanRoomName(a).localeCompare(cleanRoomName(b), "vi"),
+    );
+
+    return roomCodes.map((roomCode) => ({
+      key: roomCode,
+      title: `Phòng ${cleanRoomName(roomCode)}`,
+      subtitle: `Tòa ${selectedBuilding} • ${selectedWeekData?.label || "Tuần học"}`,
+      items: filteredRows.filter((row) => row.room === roomCode),
+    }));
+  }, [filteredRows, roomOptions, selectedBuilding, selectedRoom, selectedWeekData, viewMode]);
+
+  const selectedBuildingLabel =
+    buildingOptions.find((building) => normalize(building.code) === normalize(selectedBuilding))?.name ||
+    `Tòa ${selectedBuilding}`;
+  const isLoading = loadingMeta || loadingRows;
+
+  return (
+    <div className="space-y-5 p-5 md:p-6">
+      <header className="flex flex-col gap-3 border-b border-slate-200 pb-5 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-bold uppercase text-blue-700">
+            <CalendarDays className="h-3.5 w-3.5" />
+            Lịch học theo tuần
+          </div>
+          <h1 className="text-2xl font-extrabold tracking-normal text-slate-950">
+            THỜI KHÓA BIỂU TOÀN TRƯỜNG
           </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Tra cứu lịch học, phòng học, giảng viên và trạng thái sử dụng phòng
+          <p className="mt-1 text-sm text-slate-500">
+            Theo dõi lịch học và sử dụng phòng học theo tuần
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* View toggle */}
-          <div className="flex items-center bg-gray-100 rounded-lg p-0.5 gap-0.5">
-            <button
-              onClick={() => setViewMode("list")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                viewMode === "list" ? "bg-white shadow-sm text-blue-700" : "text-gray-500 hover:text-gray-700"
-              }`}
+          {Object.entries(STATUS_META).map(([key, meta]) => (
+            <div
+              key={key}
+              className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-600 shadow-sm ring-1 ring-slate-200"
             >
-              <List className="w-3.5 h-3.5" />
-              Danh sách
-            </button>
-            <button
-              onClick={() => setViewMode("grid")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                viewMode === "grid" ? "bg-white shadow-sm text-blue-700" : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-              Dạng lưới
-            </button>
-          </div>
-
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5 text-sm border-gray-200 text-gray-700 hover:bg-gray-50"
-            onClick={fetchAll}
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            Làm mới
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5 text-sm border-gray-200 text-gray-700 hover:bg-gray-50"
-            onClick={() => openPlaceholder("Xuất Excel")}
-          >
-            <Download className="w-3.5 h-3.5" />
-            Xuất Excel
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5 text-sm border-gray-200 text-gray-700 hover:bg-gray-50"
-            onClick={() => openPlaceholder("In lịch")}
-          >
-            <Printer className="w-3.5 h-3.5" />
-            In lịch
-          </Button>
-
-          {isAdminOrStaff && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 text-sm border-orange-200 text-orange-700 hover:bg-orange-50"
-              onClick={() => openPlaceholder("Kiểm tra xung đột")}
-            >
-              <AlertTriangle className="w-3.5 h-3.5" />
-              Kiểm tra xung đột
-            </Button>
-          )}
+              <span className={`h-2 w-2 rounded-full ${meta.dot}`} />
+              {meta.label}
+            </div>
+          ))}
         </div>
-      </div>
+      </header>
 
-      {/* ── SUMMARY CARDS ──────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {[
-          { label: "Tổng lớp HP",     val: rows.length,                                                   cls: "bg-white rounded-xl border border-blue-100 p-3 shadow-sm hover:shadow-md transition-all", lblCls: "text-[11px] font-bold text-blue-600 uppercase tracking-wider" },
-          { label: "Chưa có lịch",    val: rows.filter((r) => r.allocationStatus === "NO_SCHEDULE").length,   cls: "bg-white rounded-xl border border-orange-100 p-3 shadow-sm hover:shadow-md transition-all", lblCls: "text-[11px] font-bold text-orange-600 uppercase tracking-wider" },
-          { label: "Chưa phân phòng", val: rows.filter((r) => r.allocationStatus === "UNASSIGNED").length,    cls: "bg-white rounded-xl border border-amber-100 p-3 shadow-sm hover:shadow-md transition-all", lblCls: "text-[11px] font-bold text-amber-600 uppercase tracking-wider" },
-          { label: "Đã phân phòng",   val: rows.filter((r) => r.allocationStatus === "ASSIGNED").length,      cls: "bg-white rounded-xl border border-emerald-100 p-3 shadow-sm hover:shadow-md transition-all", lblCls: "text-[11px] font-bold text-emerald-600 uppercase tracking-wider" },
-          { label: "Đã công bố",      val: rows.filter((r) => r.allocationStatus === "PUBLISHED").length,     cls: "bg-white rounded-xl border border-green-100 p-3 shadow-sm hover:shadow-md transition-all", lblCls: "text-[11px] font-bold text-green-600 uppercase tracking-wider" },
-          { label: "Có xung đột",     val: rows.filter((r) => r.allocationStatus === "CONFLICT").length,      cls: "bg-white rounded-xl border border-red-100 p-3 shadow-sm hover:shadow-md transition-all", lblCls: "text-[11px] font-bold text-red-600 uppercase tracking-wider" },
-        ].map(({ label, val, cls, lblCls }) => (
-          <div key={label} className={cls}>
-            <p className={lblCls}>{label}</p>
-            <p className="text-2xl font-extrabold text-gray-900 mt-1">{val}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* ── FILTER BAR ─────────────────────── */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-          {/* Search Input (spans 2 columns on small screens and up) */}
-          <div className="sm:col-span-2 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input
-              placeholder="Tìm theo mã môn, tên môn, lớp, giảng viên, phòng..."
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); resetPage(); }}
-              className="pl-9 h-9 text-sm rounded-lg"
-            />
-          </div>
-
-          {/* Học kỳ */}
-          <Select value={filterSemester} onValueChange={(v) => { setFilterSemester(v); resetPage(); }}>
-            <SelectTrigger className={getSelectTriggerClass(false)}>
-              <SelectValue placeholder="Học kỳ" />
+      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.1fr_1fr_0.8fr_0.9fr_0.9fr_auto]">
+          <Select value={selectedSemester} onValueChange={setSelectedSemester}>
+            <SelectTrigger className="h-10 rounded-lg border-slate-200 bg-slate-50 text-sm">
+              <SelectValue placeholder={DEFAULT_SEMESTER_LABEL} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tất cả học kỳ</SelectItem>
-              {semestersList.map((s) => (
-                <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* Tuần học */}
-          <div className="flex items-center gap-1">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={() => goToWeekOffset(-1)}
-              disabled={selectedWeekIndex <= 0}
-              className="h-9 w-9 rounded-lg border-gray-100 bg-gray-50 text-gray-500 shadow-none"
-              title="Tuần trước"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-          <Select value={filterWeek} onValueChange={(v) => { setFilterWeek(v); resetPage(); }}>
-            <SelectTrigger className={getSelectTriggerClass(false)}>
-              <SelectValue placeholder="Tuần học" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả tuần</SelectItem>
-              {weekOptions.map((w) => (
-                <SelectItem key={w} value={w.toString()}>Tuần {w}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* Thứ / Ngày */}
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={() => goToWeekOffset(1)}
-              disabled={selectedWeekIndex < 0 || selectedWeekIndex >= weekOptions.length - 1}
-              className="h-9 w-9 rounded-lg border-gray-100 bg-gray-50 text-gray-500 shadow-none"
-              title="Tuần sau"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-
-          <Select value={filterDay} onValueChange={(v) => { setFilterDay(v); resetPage(); }}>
-            <SelectTrigger className={getSelectTriggerClass(false)}>
-              <SelectValue placeholder="Thứ / Ngày" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả thứ</SelectItem>
-              {["MON","TUE","WED","THU","FRI","SAT","SUN"].map((d) => (
-                <SelectItem key={d} value={d}>{DAY_LABELS[d]}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* Khoa */}
-          <Select value={filterDepartment} onValueChange={(v) => { setFilterDepartment(v); resetPage(); }}>
-            <SelectTrigger className={getSelectTriggerClass(false)}>
-              <SelectValue placeholder="Khoa" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả khoa</SelectItem>
-              {departmentsList.map((d) => (
-                <SelectItem key={d.departmentCode} value={d.departmentCode}>
-                  {d.departmentName || d.departmentCode}
+              {semesters.map((semester) => (
+                <SelectItem key={semester.id} value={String(semester.id)}>
+                  {getSemesterLabel(semester)}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
 
-          {/* Lớp hành chính */}
-          <Select value={filterClass} onValueChange={(v) => { setFilterClass(v); resetPage(); }}>
-            <SelectTrigger className={getSelectTriggerClass(false)}>
-              <SelectValue placeholder="Lớp hành chính" />
+          <Select value={selectedWeek} onValueChange={setSelectedWeek}>
+            <SelectTrigger className="h-10 rounded-lg border-slate-200 bg-slate-50 text-sm">
+              <SelectValue placeholder="Tuần học hiện tại" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tất cả lớp HC</SelectItem>
-              {classesList.map((c) => (
-                <SelectItem key={c.id} value={c.classCode}>{c.classCode}</SelectItem>
+              {weekOptions.map((week) => (
+                <SelectItem key={week.value} value={week.value}>
+                  {week.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
 
-          {/* Giảng viên */}
-          <Select value={filterLecturer} onValueChange={(v) => { setFilterLecturer(v); resetPage(); }}>
-            <SelectTrigger className={getSelectTriggerClass(false)}>
-              <SelectValue placeholder="Giảng viên" />
+          <Select value={selectedBuilding} onValueChange={setSelectedBuilding}>
+            <SelectTrigger className="h-10 rounded-lg border-slate-200 bg-slate-50 text-sm">
+              <SelectValue placeholder="Tòa A" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tất cả giảng viên</SelectItem>
-              {lecturersList.map((l) => (
-                <SelectItem key={l.id} value={l.id.toString()}>{l.name}</SelectItem>
+              {buildingOptions.map((building) => (
+                <SelectItem key={building.id || building.code} value={building.code}>
+                  {building.name || `Tòa ${building.code}`}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
 
-          {/* Tòa nhà */}
-          <Select value={filterBuilding} onValueChange={(v) => { setFilterBuilding(v); resetPage(); }}>
-            <SelectTrigger className={getSelectTriggerClass(isFacility)}>
-              <SelectValue placeholder="Tòa nhà" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả tòa</SelectItem>
-              {buildingOptions.map((b) => (
-                <SelectItem key={b} value={b}>Tòa {b}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* Phòng */}
-          <Select value={filterRoom} onValueChange={(v) => { setFilterRoom(v); resetPage(); }}>
-            <SelectTrigger className={getSelectTriggerClass(isFacility)}>
-              <SelectValue placeholder="Phòng" />
+          <Select value={selectedRoom} onValueChange={setSelectedRoom}>
+            <SelectTrigger className="h-10 rounded-lg border-slate-200 bg-slate-50 text-sm">
+              <SelectValue placeholder="Tất cả phòng" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tất cả phòng</SelectItem>
-              {roomOptions.map((r) => (
-                <SelectItem key={r} value={r}>Phòng {r}</SelectItem>
+              {roomOptions.map((room) => (
+                <SelectItem key={room.code} value={room.code}>
+                  Phòng {room.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
 
-          {/* Trạng thái */}
-          <Select value={filterStatus} onValueChange={(v) => { setFilterStatus(v); resetPage(); }}>
-            <SelectTrigger className={getSelectTriggerClass(false)}>
-              <SelectValue placeholder="Trạng thái" />
+          <Select value={viewMode} onValueChange={setViewMode}>
+            <SelectTrigger className="h-10 rounded-lg border-slate-200 bg-slate-50 text-sm">
+              <SelectValue placeholder="Chế độ xem" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tất cả trạng thái</SelectItem>
-              <SelectItem value="NO_SCHEDULE">Chưa có lịch</SelectItem>
-              <SelectItem value="UNASSIGNED">Chưa phân phòng</SelectItem>
-              <SelectItem value="ASSIGNED">Đã phân phòng</SelectItem>
-              <SelectItem value="PENDING_APPROVAL">Chờ duyệt</SelectItem>
-              <SelectItem value="PUBLISHED">Đã công bố</SelectItem>
-              <SelectItem value="CONFLICT">Có xung đột</SelectItem>
-              <SelectItem value="CANCELLED">Đã hủy</SelectItem>
+              {VIEW_MODES.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
-        </div>
-      </div>
 
-      {/* ── TABLE (LIST MODE) ──────────────── */}
-      {viewMode === "list" && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-gray-50/50 border-b border-gray-200">
-                  <TableHead className="text-xs font-semibold text-gray-600 whitespace-nowrap">Mã MH</TableHead>
-                  <TableHead className="text-xs font-semibold text-gray-600">Tên môn học</TableHead>
-                  <TableHead className="text-xs font-semibold text-gray-600 text-center">Nhóm/Tổ</TableHead>
-                  <TableHead className="text-xs font-semibold text-gray-600 whitespace-nowrap">Lớp hành chính</TableHead>
-                  <TableHead className="text-xs font-semibold text-gray-600">Giảng viên</TableHead>
-                  <TableHead className="text-xs font-semibold text-gray-600 text-center">SV</TableHead>
-                  <TableHead className="text-xs font-semibold text-gray-600 text-center">Thứ</TableHead>
-                  <TableHead className="text-xs font-semibold text-gray-600 text-center whitespace-nowrap">Tiết</TableHead>
-                  <TableHead className="text-xs font-semibold text-gray-600 whitespace-nowrap">Thời gian</TableHead>
-                  <TableHead className="text-xs font-semibold text-gray-600 whitespace-nowrap">Tuần học</TableHead>
-                  <TableHead className="text-xs font-semibold text-gray-600">Phòng</TableHead>
-                  <TableHead className="text-xs font-semibold text-gray-600">Tòa nhà</TableHead>
-                  <TableHead className="text-xs font-semibold text-gray-600 text-center">Trạng thái</TableHead>
-                  <TableHead className="text-xs font-semibold text-gray-600 text-center min-w-[160px]">Thao tác</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginated.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={14} className="text-center py-16">
-                      <div className="flex flex-col items-center gap-3">
-                        <AlertCircle className="w-10 h-10 text-gray-300" />
-                        <p className="font-semibold text-gray-700">
-                          Chưa có dữ liệu thời khóa biểu cho bộ lọc hiện tại.
-                        </p>
-                        <p className="text-xs text-gray-400">
-                          Vui lòng chọn học kỳ hoặc bộ lọc khác.
-                        </p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  paginated.map((r) => {
-                    const statusCfg = getStatusCfg(r.allocationStatus);
-                    const isConflict = r.allocationStatus === "CONFLICT";
-                    return (
-                      <TableRow
-                        key={r.id}
-                        className={`transition-colors border-b border-gray-100 hover:bg-gray-50/40 ${
-                          isConflict ? "bg-red-50/30" : ""
-                        }`}
-                      >
-                        {/* Mã MH */}
-                        <TableCell className="font-mono text-xs font-bold text-blue-700 whitespace-nowrap">
-                          {r.courseCode}
-                        </TableCell>
-                        {/* Tên môn học */}
-                        <TableCell className="text-xs font-medium text-gray-800 max-w-[180px] truncate">
-                          {r.courseName}
-                        </TableCell>
-                        {/* Nhóm/Tổ */}
-                        <TableCell className="text-center">
-                          <span className="inline-block font-mono text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-2 py-0.5">
-                            {r.sectionGroup}
-                          </span>
-                        </TableCell>
-                        {/* Lớp hành chính */}
-                        <TableCell className="text-xs text-gray-600 whitespace-nowrap">
-                          {r.classCodes}
-                        </TableCell>
-                        {/* Giảng viên */}
-                        <TableCell className="text-xs text-gray-600 max-w-[130px] truncate">
-                          {r.lecturer}
-                        </TableCell>
-                        {/* SV */}
-                        <TableCell className="text-xs text-center font-semibold text-gray-700">
-                          {r.students}
-                        </TableCell>
-                        {/* Thứ */}
-                        <TableCell className="text-xs text-center text-gray-700 whitespace-nowrap">
-                          {r.day}
-                        </TableCell>
-                        {/* Tiết */}
-                        <TableCell className="text-xs text-center text-gray-700 whitespace-nowrap">
-                          {r.slotLabel}
-                        </TableCell>
-                        {/* Thời gian */}
-                        <TableCell className="text-xs text-gray-600 whitespace-nowrap">
-                          {r.timeLabel}
-                        </TableCell>
-                        {/* Tuần học */}
-                        <TableCell className="text-xs text-gray-600 whitespace-nowrap">
-                          {r.weekLabel}
-                        </TableCell>
-                        {/* Phòng */}
-                        <TableCell className="text-xs font-semibold text-gray-900">
-                          {r.room !== "---" ? r.room : (
-                            <span className="text-gray-400 italic text-[11px]">Chưa phân</span>
-                          )}
-                        </TableCell>
-                        {/* Tòa nhà */}
-                        <TableCell className="text-xs text-gray-600">
-                          {r.building !== "---" ? r.building : "---"}
-                        </TableCell>
-                        {/* Trạng thái */}
-                        <TableCell className="text-center">
-                          <Badge className={`${statusCfg.cls} text-[10px] font-semibold border px-2 py-0.5 rounded-full shadow-none`}>
-                            {statusCfg.label}
-                          </Badge>
-                        </TableCell>
-                        {/* Thao tác */}
-                        <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-center gap-1">
-                            {isFacility ? (
-                              <>
-                                <Button
-                                  size="xs"
-                                  variant="ghost"
-                                  className="h-7 px-2 text-[11px] text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                  onClick={() => openPlaceholder("Chi tiết lớp học phần")}
-                                >
-                                  Chi tiết
-                                </Button>
-                                <Button
-                                  size="xs"
-                                  variant="ghost"
-                                  className="h-7 px-2 text-[11px] text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-                                  onClick={() => openPlaceholder("Báo sự cố phòng " + r.room)}
-                                >
-                                  Báo sự cố
-                                </Button>
-                                <Button
-                                  size="xs"
-                                  variant="ghost"
-                                  className="h-7 px-2 text-[11px] text-gray-600 hover:text-gray-700 hover:bg-gray-100"
-                                  onClick={() => openPlaceholder("Mở/Đóng phòng " + r.room)}
-                                >
-                                  Mở/Đóng
-                                </Button>
-                              </>
-                            ) : (
-                              <>
-                                <Button
-                                  size="xs"
-                                  variant="ghost"
-                                  className="h-7 px-2 text-[11px] text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                  onClick={() => openPlaceholder("Chi tiết lớp học phần")}
-                                >
-                                  Chi tiết
-                                </Button>
-                                <Button
-                                  size="xs"
-                                  variant="ghost"
-                                  className="h-7 px-2 text-[11px] text-gray-600 hover:text-gray-700 hover:bg-gray-100"
-                                  onClick={() => openPlaceholder("Xem theo tuần")}
-                                >
-                                  Theo tuần
-                                </Button>
-                                <Button
-                                  size="xs"
-                                  variant="ghost"
-                                  className="h-7 px-2 text-[11px] text-gray-600 hover:text-gray-700 hover:bg-gray-100"
-                                  onClick={() => openPlaceholder("Xem phòng")}
-                                >
-                                  Xem phòng
-                                </Button>
-                                {isAdminOrStaff && isConflict && (
-                                  <Button
-                                    size="xs"
-                                    className="h-7 px-2 text-[11px] bg-red-500 hover:bg-red-600 text-white font-medium shadow-none rounded-md"
-                                    onClick={() => openPlaceholder("Xem xung đột")}
-                                  >
-                                    Xung đột
-                                  </Button>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
+          <div className="flex flex-wrap items-center justify-start gap-2 xl:justify-end">
+            <Toggle
+              checked={assignedOnly}
+              onChange={setAssignedOnly}
+              label="Chỉ hiển thị lịch đã phân phòng"
+            />
+            <Toggle checked={showConflicts} onChange={setShowConflicts} label="Hiển thị xung đột" />
           </div>
         </div>
-      )}
 
-      {/* ── GRID MODE ─────────────────────── */}
-      {viewMode === "grid" && (
-        <RoomTimetableGridView
-          rows={filtered}
-          timeSlots={timeSlotsList}
-          onCellClick={() => openPlaceholder("Chi tiết lớp học phần")}
-        />
-      )}
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+          <span className="inline-flex items-center gap-1.5">
+            <Building2 className="h-3.5 w-3.5 text-blue-500" />
+            {selectedBuildingLabel}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Layers3 className="h-3.5 w-3.5 text-blue-500" />
+            {VIEW_MODES.find((option) => option.value === viewMode)?.label}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Users className="h-3.5 w-3.5 text-blue-500" />
+            {filteredRows.length} lịch phù hợp
+          </span>
+        </div>
+      </section>
 
-      {/* ── PAGINATION ────────────────────── */}
-      {viewMode === "list" && (
-        <div className="flex items-center justify-between px-4 py-3 bg-white rounded-xl border border-gray-200 shadow-sm text-xs text-gray-500">
-          <span>Hiển thị {paginated.length} / {filtered.length} lớp học phần</span>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className="h-7 w-7 p-0 rounded-lg"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            <span className="px-2 font-medium">Trang {currentPage} / {totalPages}</span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-              className="h-7 w-7 p-0 rounded-lg"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-          </div>
+      {error && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+          {error}
         </div>
       )}
 
-      {/* ── LEGEND ────────────────────────── */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3">
-        <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2">Chú thích trạng thái</p>
-        <div className="flex flex-wrap gap-3">
-          {Object.entries(STATUS_CONFIG).map(([key, { label, cls }]) => (
-            <div key={key} className="flex items-center gap-1.5">
-              <span className={`inline-block text-[10px] font-semibold border px-2 py-0.5 rounded-full ${cls}`}>
-                {label}
-              </span>
+      {isLoading ? (
+        <LoadingSkeleton />
+      ) : groups.length === 0 ||
+        groups.every((group) => group.items.length === 0 && selectedRoom !== "all") ? (
+        <EmptyState />
+      ) : (
+        <div className="space-y-4">
+          {selectedRoom === "all" && viewMode === "room" && (
+            <div className="flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800">
+              <MapPin className="h-4 w-4" />
+              Đang hiển thị nhiều phòng thuộc {selectedBuildingLabel}; cuộn dọc để xem toàn bộ
+              phòng trong tòa.
             </div>
+          )}
+
+          {groups.map((group) => (
+            <TimetableGrid
+              key={group.key}
+              title={group.title}
+              subtitle={group.subtitle}
+              items={group.items}
+              selectedWeek={selectedWeekData}
+              compact={selectedRoom === "all"}
+            />
           ))}
         </div>
-      </div>
-
-      {/* ── PLACEHOLDER MODAL ─────────────── */}
-      {placeholderModal.open && (
-        <PlaceholderModal
-          title={placeholderModal.title}
-          onClose={() => setPlaceholderModal({ open: false, title: "" })}
-        />
       )}
+
     </div>
   );
 };
 
+export { WeeklySchedulePage };
 export default WeeklySchedulePage;

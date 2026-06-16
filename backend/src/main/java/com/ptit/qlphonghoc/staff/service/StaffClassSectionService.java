@@ -281,6 +281,8 @@ public class StaffClassSectionService {
         response.setSlotEndId(projection.getSlotEndId());
         response.setSlotStart(projection.getSlotStart());
         response.setSlotEnd(projection.getSlotEnd());
+        response.setFromWeekNo(projection.getFromWeekNo());
+        response.setToWeekNo(projection.getToWeekNo());
         response.setSchedule(projection.getSchedule());
         response.setClassroomId(projection.getClassroomId());
         response.setRoom(projection.getRoom());

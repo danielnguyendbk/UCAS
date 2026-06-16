@@ -18,6 +18,8 @@ public class StaffSectionTableResponse {
     private Integer slotEndId;
     private Integer slotStart;
     private Integer slotEnd;
+    private Integer fromWeekNo;
+    private Integer toWeekNo;
     private String schedule;
     private Integer classroomId;
     private String room;
@@ -76,6 +78,12 @@ public class StaffSectionTableResponse {
 
     public Integer getSlotEnd() { return slotEnd; }
     public void setSlotEnd(Integer slotEnd) { this.slotEnd = slotEnd; }
+
+    public Integer getFromWeekNo() { return fromWeekNo; }
+    public void setFromWeekNo(Integer fromWeekNo) { this.fromWeekNo = fromWeekNo; }
+
+    public Integer getToWeekNo() { return toWeekNo; }
+    public void setToWeekNo(Integer toWeekNo) { this.toWeekNo = toWeekNo; }
 
     public String getSchedule() { return schedule; }
     public void setSchedule(String schedule) { this.schedule = schedule; }

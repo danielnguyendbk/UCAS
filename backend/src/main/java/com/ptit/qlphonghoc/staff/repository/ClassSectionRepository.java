@@ -43,6 +43,8 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
             ts_start.slot_no AS slot,
             ts_start.slot_no AS slotStart,
             ts_end.slot_no AS slotEnd,
+            sch.from_week_no AS fromWeekNo,
+            sch.to_week_no AS toWeekNo,
 
             CASE
                 WHEN sch.schedule_id IS NULL THEN '-'
@@ -294,6 +296,8 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
         Integer getSlotEndId();
         Integer getSlotStart();
         Integer getSlotEnd();
+        Integer getFromWeekNo();
+        Integer getToWeekNo();
         String getSchedule();
         Integer getClassroomId();
         String getRoom();
