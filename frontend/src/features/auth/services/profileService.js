@@ -10,4 +10,9 @@ export const profileService = {
     const response = await httpClient.put("/api/auth/me", payload);
     return response.data?.data;
   },
+
+  async changePassword(payload) {
+    const response = await httpClient.post("/api/auth/change-password", payload);
+    return response.data;
+  },
 };

@@ -1,10 +1,19 @@
 import { useEffect, useState, useMemo } from "react";
-import { Bell, ChevronDown, ChevronRight, Menu, School, LogOut, User, Key, Settings as SettingsIcon, CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
+import { Bell, ChevronDown, ChevronRight, Menu, School, LogOut, User, Key, CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import { NAVIGATION_BY_ROLE, ROLE_BADGE_CLASSES, ROLE_LABELS } from "@/constants/navigation";
 import { APP_ROUTES, ROLE_DEFAULT_PATHS } from "@/constants/routes";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { Badge } from "@/app/components/ui/badge";
+import { Button } from "@/app/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/app/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,6 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from "@/app/components/ui/dropdown-menu";
+import { profileService } from "@/features/auth/services/profileService";
 import { httpClient } from "@/services/httpClient";
 
 const getActiveSemesterName = (semesters) => {
@@ -286,6 +296,68 @@ const ROLE_PATH_GUARDS = {
   EMPLOYEES: [/^\/$/, /^\/facility(\/|$)/]
 };
 
+const BACKEND_ROLE_LABELS = {
+  ADMIN: "QUẢN TRỊ VIÊN",
+  STAFF: "PHÒNG ĐÀO TẠO",
+  LECTURER: "GIẢNG VIÊN",
+  STUDENT: "SINH VIÊN",
+  FACILITY: "CƠ SỞ VẬT CHẤT",
+  EMPLOYEES: "CƠ SỞ VẬT CHẤT",
+};
+
+const getErrorMessage = (error, fallbackMessage) =>
+  error?.response?.data?.message ||
+  error?.message ||
+  fallbackMessage;
+
+const getProfileCode = (profile, fallbackUser) =>
+  profile?.studentCode ||
+  profile?.lecturerCode ||
+  profile?.staffCode ||
+  fallbackUser?.code ||
+  fallbackUser?.username ||
+  "";
+
+const getProfileOrganization = (profile, fallbackUser) => {
+  if (profile?.className) return profile.className;
+  if (profile?.departmentName) return profile.departmentName;
+  if (profile?.facultyName) return profile.facultyName;
+  if (profile?.buildingName) return profile.buildingName;
+  if (profile?.departmentId) return `Bộ môn #${profile.departmentId}`;
+  if (profile?.facultyId) return `Khoa #${profile.facultyId}`;
+  if (profile?.buildingId) return `Tòa nhà #${profile.buildingId}`;
+  return fallbackUser?.department || "";
+};
+
+const buildProfileDisplay = (authProfile, fallbackUser) => {
+  const account = authProfile?.user || {};
+  const profile = authProfile?.profile || {};
+  const backendRole = normalize(account.role || fallbackUser?.backendRole);
+  const name =
+    account.fullName ||
+    profile.fullName ||
+    fallbackUser?.name ||
+    account.username ||
+    fallbackUser?.username ||
+    "";
+  const username = account.username || fallbackUser?.username || fallbackUser?.code || "";
+  const email = account.email || profile.email || fallbackUser?.email || "";
+  const roleLabel = BACKEND_ROLE_LABELS[backendRole] || ROLE_LABELS[fallbackUser?.role] || "";
+  const code = getProfileCode(profile, fallbackUser);
+  const organization = getProfileOrganization(profile, fallbackUser);
+
+  return {
+    name,
+    username,
+    email,
+    roleLabel,
+    backendRole,
+    code,
+    organization,
+    profile,
+  };
+};
+
 const AppLayout = () => {
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
@@ -296,6 +368,20 @@ const AppLayout = () => {
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [notificationsError, setNotificationsError] = useState("");
   const [readNotificationIds, setReadNotificationIds] = useState(() => new Set());
+  const [currentUserProfile, setCurrentUserProfile] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState("");
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [changePasswordForm, setChangePasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [changePasswordLoading, setChangePasswordLoading] = useState(false);
+  const [changePasswordError, setChangePasswordError] = useState("");
+  const [changePasswordSuccess, setChangePasswordSuccess] = useState("");
+  const [toastMessage, setToastMessage] = useState("");
 
   const menuItems = useMemo(
     () => (user ? NAVIGATION_BY_ROLE[user.role] || [] : []),
@@ -303,6 +389,46 @@ const AppLayout = () => {
   );
 
   const useGroupedSidebar = user?.role === "Admin";
+
+  const displayUser = useMemo(
+    () => buildProfileDisplay(currentUserProfile, user),
+    [currentUserProfile, user],
+  );
+
+  const profileRows = useMemo(() => {
+    const profile = displayUser.profile || {};
+    const rows = [
+      ["Tên hiển thị", displayUser.name],
+      ["Tên đăng nhập", displayUser.username],
+      ["Email", displayUser.email],
+      ["Vai trò", displayUser.roleLabel],
+      ["Mã hồ sơ", displayUser.code],
+    ];
+
+    if (profile.className) {
+      rows.push(["Lớp", profile.className]);
+    }
+    if (profile.facultyName || profile.facultyId) {
+      rows.push(["Khoa", profile.facultyName || `Khoa #${profile.facultyId}`]);
+    }
+    if (profile.departmentName || profile.departmentId) {
+      rows.push(["Bộ môn", profile.departmentName || `Bộ môn #${profile.departmentId}`]);
+    }
+    if (profile.buildingName || profile.buildingId) {
+      rows.push(["Tòa nhà", profile.buildingName || `Tòa nhà #${profile.buildingId}`]);
+    }
+    if (!profile.className && !profile.facultyId && !profile.departmentId && !profile.buildingId && displayUser.organization) {
+      rows.push(["Đơn vị", displayUser.organization]);
+    }
+    if (profile.phone) {
+      rows.push(["Số điện thoại", profile.phone]);
+    }
+    if (profile.courseYear) {
+      rows.push(["Khóa", profile.courseYear]);
+    }
+
+    return rows;
+  }, [displayUser]);
 
   const flatMenuItems = useMemo(() => {
     const flat = [];
@@ -370,6 +496,54 @@ const AppLayout = () => {
       navigate(APP_ROUTES.login);
     }
   }, [isAuthenticated, navigate]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setCurrentUserProfile(null);
+      setProfileError("");
+      return undefined;
+    }
+
+    let isMounted = true;
+
+    const fetchCurrentUser = async () => {
+      setProfileLoading(true);
+      setProfileError("");
+
+      try {
+        const profile = await profileService.getMyProfile();
+        if (isMounted) {
+          setCurrentUserProfile(profile);
+        }
+      } catch (error) {
+        if (!isMounted) return;
+
+        if (error?.response?.status === 401) {
+          logout();
+          navigate(APP_ROUTES.login, { replace: true });
+          return;
+        }
+
+        setProfileError(getErrorMessage(error, "Không tải được hồ sơ người dùng."));
+      } finally {
+        if (isMounted) {
+          setProfileLoading(false);
+        }
+      }
+    };
+
+    void fetchCurrentUser();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthenticated, logout, navigate]);
+
+  useEffect(() => {
+    if (!toastMessage) return undefined;
+    const timeoutId = window.setTimeout(() => setToastMessage(""), 4000);
+    return () => window.clearTimeout(timeoutId);
+  }, [toastMessage]);
 
   useEffect(() => {
     if (!isAuthenticated) return undefined;
@@ -510,6 +684,91 @@ const AppLayout = () => {
     }
   };
 
+  const handleOpenProfile = () => {
+    setIsProfileOpen(true);
+  };
+
+  const handleOpenChangePassword = () => {
+    setChangePasswordForm({
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    });
+    setChangePasswordError("");
+    setChangePasswordSuccess("");
+    setIsChangePasswordOpen(true);
+  };
+
+  const handleChangePasswordInput = (event) => {
+    const { name, value } = event.target;
+    setChangePasswordForm((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+  };
+
+  const handleCloseChangePassword = () => {
+    if (changePasswordLoading) return;
+    setIsChangePasswordOpen(false);
+    setChangePasswordError("");
+    setChangePasswordSuccess("");
+    setChangePasswordForm({
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    });
+  };
+
+  const handleSubmitChangePassword = async (event) => {
+    event.preventDefault();
+
+    const currentPassword = changePasswordForm.currentPassword.trim();
+    const newPassword = changePasswordForm.newPassword.trim();
+    const confirmPassword = changePasswordForm.confirmPassword.trim();
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setChangePasswordError("Vui lòng nhập đầy đủ mật khẩu hiện tại, mật khẩu mới và xác nhận mật khẩu.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setChangePasswordError("Mật khẩu mới phải có ít nhất 6 ký tự.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setChangePasswordError("Xác nhận mật khẩu mới không khớp.");
+      return;
+    }
+
+    setChangePasswordLoading(true);
+    setChangePasswordError("");
+    setChangePasswordSuccess("");
+
+    try {
+      await profileService.changePassword({
+        currentPassword,
+        newPassword,
+        confirmPassword,
+      });
+      setChangePasswordSuccess("Đổi mật khẩu thành công.");
+      setToastMessage("Đổi mật khẩu thành công.");
+      setChangePasswordForm({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+      setIsChangePasswordOpen(false);
+    } catch (error) {
+      if (error?.response?.status === 401) {
+        logout();
+        navigate(APP_ROUTES.login, { replace: true });
+        return;
+      }
+      setChangePasswordError(getErrorMessage(error, "Không thể đổi mật khẩu. Vui lòng thử lại sau."));
+    } finally {
+      setChangePasswordLoading(false);
+    }
+  };
+
   const unreadCount = notifications.filter((notification) => notification.unread).length;
 
   return (
@@ -547,7 +806,7 @@ const AppLayout = () => {
         {/* User Quick Info */}
         <div className="px-6 py-5 border-b border-gray-50 bg-gray-50/30">
           <Badge className={`${ROLE_BADGE_CLASSES[user.role]} shadow-none border-0 px-3 py-1 text-[11px] font-bold`}>
-            {ROLE_LABELS[user.role]}
+            {displayUser.roleLabel || ROLE_LABELS[user.role]}
           </Badge>
           <p className="text-xs text-gray-500 mt-2 font-medium truncate opacity-70">
             {user.department}
@@ -688,11 +947,11 @@ const AppLayout = () => {
         <div className="p-4 border-t border-gray-100 flex-shrink-0">
           <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 transition-colors">
             <div className="w-9 h-9 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center flex-shrink-0 font-bold border border-blue-200">
-              {user.name.charAt(0)}
+              {(displayUser.name || displayUser.username || "U").charAt(0)}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-gray-900 truncate">{user.name}</p>
-              <p className="text-[10px] text-gray-500 font-medium">{user.code}</p>
+              <p className="text-xs font-bold text-gray-900 truncate">{displayUser.name || displayUser.username}</p>
+              <p className="text-[10px] text-gray-500 font-medium">{displayUser.code || displayUser.username}</p>
             </div>
           </div>
         </div>
@@ -806,30 +1065,33 @@ const AppLayout = () => {
             <DropdownMenu>
               <DropdownMenuTrigger className="flex items-center gap-3 pl-2 pr-1 py-1 rounded-xl hover:bg-gray-50 transition-all border border-transparent hover:border-gray-100">
                 <div className="w-9 h-9 bg-blue-600 text-white rounded-xl flex items-center justify-center font-bold shadow-md shadow-blue-100">
-                  {user.name.charAt(0)}
+                  {(displayUser.name || displayUser.username || "U").charAt(0)}
                 </div>
                 <div className="text-left hidden sm:block">
-                  <div className="text-xs font-bold text-gray-900 leading-none">{user.name}</div>
-                  <div className="text-[10px] text-blue-600 font-bold mt-1 uppercase tracking-tight">{ROLE_LABELS[user.role]}</div>
+                  <div className="text-xs font-bold text-gray-900 leading-none">{displayUser.name || displayUser.username}</div>
+                  <div className="text-[10px] text-blue-600 font-bold mt-1 uppercase tracking-tight">{displayUser.roleLabel || ROLE_LABELS[user.role]}</div>
                 </div>
                 <ChevronDown className="w-4 h-4 text-gray-400 ml-1" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56 p-2 shadow-2xl">
                 <div className="px-3 py-3 border-b border-gray-100 mb-1">
-                  <p className="text-xs font-bold text-gray-900">{user.name}</p>
-                  <p className="text-[11px] text-gray-500 truncate mt-0.5">{user.email}</p>
+                  <p className="text-xs font-bold text-gray-900">{displayUser.name || displayUser.username}</p>
+                  <p className="text-[11px] text-gray-500 truncate mt-0.5">{displayUser.email || "Chưa có email"}</p>
+                  <p className="text-[10px] text-blue-600 font-bold uppercase mt-1">{displayUser.roleLabel || ROLE_LABELS[user.role]}</p>
+                  {profileLoading && (
+                    <p className="text-[10px] text-gray-400 mt-1">Đang tải hồ sơ...</p>
+                  )}
+                  {profileError && !profileLoading && (
+                    <p className="text-[10px] text-amber-600 mt-1 line-clamp-2">{profileError}</p>
+                  )}
                 </div>
-                <DropdownMenuItem className="rounded-lg gap-2 py-2">
+                <DropdownMenuItem onClick={handleOpenProfile} className="rounded-lg gap-2 py-2">
                   <User className="w-4 h-4 text-gray-400" />
                   <span className="text-sm">Hồ sơ cá nhân</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem className="rounded-lg gap-2 py-2">
+                <DropdownMenuItem onClick={handleOpenChangePassword} className="rounded-lg gap-2 py-2">
                   <Key className="w-4 h-4 text-gray-400" />
                   <span className="text-sm">Đổi mật khẩu</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="rounded-lg gap-2 py-2">
-                  <SettingsIcon className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm">Cài đặt</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="my-1" />
                 <DropdownMenuItem onClick={handleLogout} className="rounded-lg gap-2 py-2 text-red-600 hover:bg-red-50 focus:bg-red-50 focus:text-red-600">
@@ -846,6 +1108,145 @@ const AppLayout = () => {
            <Outlet />
         </main>
       </div>
+
+      {toastMessage && (
+        <div className="fixed right-4 top-20 z-[60] max-w-sm rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-700 shadow-lg">
+          {toastMessage}
+        </div>
+      )}
+
+      <Dialog open={isProfileOpen} onOpenChange={setIsProfileOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Hồ sơ cá nhân</DialogTitle>
+            <DialogDescription>
+              Thông tin tài khoản đang đăng nhập từ hệ thống xác thực.
+            </DialogDescription>
+          </DialogHeader>
+
+          {profileLoading ? (
+            <div className="flex items-center gap-2 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+              <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+              Đang tải hồ sơ...
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {profileError && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
+                  {profileError}
+                </div>
+              )}
+              <div className="rounded-lg border border-gray-100 bg-gray-50/70 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600 text-sm font-bold text-white shadow-sm">
+                    {(displayUser.name || displayUser.username || "U").charAt(0)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-gray-900">{displayUser.name || displayUser.username}</p>
+                    <p className="mt-0.5 text-xs font-bold uppercase text-blue-600">{displayUser.roleLabel || ROLE_LABELS[user.role]}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="divide-y divide-gray-100 rounded-lg border border-gray-100">
+                {profileRows.map(([label, value]) => (
+                  <div key={label} className="grid grid-cols-[120px_1fr] gap-3 px-4 py-3 text-sm">
+                    <span className="text-xs font-semibold uppercase text-gray-400">{label}</span>
+                    <span className="min-w-0 break-words font-medium text-gray-800">{value || "Chưa có dữ liệu"}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsProfileOpen(false)}>
+              Đóng
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isChangePasswordOpen}
+        onOpenChange={(open) => {
+          if (open) {
+            setIsChangePasswordOpen(true);
+            return;
+          }
+          handleCloseChangePassword();
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <form onSubmit={handleSubmitChangePassword} className="space-y-4">
+            <DialogHeader>
+              <DialogTitle>Đổi mật khẩu</DialogTitle>
+              <DialogDescription>
+                Nhập mật khẩu hiện tại và mật khẩu mới để cập nhật tài khoản.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3">
+              <label className="block space-y-1.5">
+                <span className="text-xs font-semibold uppercase text-gray-500">Mật khẩu hiện tại</span>
+                <input
+                  type="password"
+                  name="currentPassword"
+                  value={changePasswordForm.currentPassword}
+                  onChange={handleChangePasswordInput}
+                  className="h-10 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                  autoComplete="current-password"
+                  disabled={changePasswordLoading}
+                />
+              </label>
+              <label className="block space-y-1.5">
+                <span className="text-xs font-semibold uppercase text-gray-500">Mật khẩu mới</span>
+                <input
+                  type="password"
+                  name="newPassword"
+                  value={changePasswordForm.newPassword}
+                  onChange={handleChangePasswordInput}
+                  className="h-10 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                  autoComplete="new-password"
+                  disabled={changePasswordLoading}
+                />
+              </label>
+              <label className="block space-y-1.5">
+                <span className="text-xs font-semibold uppercase text-gray-500">Xác nhận mật khẩu mới</span>
+                <input
+                  type="password"
+                  name="confirmPassword"
+                  value={changePasswordForm.confirmPassword}
+                  onChange={handleChangePasswordInput}
+                  className="h-10 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                  autoComplete="new-password"
+                  disabled={changePasswordLoading}
+                />
+              </label>
+            </div>
+
+            {changePasswordError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+                {changePasswordError}
+              </div>
+            )}
+            {changePasswordSuccess && (
+              <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs font-medium text-green-700">
+                {changePasswordSuccess}
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={handleCloseChangePassword} disabled={changePasswordLoading}>
+                Hủy
+              </Button>
+              <Button type="submit" disabled={changePasswordLoading} className="bg-blue-600 text-white hover:bg-blue-700">
+                {changePasswordLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                Lưu
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
