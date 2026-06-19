@@ -135,7 +135,6 @@ const AdminCalendarBlocksPage = () => {
             <Plus className="mr-2 h-4 w-4" />
             Tạo ngày nghỉ
           </Button>
-          <Button disabled variant="outline">Tạo tuần thi</Button>
           <Button variant="ghost" onClick={resetFilters}>
             <RefreshCw className="h-4 w-4" />
           </Button>

@@ -1,166 +1,292 @@
-import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, Calendar, Download, FileText, Loader2, School, TrendingUp } from "lucide-react";
-import { Button } from "../components/ui/button";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
-import { httpClient } from "../../services/httpClient";
+import { Button } from "../components/ui/button";
+import {
+  FileText,
+  Download,
+  Calendar,
+  TrendingUp,
+  Loader2,
+  X,
+  AlertCircle,
+} from "lucide-react";
+import { httpClient } from "@/services/httpClient";
 
-const getResponseData = (response) => {
-  const payload = response?.data?.data ?? response?.data ?? [];
-  return Array.isArray(payload) ? payload : [];
+const reports = [
+  {
+    id: "weekly-room-utilization",
+    title: "Báo cáo sử dụng phòng theo tuần",
+    description: "Phân tích số buổi và số giờ sử dụng của từng phòng theo ngày trong tuần",
+    icon: TrendingUp,
+    color: "bg-blue-500",
+  },
+  {
+    id: "monthly-scheduling-summary",
+    title: "Tổng hợp lịch học",
+    description: "Danh sách lớp học phần, phòng học, giảng viên, tiết học và tuần học đã xếp lịch",
+    icon: Calendar,
+    color: "bg-green-500",
+  },
+  {
+    id: "conflict-resolution",
+    title: "Báo cáo xung đột lịch phòng",
+    description: "Phát hiện các lịch bị trùng phòng, trùng tiết và giao tuần học",
+    icon: FileText,
+    color: "bg-red-500",
+  },
+  {
+    id: "lecturer-workload",
+    title: "Báo cáo khối lượng giảng dạy",
+    description: "Tổng hợp số lớp học phần, số buổi và số giờ giảng dạy của từng giảng viên",
+    icon: TrendingUp,
+    color: "bg-purple-500",
+  },
+];
+
+const getPayload = (response) => response?.data?.data || response?.data || {};
+
+const getFileNameFromHeader = (contentDisposition, fallback) => {
+  if (!contentDisposition) return fallback;
+
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    return decodeURIComponent(utf8Match[1].replaceAll('"', ""));
+  }
+
+  const normalMatch = contentDisposition.match(/filename="?([^"]+)"?/i);
+  if (normalMatch?.[1]) {
+    return normalMatch[1];
+  }
+
+  return fallback;
 };
 
-const settledData = (result) => (result.status === "fulfilled" ? getResponseData(result.value) : []);
-
 const ReportsPage = () => {
-  const [classrooms, setClassrooms] = useState([]);
-  const [sections, setSections] = useState([]);
-  const [exams, setExams] = useState([]);
-  const [calendarBlocks, setCalendarBlocks] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [downloadLoadingId, setDownloadLoadingId] = useState("");
+  const [previewData, setPreviewData] = useState(null);
+  const [errorMessage, setErrorMessage] = useState("");
 
-  useEffect(() => {
-    let isMounted = true;
+  const handlePreview = async (report) => {
+    setPreviewOpen(true);
+    setPreviewLoading(true);
+    setPreviewData(null);
+    setErrorMessage("");
 
-    const loadReports = async () => {
-      setLoading(true);
-      setError("");
-      try {
-        const [roomsResult, sectionsResult, examsResult, blocksResult] = await Promise.allSettled([
-          httpClient.get("/api/categories/classrooms"),
-          httpClient.get("/api/admin/class-sections"),
-          httpClient.get("/api/admin/exams"),
-          httpClient.get("/api/admin/calendar-blocks"),
-        ]);
+    try {
+      const response = await httpClient.get(
+        `/api/admin/reports/${report.id}/preview`,
+      );
 
-        if (!isMounted) return;
-        setClassrooms(settledData(roomsResult));
-        setSections(settledData(sectionsResult));
-        setExams(settledData(examsResult));
-        setCalendarBlocks(settledData(blocksResult));
+      setPreviewData(getPayload(response));
+    } catch (error) {
+      console.error("Không tạo được preview báo cáo:", error);
+      setErrorMessage(
+        error?.response?.data?.message ||
+          "Không tạo được preview báo cáo. Vui lòng kiểm tra backend.",
+      );
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
 
-        const allFailed = [roomsResult, sectionsResult, examsResult, blocksResult]
-          .every((result) => result.status === "rejected");
-        if (allFailed) setError("Không thể tải dữ liệu báo cáo.");
-      } catch (err) {
-        if (isMounted) setError(err?.response?.data?.message || "Không thể tải dữ liệu báo cáo.");
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    };
+  const handleDownload = async (report) => {
+    setDownloadLoadingId(report.id);
+    setErrorMessage("");
 
-    loadReports();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    try {
+      const response = await httpClient.get(
+        `/api/admin/reports/${report.id}/download`,
+        {
+          responseType: "blob",
+        },
+      );
 
-  const reports = useMemo(() => {
-    const assignedSections = sections.filter((section) => section.room || section.classroomId).length;
-    const conflictSections = sections.filter((section) => section.allocationStatus === "CONFLICT").length;
-    const activeRooms = classrooms.filter((room) => room.active !== false).length;
-    const scheduledExams = exams.filter((exam) => exam.status === "SCHEDULED").length;
+      const fallbackName = `${report.id}.csv`;
+      const fileName = getFileNameFromHeader(
+        response.headers?.["content-disposition"],
+        fallbackName,
+      );
 
-    return [
-      {
-        id: "rooms",
-        title: "Thống kê phòng học",
-        description: `${activeRooms} phòng đang hoạt động / ${classrooms.length} phòng`,
-        value: activeRooms,
-        icon: School,
-        color: "bg-blue-500",
-      },
-      {
-        id: "sections",
-        title: "Tổng hợp lớp học phần",
-        description: `${assignedSections} lớp đã có phòng / ${sections.length} lớp học phần`,
-        value: sections.length,
-        icon: Calendar,
-        color: "bg-emerald-500",
-      },
-      {
-        id: "conflicts",
-        title: "Cảnh báo trùng lịch",
-        description: `${conflictSections} lớp học phần cần kiểm tra`,
-        value: conflictSections,
-        icon: TrendingUp,
-        color: conflictSections > 0 ? "bg-red-500" : "bg-slate-500",
-      },
-      {
-        id: "exams",
-        title: "Lịch thi",
-        description: `${scheduledExams} lịch thi đang xếp / ${exams.length} lịch thi`,
-        value: exams.length,
-        icon: FileText,
-        color: "bg-indigo-500",
-      },
-      {
-        id: "calendar",
-        title: "Lịch học vụ",
-        description: `${calendarBlocks.length} ngày nghỉ, tuần thi hoặc sự kiện`,
-        value: calendarBlocks.length,
-        icon: Calendar,
-        color: "bg-amber-500",
-      },
-    ];
-  }, [calendarBlocks.length, classrooms, exams, sections]);
+      const blob = new Blob([response.data], {
+        type: "text/csv;charset=utf-8",
+      });
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Không tải được báo cáo:", error);
+      setErrorMessage(
+        error?.response?.data?.message ||
+          "Không tải được báo cáo. Vui lòng kiểm tra backend.",
+      );
+    } finally {
+      setDownloadLoadingId("");
+    }
+  };
+
+  const closePreview = () => {
+    setPreviewOpen(false);
+    setPreviewData(null);
+    setErrorMessage("");
+  };
+
+  const columns = previewData?.columns || [];
+  const rows = previewData?.rows || [];
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-gray-900">Báo cáo</h1>
-        <p className="mt-1 text-gray-600">Tổng hợp nhanh từ dữ liệu database hiện có.</p>
+        <p className="text-gray-600 mt-1">
+          Xem trước và tải xuống các báo cáo hệ thống
+        </p>
       </div>
 
-      {loading && (
-        <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
-          <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-blue-500" />
-          <p className="text-sm font-semibold text-gray-600">Đang tải báo cáo...</p>
+      {errorMessage && !previewOpen && (
+        <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+          <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+          <span>{errorMessage}</span>
         </div>
       )}
 
-      {!loading && error && (
-        <div className="rounded-xl border border-red-100 bg-red-50 p-8 text-center">
-          <AlertCircle className="mx-auto mb-3 h-8 w-8 text-red-400" />
-          <p className="text-sm font-bold text-red-700">{error}</p>
-        </div>
-      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {reports.map((report) => {
+          const Icon = report.icon;
+          const isDownloading = downloadLoadingId === report.id;
 
-      {!loading && !error && (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          {reports.map((report) => {
-            const Icon = report.icon;
-            return (
-              <Card key={report.id}>
-                <CardHeader>
-                  <div className="flex items-start gap-4">
-                    <div className={`${report.color} flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg`}>
-                      <Icon className="h-6 w-6 text-white" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <CardTitle className="text-lg">{report.title}</CardTitle>
-                      <p className="mt-1 text-sm text-gray-600">{report.description}</p>
-                    </div>
+          return (
+            <Card key={report.id}>
+              <CardHeader>
+                <div className="flex items-start gap-4">
+                  <div
+                    className={`${report.color} w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0`}
+                  >
+                    <Icon className="w-6 h-6 text-white" />
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-3xl font-bold text-gray-900">{report.value}</span>
-                    <div className="flex gap-2">
-                      <Button variant="outline" disabled>
-                        <FileText className="mr-2 h-4 w-4" />
-                        Xem
-                      </Button>
-                      <Button disabled className="bg-blue-600 hover:bg-blue-700">
-                        <Download className="mr-2 h-4 w-4" />
-                        Tải về
-                      </Button>
-                    </div>
+
+                  <div className="flex-1">
+                    <CardTitle className="text-lg">{report.title}</CardTitle>
+                    <p className="text-sm text-gray-600 mt-1">
+                      {report.description}
+                    </p>
                   </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                </div>
+              </CardHeader>
+
+              <CardContent>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => handlePreview(report)}
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Xem trước
+                  </Button>
+
+                  <Button
+                    className="flex-1 bg-blue-600 hover:bg-blue-700"
+                    onClick={() => handleDownload(report)}
+                    disabled={isDownloading}
+                  >
+                    {isDownloading ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Download className="w-4 h-4 mr-2" />
+                    )}
+                    {isDownloading ? "Đang tải..." : "Tải xuống"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {previewOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-6xl max-h-[85vh] overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">
+                  {previewData?.title || "Xem trước báo cáo"}
+                </h2>
+                <p className="text-sm text-gray-500">
+                  {previewData?.totalRows !== undefined
+                    ? `Tổng số dòng: ${previewData.totalRows}`
+                    : "Đang tải dữ liệu báo cáo"}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closePreview}
+                className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] overflow-auto p-6">
+              {previewLoading ? (
+                <div className="flex items-center justify-center gap-2 py-16 text-sm text-gray-500">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  Đang tạo preview báo cáo...
+                </div>
+              ) : errorMessage ? (
+                <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+                  <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                  <span>{errorMessage}</span>
+                </div>
+              ) : rows.length > 0 ? (
+                <div className="overflow-x-auto rounded-xl border border-gray-200">
+                  <table className="min-w-full divide-y divide-gray-200 text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        {columns.map((column) => (
+                          <th
+                            key={column.key}
+                            className="whitespace-nowrap px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-gray-600"
+                          >
+                            {column.label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+
+                    <tbody className="divide-y divide-gray-100 bg-white">
+                      {rows.map((row, index) => (
+                        <tr key={index} className="hover:bg-gray-50">
+                          {columns.map((column) => (
+                            <td
+                              key={column.key}
+                              className="whitespace-nowrap px-4 py-3 text-xs text-gray-700"
+                            >
+                              {row?.[column.key] ?? ""}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-gray-300 py-16 text-center text-sm text-gray-500">
+                  Báo cáo này hiện chưa có dữ liệu.
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -168,3 +294,4 @@ const ReportsPage = () => {
 };
 
 export { ReportsPage };
+export default ReportsPage;

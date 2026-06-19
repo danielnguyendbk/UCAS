@@ -4,10 +4,12 @@ spring:
 
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/QLPHONGHOC?useSSL=false&serverTimezone=Asia/Bangkok&allowPublicKeyRetrieval=true}
-    username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:}
+    username: ${DB_USERNAME:daniel}
+    password: ${DB_PASSWORD:Thai06112005}
+    driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
+    database-platform: org.hibernate.dialect.MySQLDialect
     hibernate:
       ddl-auto: none
     open-in-view: false
