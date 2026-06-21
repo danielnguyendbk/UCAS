@@ -24,6 +24,7 @@ import {
   TabsTrigger,
 } from "@/app/components/ui/tabs";
 import { Button } from "@/app/components/ui/button";
+import { Badge } from "@/app/components/ui/badge";
 import { Card, CardContent } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import RoomSearchModal from "@/app/components/booking/RoomSearchModal";
@@ -89,6 +90,16 @@ const WORKFLOW_TABS = [
 
 const VALID_TABS = new Set(WORKFLOW_TABS.map((tab) => tab.value));
 
+const WORKFLOW_STATUS_LABELS = {
+  DRAFT: "Bản nháp",
+  VALIDATING: "Đang kiểm tra",
+  CONFLICT: "Có xung đột",
+  READY_FOR_APPROVAL: "Chờ Admin duyệt",
+  APPROVED: "Đã duyệt",
+  PUBLISHED: "Đã công bố",
+  LOCKED: "Đã khóa",
+};
+
 const StaffAutoAssignmentPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -106,6 +117,7 @@ const StaffAutoAssignmentPage = () => {
     setSemesterId,
     allocations,
     conflicts,
+    workflow,
     loadedSemesterId,
     isLoading,
     isRunning,
@@ -121,8 +133,6 @@ const StaffAutoAssignmentPage = () => {
     handleOpenRoomSearch,
     handleRoomSelect,
     isSubmitting,
-    submitMessage,
-    submitApiAvailable,
     submitForApproval,
     setActiveTab: setAllocationTab,
   } = useStaffAllocation();
@@ -534,6 +544,19 @@ const StaffAutoAssignmentPage = () => {
 
             <TabsContent value="submit" className="mt-4">
               <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <div>
+                    <p className="text-xs text-gray-500">Trạng thái thời khóa biểu</p>
+                    <p className="mt-1 text-sm font-semibold text-gray-900">
+                      {workflow?.semesterName || "Học kỳ đang chọn"}
+                    </p>
+                  </div>
+                  <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
+                    {WORKFLOW_STATUS_LABELS[workflow?.timetableStatus] ||
+                      workflow?.timetableStatus ||
+                      "Đang tải"}
+                  </Badge>
+                </div>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <Card className="rounded-xl border-gray-200 shadow-sm">
                     <CardContent className="p-4">
@@ -578,18 +601,6 @@ const StaffAutoAssignmentPage = () => {
                   </div>
                 )}
 
-                {!submitApiAvailable && (
-                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-600">
-                    Backend chưa hỗ trợ API gửi duyệt
-                  </div>
-                )}
-
-                {submitMessage && (
-                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-800">
-                    {submitMessage}
-                  </div>
-                )}
-
                 <div className="flex justify-end">
                   <Button
                     onClick={submitForApproval}
@@ -597,7 +608,7 @@ const StaffAutoAssignmentPage = () => {
                       isSubmitting ||
                       !semesterId ||
                       summary.conflicts > 0 ||
-                      !submitApiAvailable
+                      !["DRAFT", "CONFLICT"].includes(workflow?.timetableStatus)
                     }
                     className="bg-blue-600 hover:bg-blue-700"
                   >

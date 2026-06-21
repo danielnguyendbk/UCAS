@@ -22,7 +22,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
-public class StaffAllocationService {
+public class StaffAllocationService implements AllocationValidationService {
 
     private static final int DEFAULT_FIRST_WEEK = 1;
     private static final int DEFAULT_LAST_WEEK = 999;
@@ -75,6 +75,7 @@ public class StaffAllocationService {
     }
 
     @Transactional
+    @Override
     public AllocationValidationSummary validateAllocations(Integer semesterId) {
         ConflictCalculation calculation = calculateConflicts(semesterId);
         updateValidationStatuses(semesterId, calculation.conflicts());

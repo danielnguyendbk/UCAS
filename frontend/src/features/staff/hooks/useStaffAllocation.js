@@ -15,6 +15,7 @@ export const useStaffAllocation = () => {
 
   const [allocations, setAllocations] = useState([]);
   const [conflicts, setConflicts] = useState([]);
+  const [workflow, setWorkflow] = useState(null);
   const [loadedSemesterId, setLoadedSemesterId] = useState("");
 
   const [isLoading, setIsLoading] = useState(false);
@@ -26,8 +27,6 @@ export const useStaffAllocation = () => {
   const [isRoomSearchOpen, setIsRoomSearchOpen] = useState(false);
   const [selectedSection, setSelectedSection] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitMessage, setSubmitMessage] = useState(null);
-  const [submitApiAvailable, setSubmitApiAvailable] = useState(true);
 
   useEffect(() => {
     const fetchSemesters = async () => {
@@ -51,14 +50,18 @@ export const useStaffAllocation = () => {
     setLoadedSemesterId("");
     setRunDoneMessage(null);
     try {
-      const [conflictRes, allocRes] = await Promise.all([
+      const [conflictRes, allocRes, workflowRes] = await Promise.all([
         httpClient.get(
           `/api/staff/allocations/conflicts?semesterId=${semesterId}`,
         ),
         httpClient.get(`/api/staff/allocations?semesterId=${semesterId}`),
+        httpClient.get(
+          `/api/staff/timetable-workflow/status?semesterId=${semesterId}`,
+        ),
       ]);
       setConflicts(conflictRes.data?.data || []);
       setAllocations(allocRes.data?.data || []);
+      setWorkflow(workflowRes.data?.data ?? workflowRes.data ?? null);
     } catch (error) {
       console.error("Lỗi lấy dữ liệu:", error);
     } finally {
@@ -153,21 +156,26 @@ export const useStaffAllocation = () => {
 
   const submitForApproval = async () => {
     setIsSubmitting(true);
-    setSubmitMessage(null);
+    setActionMessage(null);
     try {
       const res = await httpClient.post(
-        `/api/staff/room-assignment/submit-for-approval?semesterId=${semesterId}`,
+        `/api/staff/timetable-workflow/submit?semesterId=${semesterId}`,
       );
-      setSubmitMessage(res.data?.message || "Đã gửi Admin duyệt thành công!");
+      const updatedWorkflow = res.data?.data ?? res.data;
+      setWorkflow(updatedWorkflow);
+      setActionMessage({
+        tone: "success",
+        text: res.data?.message || "Đã gửi Admin duyệt thành công!",
+      });
     } catch (error) {
-      if (error.response?.status === 404) {
-        setSubmitApiAvailable(false);
-        setSubmitMessage("Backend chưa hỗ trợ API gửi duyệt");
-      } else {
-        setSubmitMessage(
-          error.response?.data?.message || "Không thể gửi duyệt. Vui lòng thử lại.",
-        );
-      }
+      const failedWorkflow = error.response?.data?.data;
+      if (failedWorkflow) setWorkflow(failedWorkflow);
+      setActionMessage({
+        tone: "error",
+        text:
+          error.response?.data?.message ||
+          "Không thể gửi duyệt. Vui lòng kiểm tra lại xung đột.",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -181,6 +189,7 @@ export const useStaffAllocation = () => {
     setSemesterId,
     allocations,
     conflicts,
+    workflow,
     loadedSemesterId,
     isLoading,
     isRunning,
@@ -196,8 +205,6 @@ export const useStaffAllocation = () => {
     handleOpenRoomSearch,
     handleRoomSelect,
     isSubmitting,
-    submitMessage,
-    submitApiAvailable,
     submitForApproval,
     refreshData: fetchData,
   };

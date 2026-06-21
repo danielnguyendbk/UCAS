@@ -13,7 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 @Service
-public class AuditLogService {
+public class AuditLogService implements WorkflowAuditLogger {
 
     private final AuditLogRepository auditLogRepository;
     private final ObjectMapper objectMapper;
@@ -35,6 +35,26 @@ public class AuditLogService {
                 "role", user.getRole().name(),
                 "loginAt", LocalDateTime.now().toString()
         )));
+        auditLogRepository.save(auditLog);
+    }
+
+    @Override
+    public void logWorkflowTransition(
+            Integer userId,
+            AuditAction action,
+            Integer semesterId,
+            String oldStatus,
+            String newStatus,
+            String description
+    ) {
+        AuditLog auditLog = new AuditLog();
+        auditLog.setUserId(userId);
+        auditLog.setAction(action);
+        auditLog.setTableName("semesters");
+        auditLog.setRecordId(semesterId.longValue());
+        auditLog.setOldValues(toJson(Map.of("timetableStatus", oldStatus)));
+        auditLog.setNewValues(toJson(Map.of("timetableStatus", newStatus)));
+        auditLog.setDescription(description);
         auditLogRepository.save(auditLog);
     }
 

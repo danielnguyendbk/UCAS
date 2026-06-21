@@ -44,6 +44,18 @@ const STATUS_BADGE = {
   CONFLICT: "bg-red-100 text-red-800 border-0",
 };
 
+const WORKFLOW_STATUS_LABEL = {
+  DRAFT: "Bản nháp",
+  VALIDATING: "Đang kiểm tra",
+  CONFLICT: "Có xung đột",
+  READY_FOR_APPROVAL: "Chờ duyệt",
+  APPROVED: "Đã duyệt",
+  PUBLISHED: "Đã công bố",
+  LOCKED: "Đã khóa",
+};
+
+const PAGE_SIZE = 10;
+
 const getStatus = (section) => section.allocationStatus || section.statusText || "NO_SCHEDULE";
 
 const getCourseCode = (section) => {
@@ -53,16 +65,20 @@ const getCourseCode = (section) => {
 
 const AdminTimetableApprovalPage = () => {
   const [sections, setSections] = useState([]);
+  const [workflow, setWorkflow] = useState(null);
   const [semesters, setSemesters] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [classesList, setClassesList] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedSemester, setSelectedSemester] = useState("all");
+  const [selectedSemester, setSelectedSemester] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [selectedDepartment, setSelectedDepartment] = useState("all");
   const [selectedClass, setSelectedClass] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [actionMessage, setActionMessage] = useState(null);
+  const [isActionRunning, setIsActionRunning] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     let isMounted = true;
@@ -74,7 +90,12 @@ const AdminTimetableApprovalPage = () => {
         httpClient.get("/api/categories/classes"),
       ]);
       if (!isMounted) return;
-      setSemesters(semRes.status === "fulfilled" ? getResponseData(semRes.value) : []);
+      const semesterItems =
+        semRes.status === "fulfilled" ? getResponseData(semRes.value) : [];
+      setSemesters(semesterItems);
+      const defaultSemester =
+        semesterItems.find((semester) => semester.status === "ACTIVE") || semesterItems[0];
+      if (defaultSemester) setSelectedSemester(String(defaultSemester.id));
       setDepartments(depRes.status === "fulfilled" ? getResponseData(depRes.value) : []);
       setClassesList(classRes.status === "fulfilled" ? getResponseData(classRes.value) : []);
     };
@@ -89,16 +110,31 @@ const AdminTimetableApprovalPage = () => {
     let isMounted = true;
 
     const loadSections = async () => {
+      if (!selectedSemester) {
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       setError("");
       try {
-        const params = {};
-        if (selectedSemester !== "all") params.semesterId = selectedSemester;
-        const response = await httpClient.get("/api/admin/class-sections", { params });
-        if (isMounted) setSections(getResponseData(response));
+        const params =
+          selectedSemester === "all" ? {} : { semesterId: selectedSemester };
+        const workflowRequest =
+          selectedSemester === "all"
+            ? Promise.resolve({ data: null })
+            : httpClient.get("/api/admin/timetable-workflow/pending", { params });
+        const [response, workflowResponse] = await Promise.all([
+          httpClient.get("/api/admin/class-sections", { params }),
+          workflowRequest,
+        ]);
+        if (isMounted) {
+          setSections(getResponseData(response));
+          setWorkflow(workflowResponse.data?.data ?? workflowResponse.data ?? null);
+        }
       } catch (err) {
         if (isMounted) {
           setSections([]);
+          setWorkflow(null);
           setError(err?.response?.data?.message || "Không thể tải dữ liệu lớp học phần.");
         }
       } finally {
@@ -135,17 +171,59 @@ const AdminTimetableApprovalPage = () => {
     });
   }, [classesList, searchTerm, sections, selectedClass, selectedDepartment, selectedStatus]);
 
-  const summary = useMemo(() => ({
-    total: sections.length,
-    unassigned: sections.filter((section) => getStatus(section) === "UNASSIGNED").length,
-    assigned: sections.filter((section) => getStatus(section) === "ASSIGNED").length,
-    conflicts: sections.filter((section) => getStatus(section) === "CONFLICT").length,
-    published: sections.filter((section) => getStatus(section) === "PUBLISHED").length,
-  }), [sections]);
+  const totalPages = Math.max(1, Math.ceil(filteredSections.length / PAGE_SIZE));
+  const pagedSections = useMemo(
+    () =>
+      filteredSections.slice(
+        (currentPage - 1) * PAGE_SIZE,
+        currentPage * PAGE_SIZE,
+      ),
+    [currentPage, filteredSections],
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    searchTerm,
+    selectedSemester,
+    selectedStatus,
+    selectedDepartment,
+    selectedClass,
+  ]);
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages));
+  }, [totalPages]);
+
+  const runWorkflowAction = async (action) => {
+    if (!selectedSemester) return;
+    setIsActionRunning(true);
+    setActionMessage(null);
+    try {
+      const response = await httpClient.post(
+        `/api/admin/timetable-workflow/${action}?semesterId=${selectedSemester}`,
+      );
+      setWorkflow(response.data?.data ?? response.data);
+      setActionMessage({
+        tone: "success",
+        text: response.data?.message || "Cập nhật trạng thái thành công.",
+      });
+    } catch (requestError) {
+      const failedWorkflow = requestError.response?.data?.data;
+      if (failedWorkflow) setWorkflow(failedWorkflow);
+      setActionMessage({
+        tone: "error",
+        text:
+          requestError.response?.data?.message ||
+          "Không thể cập nhật trạng thái thời khóa biểu.",
+      });
+    } finally {
+      setIsActionRunning(false);
+    }
+  };
 
   const resetFilters = () => {
     setSearchTerm("");
-    setSelectedSemester("all");
     setSelectedStatus("all");
     setSelectedDepartment("all");
     setSelectedClass("all");
@@ -161,11 +239,21 @@ const AdminTimetableApprovalPage = () => {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" disabled>
+          <Button
+            variant="outline"
+            disabled={
+              isActionRunning || workflow?.timetableStatus !== "READY_FOR_APPROVAL"
+            }
+            onClick={() => runWorkflowAction("approve")}
+          >
             <Check className="mr-2 h-4 w-4" />
             Duyệt hợp lệ
           </Button>
-          <Button disabled className="bg-blue-600 hover:bg-blue-700">
+          <Button
+            disabled={isActionRunning || workflow?.timetableStatus !== "APPROVED"}
+            onClick={() => runWorkflowAction("publish")}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
             <Calendar className="mr-2 h-4 w-4" />
             Công bố lịch
           </Button>
@@ -175,17 +263,37 @@ const AdminTimetableApprovalPage = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+      {actionMessage && (
+        <div
+          className={`rounded-xl border p-4 text-sm ${
+            actionMessage.tone === "success"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+              : "border-red-200 bg-red-50 text-red-800"
+          }`}
+        >
+          {actionMessage.text}
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {[
-          { label: "Tổng lớp HP", value: summary.total, color: "text-purple-600 bg-purple-50" },
-          { label: "Chưa phân phòng", value: summary.unassigned, color: "text-amber-600 bg-amber-50" },
-          { label: "Đã phân phòng", value: summary.assigned, color: "text-blue-600 bg-blue-50" },
-          { label: "Có xung đột", value: summary.conflicts, color: "text-red-700 bg-red-50" },
-          { label: "Đã công bố", value: summary.published, color: "text-emerald-600 bg-emerald-50" },
+          { label: "Tổng số lịch", value: workflow?.totalSchedules ?? 0 },
+          { label: "Lịch hợp lệ", value: workflow?.validCount ?? 0 },
+          { label: "Lịch xung đột", value: workflow?.conflictCount ?? 0 },
+          {
+            label: "Trạng thái workflow",
+            value:
+              WORKFLOW_STATUS_LABEL[workflow?.timetableStatus] ||
+              workflow?.timetableStatus ||
+              "Chưa chọn học kỳ",
+          },
         ].map((item) => (
-          <div key={item.label} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <div
+            key={item.label}
+            className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+          >
             <span className="text-xs font-medium text-gray-500">{item.label}</span>
-            <span className={`mt-2 block w-max rounded-lg px-2 py-0.5 text-2xl font-bold ${item.color}`}>
+            <span className="mt-2 block text-xl font-bold text-gray-900">
               {item.value}
             </span>
           </div>
@@ -291,7 +399,7 @@ const AdminTimetableApprovalPage = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredSections.length > 0 ? filteredSections.map((section) => {
+                {filteredSections.length > 0 ? pagedSections.map((section) => {
                   const status = getStatus(section);
                   return (
                     <TableRow key={section.id} className="hover:bg-gray-50/40">
@@ -329,6 +437,34 @@ const AdminTimetableApprovalPage = () => {
               </TableBody>
             </Table>
           </div>
+          {filteredSections.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 px-4 py-3 text-xs text-gray-500">
+              <span>
+                Hiển thị {(currentPage - 1) * PAGE_SIZE + 1}–
+                {Math.min(currentPage * PAGE_SIZE, filteredSections.length)} /{" "}
+                {filteredSections.length}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage <= 1}
+                  onClick={() => setCurrentPage((page) => page - 1)}
+                >
+                  Trước
+                </Button>
+                <span>Trang {currentPage}/{totalPages}</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage((page) => page + 1)}
+                >
+                  Sau
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

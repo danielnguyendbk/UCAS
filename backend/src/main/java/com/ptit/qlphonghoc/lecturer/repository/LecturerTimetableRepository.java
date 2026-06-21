@@ -58,6 +58,7 @@ public interface LecturerTimetableRepository extends JpaRepository<Lecturer, Int
             sch.status AS status
         FROM lecturers l
         JOIN class_sections cs ON cs.lecturer_id = l.lecturer_id
+        JOIN semesters sem ON sem.semester_id = cs.semester_id
         JOIN courses c ON c.course_id = cs.course_id
         JOIN schedules sch ON sch.section_id = cs.section_id
         JOIN time_slots ts_start ON ts_start.slot_id = sch.slot_start_id
@@ -66,6 +67,8 @@ public interface LecturerTimetableRepository extends JpaRepository<Lecturer, Int
         LEFT JOIN buildings b ON b.building_id = cr.building_id
         WHERE l.lecturer_id = :lecturerId
           AND l.is_deleted = FALSE
+          AND sem.is_deleted = FALSE
+          AND sem.timetable_status IN ('PUBLISHED', 'LOCKED')
           AND cs.status = 'ACTIVE'
           AND sch.status <> 'CANCELLED'
           AND (:semesterId IS NULL OR cs.semester_id = :semesterId)

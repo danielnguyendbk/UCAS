@@ -124,7 +124,8 @@ public class CategoryController {
                    s.semester_type AS type,
                    s.start_date AS startDate,
                    s.end_date AS endDate,
-                   s.status
+                   s.status,
+                   s.timetable_status AS timetableStatus
             FROM semesters s
             JOIN academic_years ay ON s.academic_year_id = ay.academic_year_id
             WHERE s.is_deleted = FALSE

@@ -57,6 +57,7 @@ public interface StudentTimetableRepository extends JpaRepository<Student, Integ
         FROM students s
         JOIN student_section_enrollments sse ON sse.student_id = s.student_id
         JOIN class_sections cs ON cs.section_id = sse.section_id
+        JOIN semesters sem ON sem.semester_id = cs.semester_id
         JOIN courses c ON c.course_id = cs.course_id
         JOIN lecturers l ON l.lecturer_id = cs.lecturer_id
         JOIN schedules sch ON sch.section_id = cs.section_id
@@ -67,6 +68,8 @@ public interface StudentTimetableRepository extends JpaRepository<Student, Integ
         WHERE s.user_id = :userId
           AND s.is_deleted = FALSE
           AND sse.status = 'ENROLLED'
+          AND sem.is_deleted = FALSE
+          AND sem.timetable_status IN ('PUBLISHED', 'LOCKED')
           AND cs.status = 'ACTIVE'
           AND sch.status <> 'CANCELLED'
           AND (:semesterId IS NULL OR cs.semester_id = :semesterId)
