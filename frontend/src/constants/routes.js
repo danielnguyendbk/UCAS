@@ -9,6 +9,7 @@ const APP_ROUTES = {
   adminLecturers: "/admin/lecturers",
   adminSections: "/admin/sections",
   adminTimetable: "/admin/timetable",
+  adminTimetableImport: "/admin/timetable-import",
   adminAutoAssignment: "/admin/auto-assignment",
   adminTimetableApproval: "/admin/timetable-approval",
   adminCalendarBlocks: "/admin/calendar-blocks",

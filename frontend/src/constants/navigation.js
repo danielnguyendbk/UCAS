@@ -12,6 +12,7 @@ import {
   PlusSquare,
   School,
   Settings,
+  Upload,
   Wrench,
 } from "lucide-react";
 import { APP_ROUTES } from "./routes";
@@ -68,6 +69,12 @@ const NAVIGATION_BY_ROLE = {
           id: "admin-timetable-view",
           label: "Thời khóa biểu toàn trường",
           path: APP_ROUTES.adminTimetable,
+        },
+        {
+          id: "admin-timetable-import",
+          label: "Import và kiểm tra dữ liệu",
+          path: APP_ROUTES.adminTimetableImport,
+          icon: Upload,
         },
         {
           id: "admin-timetable-approval",

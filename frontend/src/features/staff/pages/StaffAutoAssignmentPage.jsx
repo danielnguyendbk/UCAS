@@ -81,7 +81,7 @@ const ListPagination = ({ page, totalItems, onPageChange }) => {
 };
 
 const WORKFLOW_TABS = [
-  { value: "import", label: "Import thời khóa biểu" },
+  { value: "import", label: "Import thử nghiệm" },
   { value: "pending", label: "Chờ phân phòng" },
   { value: "assigned", label: "Đã phân phòng" },
   { value: "conflicts", label: "Xung đột" },
@@ -506,12 +506,11 @@ const StaffAutoAssignmentPage = () => {
               <div className="flex flex-col items-center justify-center py-16 bg-gray-50/50 rounded-xl border border-dashed border-gray-200 text-center">
                 <Upload className="w-10 h-10 text-gray-300 mb-3" />
                 <p className="text-sm font-medium text-gray-700">
-                  Chức năng import thời khóa biểu đang phát triển
+                  Import học phần hiện được thực hiện bởi Admin
                 </p>
                 <p className="text-xs text-gray-400 mt-1 max-w-md">
-                  API{" "}
-                  <span className="font-mono">POST /api/staff/timetable/import</span>{" "}
-                  chưa được triển khai trên backend.
+                  Tab thử nghiệm này được giữ để không làm vỡ luồng cũ. Admin có thể
+                  validate và preview file tại màn “Import và kiểm tra dữ liệu”.
                 </p>
               </div>
             </TabsContent>
