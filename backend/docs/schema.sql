@@ -53,6 +53,15 @@ CREATE TABLE semesters (
     semester_year      VARCHAR(20) NOT NULL,
     semester_type      ENUM('FALL','SPRING','SUMMER') NOT NULL,
     semester_name      VARCHAR(100) NOT NULL,
+    timetable_status ENUM(
+	  'DRAFT',
+	  'VALIDATING',
+	  'CONFLICT',
+	  'READY_FOR_APPROVAL',
+	  'APPROVED',
+	  'PUBLISHED',
+	  'LOCKED'
+	) NOT NULL DEFAULT 'DRAFT',
     start_date         DATE NOT NULL,
     end_date           DATE NOT NULL,
     status             ENUM('UPCOMING','ACTIVE','COMPLETED') NOT NULL DEFAULT 'UPCOMING',
@@ -67,6 +76,8 @@ CREATE TABLE semesters (
     CONSTRAINT fk_semesters_academic_year
         FOREIGN KEY (academic_year_id) REFERENCES academic_years(academic_year_id)
 ) ENGINE=InnoDB;
+
+
 
 CREATE TABLE semester_weeks (
     semester_week_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -313,6 +324,9 @@ CREATE TABLE class_sections (
     class_name     VARCHAR(50) NOT NULL,
     enrolled_count INT NOT NULL DEFAULT 0,
     max_capacity   INT NOT NULL,
+    import_source VARCHAR(100) NULL,
+    import_batch_code VARCHAR(50) NULL,
+    last_imported_at DATETIME NULL,
     status         ENUM('ACTIVE','CANCELLED','COMPLETED') NOT NULL DEFAULT 'ACTIVE',
     created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -331,6 +345,8 @@ CREATE TABLE class_sections (
         FOREIGN KEY (lecturer_id) REFERENCES lecturers(lecturer_id)
 ) ENGINE=InnoDB;
 
+
+
 CREATE TABLE schedules (
     schedule_id       BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     section_id        BIGINT UNSIGNED NOT NULL,
@@ -346,8 +362,14 @@ CREATE TABLE schedules (
     practice_group_no TINYINT UNSIGNED NOT NULL DEFAULT 0,
     assigned_by       BIGINT UNSIGNED NULL,
     assigned_at       DATETIME NULL,
+    validation_status ENUM(
+	  'NOT_CHECKED',
+	  'VALID',
+	  'CONFLICT'
+	) NOT NULL DEFAULT 'NOT_CHECKED',
     status            ENUM('UNASSIGNED','ASSIGNED','INACTIVE','CANCELLED') NOT NULL DEFAULT 'UNASSIGNED',
     note              VARCHAR(255),
+    conflict_reason VARCHAR(255) NULL,
     created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
@@ -375,6 +397,9 @@ CREATE TABLE schedules (
     CONSTRAINT fk_schedules_assigned_by
         FOREIGN KEY (assigned_by) REFERENCES users(user_id)
 ) ENGINE=InnoDB;
+
+
+
 
 CREATE TABLE student_section_enrollments (
     enrollment_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
