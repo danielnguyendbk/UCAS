@@ -28,7 +28,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
-public class TimetableImportPreviewService {
+public class TimetableImportPreviewService implements TimetableImportValidator {
 
     private static final Set<String> DAYS = Set.of("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN");
     private static final Set<String> SESSION_TYPES = Set.of("THEORY", "PRACTICE");
@@ -44,6 +44,11 @@ public class TimetableImportPreviewService {
 
     @Transactional(readOnly = true)
     public ImportPreviewResponse preview(MultipartFile file, Long semesterId, String semesterCode) {
+        return validate(file, semesterId, semesterCode).preview();
+    }
+
+    @Override
+    public TimetableImportValidationResult validate(MultipartFile file, Long semesterId, String semesterCode) {
         ParsedImportFile parsed = parser.parse(file);
         String inferredCode = firstNonBlank(parsed.rows(), "semester_code");
         String requestedCode = normalizeNullable(semesterCode);
@@ -184,8 +189,7 @@ public class TimetableImportPreviewService {
             }
 
             String operation = determineOperation(section, matchedSchedule, lecturer, enrolled, maximum, className,
-                    day, slotStart, slotEnd, fromWeek, toWeek, sessionType, practiceGroup, classroom,
-                    schedulesBySection.getOrDefault(section == null ? -1L : section.id(), List.of()));
+                    day, slotStart, slotEnd, fromWeek, toWeek, sessionType, practiceGroup, classroom);
             String status = messages.stream().anyMatch(message -> "ERROR".equals(message.severity())) ? "ERROR"
                     : messages.isEmpty() ? "VALID" : "WARNING";
             if ("ERROR".equals(status)) operation = "ERROR";
@@ -202,9 +206,11 @@ public class TimetableImportPreviewService {
         int valid = (int) resultRows.stream().filter(row -> "VALID".equals(row.status())).count();
         int warnings = (int) resultRows.stream().filter(row -> "WARNING".equals(row.status())).count();
         int errorCount = (int) resultRows.stream().filter(row -> "ERROR".equals(row.status())).count();
-        return new ImportPreviewResponse("PREVIEW-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT),
+        ImportPreviewResponse preview = new ImportPreviewResponse(
+                "PREVIEW-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT),
                 semester.id(), semester.code(), resultRows.size(), valid, warnings, errorCount,
                 operations, errors, List.copyOf(resultRows));
+        return new TimetableImportValidationResult(preview, semester, refs);
     }
 
     private void assertMutable(SemesterRef semester) {
@@ -219,18 +225,13 @@ public class TimetableImportPreviewService {
     private String determineOperation(SectionRef section, ScheduleRef exactSchedule, LecturerRef lecturer,
                                       Integer enrolled, Integer maximum, String className, String day,
                                       Integer slotStart, Integer slotEnd, Integer fromWeek, Integer toWeek,
-                                      String sessionType, Integer practiceGroup, ClassroomRef classroom,
-                                      List<ScheduleRef> schedules) {
+                                      String sessionType, Integer practiceGroup, ClassroomRef classroom) {
         if (section == null) return "CREATE_SECTION";
         boolean sectionChanged = lecturer != null && (section.lecturerId() != lecturer.id()
                 || enrolled != null && section.enrolledCount() != enrolled
                 || maximum != null && section.maxCapacity() != maximum
                 || !normalize(section.className()).equals(normalize(className)));
         ScheduleRef candidate = exactSchedule;
-        if (candidate == null) {
-            candidate = schedules.stream().filter(schedule -> normalize(schedule.dayOfWeek()).equals(day)
-                    && practiceGroup != null && schedule.practiceGroup() == practiceGroup).findFirst().orElse(null);
-        }
         if (candidate == null) return "CREATE_SCHEDULE";
         boolean scheduleChanged = slotStart != null && candidate.slotStart() != slotStart
                 || slotEnd != null && candidate.slotEnd() != slotEnd
@@ -250,7 +251,8 @@ public class TimetableImportPreviewService {
     }
 
     private boolean isScheduleRangeValid(String day, Integer start, Integer end, Integer from, Integer to) {
-        return DAYS.contains(day) && start != null && end != null && start <= end && from != null && to != null && from <= to;
+        boolean validWeeks = from == null && to == null || from != null && to != null && from <= to;
+        return DAYS.contains(day) && start != null && end != null && start <= end && validWeeks;
     }
 
     private boolean overlaps(int aStart, int aEnd, int bStart, int bEnd) {

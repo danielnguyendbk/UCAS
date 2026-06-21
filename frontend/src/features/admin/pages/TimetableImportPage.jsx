@@ -1,12 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, Search, Upload, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, Download, FileSpreadsheet, Search, Upload, XCircle } from "lucide-react";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/app/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
+import { APP_ROUTES } from "@/constants/routes";
 import { getApiError } from "@/utils/apiError";
 import {
+  applyTimetableImport,
   downloadTimetableImportTemplate,
   getImportSemesters,
   previewTimetableImport,
@@ -35,11 +46,15 @@ const SummaryItem = ({ label, value, tone = "text-slate-900" }) => (
 );
 
 export default function TimetableImportPage() {
+  const navigate = useNavigate();
   const [semesters, setSemesters] = useState([]);
   const [semesterId, setSemesterId] = useState("");
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [applyResult, setApplyResult] = useState(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("ALL");
   const [page, setPage] = useState(1);
@@ -85,12 +100,33 @@ export default function TimetableImportPage() {
       setLoading(true);
       const result = await previewTimetableImport({ file, semesterId });
       setPreview(result);
+      setApplyResult(null);
       toast.success("Đã kiểm tra file. Chưa có dữ liệu nào được ghi.");
     } catch (error) {
       const apiError = getApiError(error, "Không thể kiểm tra file import.");
       toast.error(apiError.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleApply = async () => {
+    if (!file || !preview || preview.errorRows > 0) return;
+    try {
+      setApplying(true);
+      const result = await applyTimetableImport({ file, semesterId });
+      setApplyResult(result);
+      setConfirmOpen(false);
+      toast.success("Đã áp dụng import thành công. Học kỳ được đưa về trạng thái DRAFT.");
+    } catch (error) {
+      const apiError = getApiError(error, "Không thể áp dụng file import.");
+      if (apiError.errorCode === "IMPORT_HAS_ERRORS") {
+        setPreview(null);
+        setConfirmOpen(false);
+      }
+      toast.error(apiError.message);
+    } finally {
+      setApplying(false);
     }
   };
 
@@ -107,9 +143,9 @@ export default function TimetableImportPage() {
       <header className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">Đối soát dữ liệu học vụ</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950">Preview import thời khóa biểu</h1>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950">Import thời khóa biểu</h1>
           <p className="mt-1 max-w-2xl text-sm text-slate-500">
-            Kiểm tra từng dòng trước khi nhập. Phase 2A chỉ đọc và preview, không ghi dữ liệu vào hệ thống.
+            Preview từng dòng trước khi áp dụng. Backend luôn kiểm tra lại file và ghi toàn bộ trong một transaction.
           </p>
         </div>
         <Button variant="outline" onClick={handleTemplate}>
@@ -121,7 +157,7 @@ export default function TimetableImportPage() {
         <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)_auto] lg:items-end">
           <div>
             <label className="mb-2 block text-xs font-medium text-slate-600">Học kỳ đối chiếu</label>
-            <Select value={semesterId} onValueChange={(value) => { setSemesterId(value); setPreview(null); }}>
+            <Select value={semesterId} onValueChange={(value) => { setSemesterId(value); setPreview(null); setApplyResult(null); }}>
               <SelectTrigger className="bg-slate-50"><SelectValue placeholder="Chọn học kỳ" /></SelectTrigger>
               <SelectContent>
                 {semesters.map((semester) => (
@@ -141,7 +177,7 @@ export default function TimetableImportPage() {
                 type="file"
                 accept=".xlsx,.csv"
                 className="sr-only"
-                onChange={(event) => { setFile(event.target.files?.[0] ?? null); setPreview(null); }}
+                onChange={(event) => { setFile(event.target.files?.[0] ?? null); setPreview(null); setApplyResult(null); }}
               />
             </label>
           </div>
@@ -165,6 +201,52 @@ export default function TimetableImportPage() {
               </div>
             </div>
           </section>
+
+          <section className={`flex flex-col gap-4 rounded-xl border p-4 md:flex-row md:items-center md:justify-between ${preview.errorRows > 0 ? "border-red-200 bg-red-50/70" : "border-blue-200 bg-blue-50/60"}`}>
+            <div className="flex items-start gap-3">
+              {preview.errorRows > 0 ? <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" /> : <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-blue-700" />}
+              <div>
+                <p className={`text-sm font-semibold ${preview.errorRows > 0 ? "text-red-900" : "text-blue-950"}`}>
+                  {preview.errorRows > 0 ? "Chưa thể áp dụng import" : "File đã qua cổng kiểm tra"}
+                </p>
+                <p className={`mt-1 text-xs ${preview.errorRows > 0 ? "text-red-700" : "text-blue-700"}`}>
+                  {preview.errorRows > 0
+                    ? `Còn ${preview.errorRows} dòng lỗi. Hãy sửa file và preview lại.`
+                    : "Backend sẽ parse và validate lại chính file này trong transaction trước khi ghi."}
+                </p>
+              </div>
+            </div>
+            <Button
+              disabled={preview.errorRows > 0 || applying || Boolean(applyResult)}
+              onClick={() => setConfirmOpen(true)}
+              className="shrink-0 bg-blue-700 hover:bg-blue-800"
+            >
+              {applyResult ? "Đã áp dụng" : "Áp dụng import"}
+            </Button>
+          </section>
+
+          {applyResult && (
+            <section className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <div className="flex items-center gap-2 text-sm font-semibold text-emerald-900">
+                    <CheckCircle2 className="h-5 w-5" /> Import đã được commit
+                  </div>
+                  <p className="mt-1 font-mono text-xs text-emerald-700">{applyResult.importBatchCode} · {applyResult.semesterCode} · DRAFT</p>
+                </div>
+                <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-emerald-800">
+                  <span>Tạo lớp: <strong>{applyResult.createdSections}</strong></span>
+                  <span>Cập nhật lớp: <strong>{applyResult.updatedSections}</strong></span>
+                  <span>Tạo lịch: <strong>{applyResult.createdSchedules}</strong></span>
+                  <span>Cập nhật lịch: <strong>{applyResult.updatedSchedules}</strong></span>
+                  <span>Giữ phòng cũ: <strong>{applyResult.retainedClassroomAssignments}</strong></span>
+                </div>
+                <Button variant="outline" onClick={() => navigate(APP_ROUTES.adminAutoAssignment)} className="border-emerald-300 bg-white text-emerald-800 hover:bg-emerald-100">
+                  Chuyển sang phân phòng <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            </section>
+          )}
 
           <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50/70 p-3 md:flex-row md:items-center">
@@ -242,6 +324,28 @@ export default function TimetableImportPage() {
           </section>
         </>
       )}
+
+      <Dialog open={confirmOpen} onOpenChange={(open) => !applying && setConfirmOpen(open)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xác nhận áp dụng import</DialogTitle>
+            <DialogDescription>
+              Thao tác này sẽ cập nhật lớp học phần và lịch mẫu. Dữ liệu đã public hoặc locked sẽ bị backend chặn.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+            <p><span className="font-medium text-slate-800">File:</span> {file?.name}</p>
+            <p className="mt-1"><span className="font-medium text-slate-800">Preview:</span> {preview?.importBatchCode} · {preview?.totalRows ?? 0} dòng · {preview?.warningRows ?? 0} cảnh báo</p>
+            <p className="mt-2 text-amber-700">Không soft-cancel dữ liệu vắng mặt trong file. Không sinh class sessions.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" disabled={applying} onClick={() => setConfirmOpen(false)}>Hủy</Button>
+            <Button disabled={applying} onClick={handleApply} className="bg-blue-700 hover:bg-blue-800">
+              {applying ? "Đang áp dụng..." : "Xác nhận áp dụng"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

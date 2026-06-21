@@ -1,8 +1,11 @@
 package com.ptit.qlphonghoc.admin.timetableimport.controller;
 
+import com.ptit.qlphonghoc.admin.timetableimport.dto.ImportApplyResponse;
 import com.ptit.qlphonghoc.admin.timetableimport.dto.ImportPreviewResponse;
 import com.ptit.qlphonghoc.admin.timetableimport.parser.TimetableImportFileParser;
+import com.ptit.qlphonghoc.admin.timetableimport.service.TimetableImportApplyService;
 import com.ptit.qlphonghoc.admin.timetableimport.service.TimetableImportPreviewService;
+import com.ptit.qlphonghoc.auth.security.CustomUserDetails;
 import com.ptit.qlphonghoc.common.response.ApiResponse;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -12,6 +15,7 @@ import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,9 +33,27 @@ import java.util.List;
 public class AdminTimetableImportController {
 
     private final TimetableImportPreviewService previewService;
+    private final TimetableImportApplyService applyService;
 
-    public AdminTimetableImportController(TimetableImportPreviewService previewService) {
+    public AdminTimetableImportController(
+            TimetableImportPreviewService previewService,
+            TimetableImportApplyService applyService
+    ) {
         this.previewService = previewService;
+        this.applyService = applyService;
+    }
+
+    @PostMapping(value = "/apply", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<ImportApplyResponse> apply(
+            @RequestParam(required = false) MultipartFile file,
+            @RequestParam(required = false) Long semesterId,
+            @RequestParam(required = false) String semesterCode,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        return ApiResponse.success(
+                "Đã áp dụng file import thành công.",
+                applyService.apply(file, semesterId, semesterCode, userDetails.getUserId())
+        );
     }
 
     @PostMapping(value = "/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

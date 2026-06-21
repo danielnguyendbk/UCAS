@@ -16,6 +16,17 @@ export const previewTimetableImport = async ({ file, semesterId }) => {
   return response.data?.data;
 };
 
+export const applyTimetableImport = async ({ file, semesterId }) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await httpClient.post("/api/admin/timetable-import/apply", formData, {
+    params: semesterId ? { semesterId } : undefined,
+    headers: { "Content-Type": "multipart/form-data" },
+    timeout: 60_000,
+  });
+  return response.data?.data;
+};
+
 export const downloadTimetableImportTemplate = async () => {
   const response = await httpClient.get("/api/admin/timetable-import/template", {
     responseType: "blob",

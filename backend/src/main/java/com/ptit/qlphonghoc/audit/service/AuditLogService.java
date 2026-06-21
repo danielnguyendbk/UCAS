@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ptit.qlphonghoc.audit.entity.AuditLog;
 import com.ptit.qlphonghoc.audit.enumtype.AuditAction;
 import com.ptit.qlphonghoc.audit.repository.AuditLogRepository;
+import com.ptit.qlphonghoc.admin.timetableimport.service.TimetableImportAuditLogger;
 import com.ptit.qlphonghoc.user.entity.User;
 import org.springframework.stereotype.Service;
 
@@ -13,7 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 @Service
-public class AuditLogService implements WorkflowAuditLogger {
+public class AuditLogService implements WorkflowAuditLogger, TimetableImportAuditLogger {
 
     private final AuditLogRepository auditLogRepository;
     private final ObjectMapper objectMapper;
@@ -56,6 +57,23 @@ public class AuditLogService implements WorkflowAuditLogger {
         auditLog.setNewValues(toJson(Map.of("timetableStatus", newStatus)));
         auditLog.setDescription(description);
         auditLogRepository.save(auditLog);
+    }
+
+    @Override
+    public void logTimetableImport(
+            Integer userId,
+            Long semesterId,
+            String importBatchCode,
+            Map<String, Object> summary
+    ) {
+        AuditLog auditLog = new AuditLog();
+        auditLog.setUserId(userId);
+        auditLog.setAction(AuditAction.UPDATE);
+        auditLog.setTableName("class_sections");
+        auditLog.setRecordId(semesterId);
+        auditLog.setNewValues(toJson(summary));
+        auditLog.setDescription("Apply timetable import batch " + importBatchCode);
+        auditLogRepository.saveAndFlush(auditLog);
     }
 
     private String toJson(Map<String, Object> values) {
