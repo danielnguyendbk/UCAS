@@ -106,6 +106,22 @@ public class JdbcTimetableImportWriteStore implements TimetableImportWriteStore 
     }
 
     @Override
+    public int softCancelSchedule(long scheduleId, String note) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("scheduleId", scheduleId)
+                .addValue("note", note);
+        return jdbc.update("""
+                UPDATE schedules
+                SET status = 'CANCELLED',
+                    validation_status = 'NOT_CHECKED',
+                    conflict_reason = NULL,
+                    note = :note
+                WHERE schedule_id = :scheduleId
+                  AND status NOT IN ('CANCELLED', 'INACTIVE')
+                """, params);
+    }
+
+    @Override
     public void markSemesterDraft(long semesterId) {
         int changed = jdbc.update("""
                 UPDATE semesters SET timetable_status = 'DRAFT' WHERE semester_id = :semesterId

@@ -152,7 +152,7 @@ const NAVIGATION_BY_ROLE = {
       path: APP_ROUTES.staffAutoAssignment,
     },
 
-    { icon: PlusSquare, label: "Đặt phòng khẩn cấp", path: APP_ROUTES.staffBookings, badge: "G\u1EA5p" },
+    { icon: PlusSquare, label: "Đặt phòng khẩn cấp", path: APP_ROUTES.staffEmergencyRoomChange, badge: "Gấp" },
     {
       id: "staff-maintenance-requests",
       icon: Wrench,

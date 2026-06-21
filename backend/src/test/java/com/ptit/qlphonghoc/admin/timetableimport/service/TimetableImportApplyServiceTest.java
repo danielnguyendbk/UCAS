@@ -31,8 +31,10 @@ class TimetableImportApplyServiceTest {
 
         ImportApplyResponse response = service.apply(file, 1L, null, 99);
 
+        assertThat(response.importMode()).isEqualTo("MERGE_ONLY");
         assertThat(response.createdSections()).isEqualTo(1);
         assertThat(response.createdSchedules()).isEqualTo(1);
+        assertThat(response.cancelledSchedules()).isZero();
         assertThat(response.timetableStatus()).isEqualTo("DRAFT");
         assertThat(store.draftMarked).isTrue();
     }
@@ -75,6 +77,44 @@ class TimetableImportApplyServiceTest {
         assertThat(response.retainedClassroomAssignments()).isEqualTo(1);
         assertThat(store.lastSchedule.classroomId()).isEqualTo(30L);
         assertThat(store.lastSchedule.status()).isEqualTo("ASSIGNED");
+    }
+
+    @Test
+    void syncFileScopeCancelsExistingSchedulesOutsideImportedSectionKeys() {
+        FakeWriteStore store = new FakeWriteStore("DRAFT");
+        TimetableImportApplyService service = service(validation(validRow("NO_CHANGE"), referenceDataWithExtraSchedule()), store);
+
+        ImportApplyResponse response = service.apply(file, 1L, null, "SYNC_FILE_SCOPE", 99);
+
+        assertThat(response.importMode()).isEqualTo("SYNC_FILE_SCOPE");
+        assertThat(response.cancelledSchedules()).isEqualTo(1);
+        assertThat(store.cancelledScheduleIds).containsExactly(60L);
+    }
+
+    @Test
+    void syncFileScopeDoesNotCancelSchedulesOfSectionsOutsideFile() {
+        FakeWriteStore store = new FakeWriteStore("DRAFT");
+        TimetableImportApplyService service = service(validation(validRow("NO_CHANGE"), referenceDataWithOtherSectionSchedule()), store);
+
+        ImportApplyResponse response = service.apply(file, 1L, null, "SYNC_FILE_SCOPE", 99);
+
+        assertThat(response.cancelledSchedules()).isZero();
+        assertThat(store.cancelledScheduleIds).isEmpty();
+    }
+
+    @Test
+    void rejectsInvalidImportModeBeforeValidation() {
+        FakeWriteStore store = new FakeWriteStore("DRAFT");
+        TimetableImportValidator validator = (ignoredFile, ignoredId, ignoredCode) -> {
+            throw new AssertionError("validator should not run for invalid mode");
+        };
+        TimetableImportApplyService service = new TimetableImportApplyService(validator, store, (userId, semesterId, batchCode, summary) -> { });
+
+        assertThatThrownBy(() -> service.apply(file, 1L, null, "FULL_SYNC", 99))
+                .isInstanceOf(BadRequestException.class)
+                .extracting("errorCode")
+                .isEqualTo("INVALID_IMPORT_MODE");
+        assertThat(store.lockCalled).isFalse();
     }
 
     @Test
@@ -150,11 +190,51 @@ class TimetableImportApplyServiceTest {
         );
     }
 
+    private ReferenceData referenceDataWithExtraSchedule() {
+        CourseRef course = new CourseRef(10L, "INT1001", "LECTURE");
+        LecturerRef lecturer = new LecturerRef(20L, "GV01");
+        SectionRef section = new SectionRef(40L, 10L, 20L, "01", "D23CQCN01", 40, 50, "ACTIVE");
+        ScheduleRef importedSchedule = new ScheduleRef(50L, 40L, 30L, "MON", 1, 3, 1, 15, "THEORY", 0, "ASSIGNED");
+        ScheduleRef staleSchedule = new ScheduleRef(60L, 40L, 31L, "TUE", 4, 6, 1, 15, "THEORY", 0, "ASSIGNED");
+        return new ReferenceData(
+                Map.of("INT1001", course),
+                Map.of("GV01", lecturer),
+                Map.of(
+                        1, new SlotRef(1L, 1, LocalTime.of(7, 0), LocalTime.of(7, 50)),
+                        3, new SlotRef(3L, 3, LocalTime.of(8, 50), LocalTime.of(9, 40))
+                ),
+                Map.of(), Map.of(), new WeekRange(1, 15),
+                List.of(section),
+                List.of(importedSchedule, staleSchedule)
+        );
+    }
+
+    private ReferenceData referenceDataWithOtherSectionSchedule() {
+        CourseRef course = new CourseRef(10L, "INT1001", "LECTURE");
+        LecturerRef lecturer = new LecturerRef(20L, "GV01");
+        SectionRef importedSection = new SectionRef(40L, 10L, 20L, "01", "D23CQCN01", 40, 50, "ACTIVE");
+        SectionRef otherSection = new SectionRef(41L, 10L, 20L, "02", "D23CQCN02", 40, 50, "ACTIVE");
+        ScheduleRef importedSchedule = new ScheduleRef(50L, 40L, 30L, "MON", 1, 3, 1, 15, "THEORY", 0, "ASSIGNED");
+        ScheduleRef otherSchedule = new ScheduleRef(60L, 41L, 31L, "TUE", 4, 6, 1, 15, "THEORY", 0, "ASSIGNED");
+        return new ReferenceData(
+                Map.of("INT1001", course),
+                Map.of("GV01", lecturer),
+                Map.of(
+                        1, new SlotRef(1L, 1, LocalTime.of(7, 0), LocalTime.of(7, 50)),
+                        3, new SlotRef(3L, 3, LocalTime.of(8, 50), LocalTime.of(9, 40))
+                ),
+                Map.of(), Map.of(), new WeekRange(1, 15),
+                List.of(importedSection, otherSection),
+                List.of(importedSchedule, otherSchedule)
+        );
+    }
+
     private static class FakeWriteStore implements TimetableImportWriteStore {
         private final String semesterStatus;
         private boolean lockCalled;
         private boolean draftMarked;
         private ScheduleWrite lastSchedule;
+        private final java.util.List<Long> cancelledScheduleIds = new java.util.ArrayList<>();
 
         private FakeWriteStore(String semesterStatus) {
             this.semesterStatus = semesterStatus;
@@ -170,6 +250,7 @@ class TimetableImportApplyServiceTest {
         @Override public void updateSection(long sectionId, SectionWrite row) { }
         @Override public long insertSchedule(ScheduleWrite row) { lastSchedule = row; return 50L; }
         @Override public void updateSchedule(long scheduleId, ScheduleWrite row) { lastSchedule = row; }
+        @Override public int softCancelSchedule(long scheduleId, String note) { cancelledScheduleIds.add(scheduleId); return 1; }
         @Override public void markSemesterDraft(long semesterId) { draftMarked = true; }
     }
 }

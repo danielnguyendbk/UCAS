@@ -2,6 +2,7 @@ package com.ptit.qlphonghoc.admin.timetableimport.dto;
 
 public record ImportApplyResponse(
         String importBatchCode,
+        String importMode,
         Long semesterId,
         String semesterCode,
         int totalRows,
@@ -9,6 +10,8 @@ public record ImportApplyResponse(
         int updatedSections,
         int createdSchedules,
         int updatedSchedules,
+        int cancelledSchedules,
+        int cancelledSections,
         int unchangedRows,
         int skippedRows,
         int retainedClassroomAssignments,

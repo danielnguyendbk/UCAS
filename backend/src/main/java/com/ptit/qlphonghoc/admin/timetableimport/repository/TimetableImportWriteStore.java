@@ -12,6 +12,7 @@ public interface TimetableImportWriteStore {
     void updateSection(long sectionId, SectionWrite row);
     long insertSchedule(ScheduleWrite row);
     void updateSchedule(long scheduleId, ScheduleWrite row);
+    int softCancelSchedule(long scheduleId, String note);
     void markSemesterDraft(long semesterId);
 
     record SectionWrite(

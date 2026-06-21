@@ -16,11 +16,11 @@ export const previewTimetableImport = async ({ file, semesterId }) => {
   return response.data?.data;
 };
 
-export const applyTimetableImport = async ({ file, semesterId }) => {
+export const applyTimetableImport = async ({ file, semesterId, mode = "MERGE_ONLY" }) => {
   const formData = new FormData();
   formData.append("file", file);
   const response = await httpClient.post("/api/admin/timetable-import/apply", formData, {
-    params: semesterId ? { semesterId } : undefined,
+    params: { ...(semesterId ? { semesterId } : {}), mode },
     headers: { "Content-Type": "multipart/form-data" },
     timeout: 60_000,
   });

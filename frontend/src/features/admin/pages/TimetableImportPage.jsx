@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/app/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/app/components/ui/radio-group";
 import { APP_ROUTES } from "@/constants/routes";
 import { getApiError } from "@/utils/apiError";
 import {
@@ -24,6 +25,16 @@ import {
 } from "@/features/admin/services/timetableImportService";
 
 const PAGE_SIZES = [10, 20, 50];
+const IMPORT_MODES = {
+  MERGE_ONLY: {
+    label: "Merge only",
+    description: "Chỉ thêm/cập nhật, không hủy lịch cũ.",
+  },
+  SYNC_FILE_SCOPE: {
+    label: "Sync file scope",
+    description: "Hủy mềm lịch cũ của các học phần có trong file nếu lịch đó không còn trong file.",
+  },
+};
 const STATUS_META = {
   VALID: { label: "Hợp lệ", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   WARNING: { label: "Cảnh báo", className: "bg-amber-50 text-amber-700 border-amber-200" },
@@ -55,6 +66,7 @@ export default function TimetableImportPage() {
   const [applying, setApplying] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [applyResult, setApplyResult] = useState(null);
+  const [importMode, setImportMode] = useState("MERGE_ONLY");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("ALL");
   const [page, setPage] = useState(1);
@@ -114,7 +126,7 @@ export default function TimetableImportPage() {
     if (!file || !preview || preview.errorRows > 0) return;
     try {
       setApplying(true);
-      const result = await applyTimetableImport({ file, semesterId });
+      const result = await applyTimetableImport({ file, semesterId, mode: importMode });
       setApplyResult(result);
       setConfirmOpen(false);
       toast.success("Đã áp dụng import thành công. Học kỳ được đưa về trạng thái DRAFT.");
@@ -185,6 +197,35 @@ export default function TimetableImportPage() {
             <Upload className="mr-2 h-4 w-4" /> {loading ? "Đang kiểm tra..." : "Kiểm tra file"}
           </Button>
         </div>
+        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/70 p-3">
+          <p className="text-xs font-medium text-slate-700">Chế độ áp dụng</p>
+          <RadioGroup
+            value={importMode}
+            onValueChange={(value) => { setImportMode(value); setApplyResult(null); }}
+            className="mt-3 grid gap-3 lg:grid-cols-2"
+          >
+            {Object.entries(IMPORT_MODES).map(([value, meta]) => (
+              <label
+                key={value}
+                className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm transition ${
+                  importMode === value ? "border-blue-300 bg-white ring-2 ring-blue-500/10" : "border-slate-200 bg-white/70 hover:border-slate-300"
+                }`}
+              >
+                <RadioGroupItem value={value} className="mt-0.5" />
+                <span>
+                  <span className="block font-semibold text-slate-900">{meta.label}</span>
+                  <span className="mt-1 block text-xs leading-5 text-slate-600">{meta.description}</span>
+                </span>
+              </label>
+            ))}
+          </RadioGroup>
+          {importMode === "SYNC_FILE_SCOPE" && (
+            <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>Chế độ này có thể hủy mềm các lịch cũ của những học phần xuất hiện trong file nếu lịch đó không còn trong file.</span>
+            </div>
+          )}
+        </div>
       </section>
 
       {preview && (
@@ -235,10 +276,12 @@ export default function TimetableImportPage() {
                   <p className="mt-1 font-mono text-xs text-emerald-700">{applyResult.importBatchCode} · {applyResult.semesterCode} · DRAFT</p>
                 </div>
                 <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-emerald-800">
+                  <span>Mode: <strong>{applyResult.importMode}</strong></span>
                   <span>Tạo lớp: <strong>{applyResult.createdSections}</strong></span>
                   <span>Cập nhật lớp: <strong>{applyResult.updatedSections}</strong></span>
                   <span>Tạo lịch: <strong>{applyResult.createdSchedules}</strong></span>
                   <span>Cập nhật lịch: <strong>{applyResult.updatedSchedules}</strong></span>
+                  <span>Hủy mềm lịch: <strong>{applyResult.cancelledSchedules ?? 0}</strong></span>
                   <span>Giữ phòng cũ: <strong>{applyResult.retainedClassroomAssignments}</strong></span>
                 </div>
                 <Button variant="outline" onClick={() => navigate(APP_ROUTES.adminAutoAssignment)} className="border-emerald-300 bg-white text-emerald-800 hover:bg-emerald-100">
@@ -335,8 +378,13 @@ export default function TimetableImportPage() {
           </DialogHeader>
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
             <p><span className="font-medium text-slate-800">File:</span> {file?.name}</p>
+            <p className="mt-1"><span className="font-medium text-slate-800">Mode:</span> {IMPORT_MODES[importMode]?.label} — {IMPORT_MODES[importMode]?.description}</p>
             <p className="mt-1"><span className="font-medium text-slate-800">Preview:</span> {preview?.importBatchCode} · {preview?.totalRows ?? 0} dòng · {preview?.warningRows ?? 0} cảnh báo</p>
-            <p className="mt-2 text-amber-700">Không soft-cancel dữ liệu vắng mặt trong file. Không sinh class sessions.</p>
+            <p className="mt-2 text-amber-700">
+              {importMode === "SYNC_FILE_SCOPE"
+                ? "Sẽ hủy mềm lịch cũ của các học phần xuất hiện trong file nếu lịch đó không còn trong file. Không sinh class sessions."
+                : "Không soft-cancel dữ liệu vắng mặt trong file. Không sinh class sessions."}
+            </p>
           </div>
           <DialogFooter>
             <Button variant="outline" disabled={applying} onClick={() => setConfirmOpen(false)}>Hủy</Button>

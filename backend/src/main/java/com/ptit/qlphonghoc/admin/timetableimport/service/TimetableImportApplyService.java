@@ -17,9 +17,11 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
 
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -43,6 +45,12 @@ public class TimetableImportApplyService {
 
     @Transactional
     public ImportApplyResponse apply(MultipartFile file, Long semesterId, String semesterCode, Integer userId) {
+        return apply(file, semesterId, semesterCode, null, userId);
+    }
+
+    @Transactional
+    public ImportApplyResponse apply(MultipartFile file, Long semesterId, String semesterCode, String mode, Integer userId) {
+        TimetableImportMode importMode = TimetableImportMode.from(mode);
         TimetableImportValidationResult validation = validator.validate(file, semesterId, semesterCode);
         ImportPreviewResponse preview = validation.preview();
         if (preview.errorRows() > 0) {
@@ -67,11 +75,12 @@ public class TimetableImportApplyService {
         Map<Long, List<ScheduleRef>> schedules = refs.schedules().stream()
                 .collect(Collectors.groupingBy(ScheduleRef::sectionId, LinkedHashMap::new, Collectors.toList()));
         Counters counters = new Counters();
+        Map<Long, Set<ScheduleKey>> fileScheduleKeysBySection = new LinkedHashMap<>();
 
         try {
             for (ImportPreviewRow row : preview.rows()) {
                 try {
-                    applyRow(row, lockedSemester.id(), source, batchCode, refs, sections, schedules, counters);
+                    applyRow(row, lockedSemester.id(), source, batchCode, refs, sections, schedules, counters, fileScheduleKeysBySection);
                 } catch (Exception exception) {
                     if (exception instanceof BadRequestException badRequestException) throw badRequestException;
                     if (exception instanceof DuplicateKeyException) {
@@ -88,9 +97,23 @@ public class TimetableImportApplyService {
                     );
                 }
             }
+            if (importMode == TimetableImportMode.SYNC_FILE_SCOPE) {
+                try {
+                    counters.cancelledSchedules += softCancelSchedulesOutsideFileScope(
+                            schedules, fileScheduleKeysBySection, batchCode, importMode
+                    );
+                } catch (Exception exception) {
+                    if (exception instanceof BadRequestException badRequestException) throw badRequestException;
+                    throw new BadRequestException(
+                            "IMPORT_SYNC_FAILED",
+                            "Không thể hủy mềm lịch cũ trong phạm vi file. Toàn bộ import đã được rollback.",
+                            Map.of("reason", safeReason(exception))
+                    );
+                }
+            }
 
             writeStore.markSemesterDraft(lockedSemester.id());
-            ImportApplyResponse response = counters.toResponse(batchCode, lockedSemester, preview.totalRows());
+            ImportApplyResponse response = counters.toResponse(batchCode, importMode, lockedSemester, preview.totalRows());
             auditLogger.logTimetableImport(userId, lockedSemester.id(), batchCode, auditSummary(response, source));
             return response;
         } catch (BadRequestException exception) {
@@ -112,7 +135,8 @@ public class TimetableImportApplyService {
             ReferenceData refs,
             Map<String, SectionRef> sections,
             Map<Long, List<ScheduleRef>> schedules,
-            Counters counters
+            Counters counters,
+            Map<Long, Set<ScheduleKey>> fileScheduleKeysBySection
     ) {
         Map<String, String> values = row.values();
         CourseRef course = refs.courses().get(normalize(values.get("course_code")));
@@ -150,6 +174,8 @@ public class TimetableImportApplyService {
                 schedules.getOrDefault(sectionId, List.of()),
                 values.get("day_of_week"), slotStartNo, slotEndNo, practiceGroup
         );
+        fileScheduleKeysBySection.computeIfAbsent(sectionId, ignored -> new LinkedHashSet<>())
+                .add(ScheduleKey.of(values.get("day_of_week"), slotStartNo, slotEndNo, practiceGroup));
 
         String classroomCode = values.getOrDefault("preferred_classroom_code", "").trim();
         Long classroomId;
@@ -187,6 +213,27 @@ public class TimetableImportApplyService {
         if ("NO_CHANGE".equals(row.operation())) counters.unchangedRows++;
     }
 
+    private int softCancelSchedulesOutsideFileScope(
+            Map<Long, List<ScheduleRef>> schedules,
+            Map<Long, Set<ScheduleKey>> fileScheduleKeysBySection,
+            String batchCode,
+            TimetableImportMode importMode
+    ) {
+        int cancelled = 0;
+        String note = "Soft-cancelled by import " + batchCode + " (" + importMode.name() + ")";
+        for (Map.Entry<Long, Set<ScheduleKey>> sectionEntry : fileScheduleKeysBySection.entrySet()) {
+            Set<ScheduleKey> fileKeys = sectionEntry.getValue();
+            for (ScheduleRef existing : schedules.getOrDefault(sectionEntry.getKey(), List.of())) {
+                if (Set.of("CANCELLED", "INACTIVE").contains(normalize(existing.status()))) continue;
+                if (fileKeys.contains(ScheduleKey.of(existing.dayOfWeek(), existing.slotStart(), existing.slotEnd(), existing.practiceGroup()))) {
+                    continue;
+                }
+                cancelled += writeStore.softCancelSchedule(existing.id(), note);
+            }
+        }
+        return cancelled;
+    }
+
     private ScheduleRef findSchedule(List<ScheduleRef> schedules, String day, int start, int end, int group) {
         return schedules.stream().filter(schedule -> normalize(schedule.dayOfWeek()).equals(normalize(day))
                 && schedule.slotStart() == start
@@ -216,6 +263,7 @@ public class TimetableImportApplyService {
     private Map<String, Object> auditSummary(ImportApplyResponse response, String source) {
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("importBatchCode", response.importBatchCode());
+        summary.put("importMode", response.importMode());
         summary.put("importSource", source);
         summary.put("semesterId", response.semesterId());
         summary.put("semesterCode", response.semesterCode());
@@ -224,6 +272,8 @@ public class TimetableImportApplyService {
         summary.put("updatedSections", response.updatedSections());
         summary.put("createdSchedules", response.createdSchedules());
         summary.put("updatedSchedules", response.updatedSchedules());
+        summary.put("cancelledSchedules", response.cancelledSchedules());
+        summary.put("cancelledSections", response.cancelledSections());
         summary.put("unchangedRows", response.unchangedRows());
         summary.put("retainedClassroomAssignments", response.retainedClassroomAssignments());
         summary.put("timetableStatus", response.timetableStatus());
@@ -264,6 +314,12 @@ public class TimetableImportApplyService {
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
     }
 
+    private record ScheduleKey(String dayOfWeek, int slotStart, int slotEnd, int practiceGroup) {
+        private static ScheduleKey of(String dayOfWeek, int slotStart, int slotEnd, int practiceGroup) {
+            return new ScheduleKey(dayOfWeek == null ? "" : dayOfWeek.trim().toUpperCase(Locale.ROOT), slotStart, slotEnd, practiceGroup);
+        }
+    }
+
     private String safeReason(Exception exception) {
         if (exception instanceof DataAccessException dataAccessException
                 && dataAccessException.getMostSpecificCause() != null) {
@@ -279,12 +335,15 @@ public class TimetableImportApplyService {
         private int updatedSections;
         private int createdSchedules;
         private int updatedSchedules;
+        private int cancelledSchedules;
+        private int cancelledSections;
         private int unchangedRows;
         private int retainedClassroomAssignments;
 
-        private ImportApplyResponse toResponse(String batchCode, SemesterRef semester, int totalRows) {
+        private ImportApplyResponse toResponse(String batchCode, TimetableImportMode importMode, SemesterRef semester, int totalRows) {
             return new ImportApplyResponse(
                     batchCode,
+                    importMode.name(),
                     semester.id(),
                     semester.code(),
                     totalRows,
@@ -292,6 +351,8 @@ public class TimetableImportApplyService {
                     updatedSections,
                     createdSchedules,
                     updatedSchedules,
+                    cancelledSchedules,
+                    cancelledSections,
                     unchangedRows,
                     0,
                     retainedClassroomAssignments,
