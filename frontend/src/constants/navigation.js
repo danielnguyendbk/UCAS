@@ -164,7 +164,6 @@ const NAVIGATION_BY_ROLE = {
       label: "Danh sách đổi phòng",
       path: APP_ROUTES.staffRoomChangeList,
     },
-    { icon: Wrench, label: "Quản lý sửa chữa", path: APP_ROUTES.staffMaintenanceList, badge: "Mới" }
   ],
 
   Employee: [

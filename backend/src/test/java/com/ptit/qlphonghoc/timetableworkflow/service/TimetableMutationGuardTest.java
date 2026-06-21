@@ -41,7 +41,8 @@ class TimetableMutationGuardTest {
                 BadRequestException.class,
                 () -> guard.assertOriginalTimetableMutable(2)
         );
-        assertEquals(TimetableMutationGuard.PUBLISHED_ERROR, exception.getMessage());
+        assertEquals(TimetableMutationGuard.PUBLISHED_ERROR_CODE, exception.getErrorCode());
+        assertEquals(TimetableMutationGuard.PUBLISHED_MESSAGE, exception.getMessage());
     }
 
     @Test
@@ -52,7 +53,8 @@ class TimetableMutationGuardTest {
                 BadRequestException.class,
                 () -> guard.assertOriginalTimetableMutable(2)
         );
-        assertEquals(TimetableMutationGuard.LOCKED_ERROR, exception.getMessage());
+        assertEquals(TimetableMutationGuard.LOCKED_ERROR_CODE, exception.getErrorCode());
+        assertEquals(TimetableMutationGuard.LOCKED_MESSAGE, exception.getMessage());
     }
 
     private SemesterWorkflowState state(TimetableWorkflowStatus status) {

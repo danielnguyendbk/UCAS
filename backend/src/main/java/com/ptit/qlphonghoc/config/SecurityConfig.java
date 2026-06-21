@@ -63,13 +63,27 @@ public class SecurityConfig {
                             response.setStatus(HttpStatus.UNAUTHORIZED.value());
                             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                             objectMapper.writeValue(response.getOutputStream(),
-                                    new ErrorResponse(false, "Unauthorized", null, LocalDateTime.now()));
+                                    new ErrorResponse(
+                                            false,
+                                            "UNAUTHORIZED",
+                                            "Unauthorized",
+                                            null,
+                                            null,
+                                            LocalDateTime.now()
+                                    ));
                         })
                         .accessDeniedHandler((request, response, accessDeniedException) -> {
                             response.setStatus(HttpStatus.FORBIDDEN.value());
                             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                             objectMapper.writeValue(response.getOutputStream(),
-                                    new ErrorResponse(false, "Access denied", null, LocalDateTime.now()));
+                                    new ErrorResponse(
+                                            false,
+                                            "ACCESS_DENIED",
+                                            "Access denied",
+                                            null,
+                                            null,
+                                            LocalDateTime.now()
+                                    ));
                         })
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

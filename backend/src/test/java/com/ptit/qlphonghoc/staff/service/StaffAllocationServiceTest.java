@@ -75,7 +75,7 @@ class StaffAllocationServiceTest {
                 BadRequestException.class,
                 () -> service.manualAssign(request(49, 9), 2)
         );
-        assertTrue(exception.getMessage().startsWith("CAPACITY_EXCEEDED"));
+        assertEquals("CAPACITY_EXCEEDED", exception.getErrorCode());
     }
 
     @Test

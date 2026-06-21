@@ -29,47 +29,59 @@ public class GlobalExceptionHandler {
         Map<String, String> errors = new LinkedHashMap<>();
         exception.getBindingResult().getFieldErrors()
                 .forEach(error -> errors.put(error.getField(), error.getDefaultMessage()));
-        return build(HttpStatus.BAD_REQUEST, "Validation failed", errors);
+        return build(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Validation failed", errors, errors);
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ErrorResponse> handleConstraintViolation(ConstraintViolationException exception) {
-        return build(HttpStatus.BAD_REQUEST, exception.getMessage(), null);
+        return build(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", exception.getMessage(), null, null);
     }
 
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<ErrorResponse> handleBadRequest(BadRequestException exception) {
-        return build(HttpStatus.BAD_REQUEST, exception.getMessage(), null);
+        return build(
+                HttpStatus.BAD_REQUEST,
+                exception.getErrorCode(),
+                exception.getMessage(),
+                exception.getDetails(),
+                null
+        );
     }
 
     @ExceptionHandler({BadCredentialsException.class})
     public ResponseEntity<ErrorResponse> handleBadCredentials(RuntimeException exception) {
-        return build(HttpStatus.UNAUTHORIZED, "Invalid username or password", null);
+        return build(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "Invalid username or password", null, null);
     }
 
     @ExceptionHandler(InactiveAccountException.class)
     public ResponseEntity<ErrorResponse> handleInactiveAccount(InactiveAccountException exception) {
-        return build(HttpStatus.FORBIDDEN, exception.getMessage(), null);
+        return build(HttpStatus.FORBIDDEN, "ACCOUNT_INACTIVE", exception.getMessage(), null, null);
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(ResourceNotFoundException exception) {
-        return build(HttpStatus.NOT_FOUND, exception.getMessage(), null);
+        return build(
+                HttpStatus.NOT_FOUND,
+                exception.getErrorCode(),
+                exception.getMessage(),
+                exception.getDetails(),
+                null
+        );
     }
 
     @ExceptionHandler(UserProfileInconsistentException.class)
     public ResponseEntity<ErrorResponse> handleUserProfileInconsistent(UserProfileInconsistentException exception) {
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, exception.getMessage(), null);
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, "PROFILE_INCONSISTENT", exception.getMessage(), null, null);
     }
 
     @ExceptionHandler({ExpiredJwtException.class, JwtException.class})
     public ResponseEntity<ErrorResponse> handleJwt(RuntimeException exception) {
-        return build(HttpStatus.UNAUTHORIZED, "Unauthorized", null);
+        return build(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Unauthorized", null, null);
     }
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException exception) {
-        return build(HttpStatus.FORBIDDEN, "Access denied", null);
+        return build(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "Access denied", null, null);
     }
 
     @ExceptionHandler(ResponseStatusException.class)
@@ -79,17 +91,30 @@ public class GlobalExceptionHandler {
             status = HttpStatus.BAD_REQUEST;
         }
         String message = exception.getReason() == null ? status.getReasonPhrase() : exception.getReason();
-        return build(status, message, null);
+        return build(status, status.name(), message, null, null);
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception exception) {
         log.error("Unhandled application exception", exception);
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error", null);
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", "Internal server error", null, null);
     }
 
-    private ResponseEntity<ErrorResponse> build(HttpStatus status, String message, Map<String, String> errors) {
+    private ResponseEntity<ErrorResponse> build(
+            HttpStatus status,
+            String errorCode,
+            String message,
+            Object details,
+            Map<String, String> errors
+    ) {
         return ResponseEntity.status(status)
-                .body(new ErrorResponse(false, message, errors, LocalDateTime.now()));
+                .body(new ErrorResponse(
+                        false,
+                        errorCode,
+                        message,
+                        details,
+                        errors,
+                        LocalDateTime.now()
+                ));
     }
 }

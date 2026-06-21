@@ -1,6 +1,7 @@
 package com.ptit.qlphonghoc.timetableworkflow.controller;
 
 import com.ptit.qlphonghoc.auth.security.CustomUserDetails;
+import com.ptit.qlphonghoc.common.exception.BadRequestException;
 import com.ptit.qlphonghoc.common.response.ApiResponse;
 import com.ptit.qlphonghoc.timetableworkflow.TimetableWorkflowStatus;
 import com.ptit.qlphonghoc.timetableworkflow.dto.TimetableWorkflowSummary;
@@ -35,10 +36,11 @@ public class StaffTimetableWorkflowController {
     ) {
         TimetableWorkflowSummary summary = service.submit(semesterId, userDetails.getUserId());
         if (TimetableWorkflowStatus.CONFLICT.name().equals(summary.timetableStatus())) {
-            return ResponseEntity.badRequest().body(ApiResponse.error(
-                    "Timetable still has blocking conflicts and cannot be submitted.",
+            throw new BadRequestException(
+                    "ALLOCATION_CONFLICT",
+                    "Thời khóa biểu vẫn còn xung đột và chưa thể gửi duyệt.",
                     summary
-            ));
+            );
         }
         return ResponseEntity.ok(ApiResponse.success("Timetable submitted for approval.", summary));
     }

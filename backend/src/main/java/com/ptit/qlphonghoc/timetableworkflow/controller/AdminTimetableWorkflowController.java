@@ -1,6 +1,7 @@
 package com.ptit.qlphonghoc.timetableworkflow.controller;
 
 import com.ptit.qlphonghoc.auth.security.CustomUserDetails;
+import com.ptit.qlphonghoc.common.exception.BadRequestException;
 import com.ptit.qlphonghoc.common.response.ApiResponse;
 import com.ptit.qlphonghoc.timetableworkflow.TimetableWorkflowStatus;
 import com.ptit.qlphonghoc.timetableworkflow.dto.TimetableWorkflowSummary;
@@ -46,10 +47,11 @@ public class AdminTimetableWorkflowController {
     ) {
         TimetableWorkflowSummary summary = service.publish(semesterId, userDetails.getUserId());
         if (TimetableWorkflowStatus.CONFLICT.name().equals(summary.timetableStatus())) {
-            return ResponseEntity.badRequest().body(ApiResponse.error(
-                    "Timetable has blocking conflicts and cannot be published.",
+            throw new BadRequestException(
+                    "ALLOCATION_CONFLICT",
+                    "Thời khóa biểu còn xung đột và chưa thể công bố.",
                     summary
-            ));
+            );
         }
         return ResponseEntity.ok(ApiResponse.success("Timetable published.", summary));
     }

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { httpClient } from "@/services/httpClient";
+import { getApiError } from "@/utils/apiError";
 
 const getActiveSemesterId = (semesters) => {
   const activeSemester = semesters.find(
@@ -106,9 +107,14 @@ export const useStaffAllocation = () => {
       setRunDoneMessage(res.data?.message || "Phân công tự động hoàn tất!");
       fetchData();
     } catch (error) {
+      const apiError = getApiError(
+        error,
+        "Không thể chạy phân phòng tự động.",
+      );
       setActionMessage({
         tone: "error",
-        text: error.response?.data?.message || "Không thể chạy phân phòng tự động.",
+        errorCode: apiError.errorCode,
+        text: apiError.message,
       });
     } finally {
       setIsRunning(false);
@@ -131,11 +137,14 @@ export const useStaffAllocation = () => {
       });
       await fetchData();
     } catch (error) {
+      const apiError = getApiError(
+        error,
+        "Không thể cập nhật trạng thái validation.",
+      );
       setActionMessage({
         tone: "error",
-        text:
-          error.response?.data?.message ||
-          "Không thể cập nhật trạng thái validation.",
+        errorCode: apiError.errorCode,
+        text: apiError.message,
       });
     } finally {
       setIsValidating(false);
@@ -162,11 +171,14 @@ export const useStaffAllocation = () => {
       setIsRoomSearchOpen(false);
       fetchData();
     } catch (error) {
+      const apiError = getApiError(
+        error,
+        "Không thể phân phòng do xung đột hoặc ràng buộc phòng.",
+      );
       setActionMessage({
         tone: "error",
-        text:
-          error.response?.data?.message ||
-          "Không thể phân phòng do xung đột hoặc ràng buộc phòng.",
+        errorCode: apiError.errorCode,
+        text: apiError.message,
       });
     }
   };
@@ -185,13 +197,16 @@ export const useStaffAllocation = () => {
         text: res.data?.message || "Đã gửi Admin duyệt thành công!",
       });
     } catch (error) {
-      const failedWorkflow = error.response?.data?.data;
+      const apiError = getApiError(
+        error,
+        "Không thể gửi duyệt. Vui lòng kiểm tra lại xung đột.",
+      );
+      const failedWorkflow = apiError.details;
       if (failedWorkflow) setWorkflow(failedWorkflow);
       setActionMessage({
         tone: "error",
-        text:
-          error.response?.data?.message ||
-          "Không thể gửi duyệt. Vui lòng kiểm tra lại xung đột.",
+        errorCode: apiError.errorCode,
+        text: apiError.message,
       });
     } finally {
       setIsSubmitting(false);

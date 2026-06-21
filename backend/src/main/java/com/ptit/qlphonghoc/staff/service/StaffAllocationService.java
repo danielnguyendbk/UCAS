@@ -1,6 +1,7 @@
 package com.ptit.qlphonghoc.staff.service;
 
 import com.ptit.qlphonghoc.common.exception.BadRequestException;
+import com.ptit.qlphonghoc.common.exception.ResourceNotFoundException;
 import com.ptit.qlphonghoc.staff.dto.allocation.AllocationResponse;
 import com.ptit.qlphonghoc.staff.dto.allocation.AllocationValidationSummary;
 import com.ptit.qlphonghoc.staff.dto.allocation.ConflictResponse;
@@ -140,21 +141,33 @@ public class StaffAllocationService implements AllocationValidationService {
         Integer classroomId = request.getClassroomId();
 
         repository.lockSchedule(scheduleId)
-                .orElseThrow(() -> new BadRequestException("Schedule does not exist."));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "SCHEDULE_NOT_FOUND",
+                        "Không tìm thấy lịch học."
+                ));
 
         StaffAllocationRepository.AssignmentScheduleProjection schedule =
                 repository.findScheduleForAssignment(scheduleId)
-                        .orElseThrow(() -> new BadRequestException("Schedule does not exist."));
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "SCHEDULE_NOT_FOUND",
+                                "Không tìm thấy lịch học."
+                        ));
 
         validateAssignableSchedule(schedule);
         mutationPolicy.assertOriginalTimetableMutable(schedule.getSemesterId());
 
         repository.lockClassroom(classroomId)
-                .orElseThrow(() -> new BadRequestException("Classroom does not exist."));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "CLASSROOM_NOT_FOUND",
+                        "Không tìm thấy phòng học."
+                ));
 
         StaffAllocationRepository.AssignmentRoomProjection room =
                 repository.findRoomForAssignment(classroomId)
-                        .orElseThrow(() -> new BadRequestException("Classroom does not exist."));
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "CLASSROOM_NOT_FOUND",
+                                "Không tìm thấy phòng học."
+                        ));
 
         validateRoomForSchedule(room, schedule);
 
@@ -170,20 +183,24 @@ public class StaffAllocationService implements AllocationValidationService {
         );
         if (roomConflicts > 0) {
             throw new BadRequestException(
-                    "ROOM_TIME_CONFLICT: Room " + room.getRoomCode()
-                            + " is occupied in an overlapping slot and week range."
+                    "ROOM_TIME_CONFLICT",
+                    "Phòng " + room.getRoomCode() + " đã có lịch trùng tiết và khoảng tuần."
             );
         }
 
         if (repository.countCalendarBlockConflicts(scheduleId) > 0) {
             throw new BadRequestException(
-                    "CALENDAR_BLOCK_CONFLICT: This schedule falls on a non-teaching calendar block."
+                    "CALENDAR_BLOCK_CONFLICT",
+                    "Lịch học rơi vào khoảng thời gian không được phép giảng dạy."
             );
         }
 
         int updated = repository.upsertRoomAllocation(scheduleId, classroomId, staffUserId);
         if (updated != 1) {
-            throw new BadRequestException("Schedule is no longer assignable. Refresh and try again.");
+            throw new BadRequestException(
+                    "ALLOCATION_CONFLICT",
+                    "Lịch học không còn có thể phân phòng. Vui lòng tải lại dữ liệu."
+            );
         }
 
     }
@@ -279,9 +296,15 @@ public class StaffAllocationService implements AllocationValidationService {
         if (scheduleId != null) {
             StaffAllocationRepository.AssignmentScheduleProjection schedule =
                     repository.findScheduleForAssignment(scheduleId)
-                            .orElseThrow(() -> new BadRequestException("Schedule does not exist."));
+                            .orElseThrow(() -> new ResourceNotFoundException(
+                                    "SCHEDULE_NOT_FOUND",
+                                    "Không tìm thấy lịch học."
+                            ));
             if (!Objects.equals(schedule.getSemesterId(), semesterId)) {
-                throw new BadRequestException("Schedule does not belong to the selected semester.");
+                throw new BadRequestException(
+                        "ALLOCATION_CONFLICT",
+                        "Lịch học không thuộc học kỳ đã chọn."
+                );
             }
             slotStartId = schedule.getSlotStartId();
             slotEndId = schedule.getSlotEndId();
@@ -521,19 +544,31 @@ public class StaffAllocationService implements AllocationValidationService {
 
     private void validateAssignableSchedule(StaffAllocationRepository.AssignmentScheduleProjection schedule) {
         if (!"ACTIVE".equalsIgnoreCase(schedule.getSectionStatus())) {
-            throw new BadRequestException("The class section is not active.");
+            throw new BadRequestException(
+                    "ALLOCATION_CONFLICT",
+                    "Lớp học phần không còn hoạt động."
+            );
         }
         if ("CANCELLED".equalsIgnoreCase(schedule.getScheduleStatus())
                 || "INACTIVE".equalsIgnoreCase(schedule.getScheduleStatus())) {
-            throw new BadRequestException("Schedule is cancelled or inactive and cannot be assigned.");
+            throw new BadRequestException(
+                    "ALLOCATION_CONFLICT",
+                    "Lịch học đã hủy hoặc ngừng hoạt động, không thể phân phòng."
+            );
         }
 
         StaffAllocationRepository.WeekBoundsProjection bounds = repository.findWeekBounds(schedule.getSemesterId());
         if (hasInvalidWeekRange(schedule, bounds)) {
-            throw new BadRequestException("INVALID_WEEK_RANGE: Schedule week range is invalid.");
+            throw new BadRequestException(
+                    "INVALID_WEEK_RANGE",
+                    "Khoảng tuần của lịch học không hợp lệ."
+            );
         }
         if (hasInvalidTimeRange(schedule)) {
-            throw new BadRequestException("INVALID_TIME_RANGE: Schedule time range is invalid.");
+            throw new BadRequestException(
+                    "INVALID_TIME_RANGE",
+                    "Khoảng thời gian của lịch học không hợp lệ."
+            );
         }
     }
 
@@ -543,23 +578,26 @@ public class StaffAllocationService implements AllocationValidationService {
     ) {
         if (!Boolean.TRUE.equals(room.getActive()) || Boolean.TRUE.equals(room.getDeleted())) {
             throw new BadRequestException(
-                    "ROOM_INACTIVE_OR_DELETED: Room " + room.getRoomCode() + " is inactive or deleted."
+                    "ROOM_INACTIVE_OR_DELETED",
+                    "Phòng " + room.getRoomCode() + " đã ngừng hoạt động hoặc bị xóa."
             );
         }
         if (schedule.getRequiredRoomType() != null
                 && !schedule.getRequiredRoomType().isBlank()
                 && !schedule.getRequiredRoomType().equalsIgnoreCase(room.getRoomType())) {
             throw new BadRequestException(
-                    "ROOM_TYPE_MISMATCH: Required " + schedule.getRequiredRoomType()
-                            + " but room " + room.getRoomCode() + " is " + room.getRoomType() + "."
+                    "ROOM_TYPE_MISMATCH",
+                    "Lịch yêu cầu phòng " + schedule.getRequiredRoomType()
+                            + " nhưng phòng " + room.getRoomCode() + " có loại " + room.getRoomType() + "."
             );
         }
 
         int requiredCapacity = requiredCapacity(schedule.getEnrolledCount(), schedule.getMaxCapacity());
         if (room.getCapacity() == null || room.getCapacity() < requiredCapacity) {
             throw new BadRequestException(
-                    "CAPACITY_EXCEEDED: Room " + room.getRoomCode() + " has capacity " + room.getCapacity()
-                            + " but the schedule requires " + requiredCapacity + "."
+                    "CAPACITY_EXCEEDED",
+                    "Phòng " + room.getRoomCode() + " có sức chứa " + room.getCapacity()
+                            + " nhưng lịch học cần " + requiredCapacity + " chỗ."
             );
         }
     }

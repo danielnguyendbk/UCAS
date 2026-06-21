@@ -25,6 +25,7 @@ import {
 } from "../ui/select";
 import { Filter } from "lucide-react";
 import { httpClient } from "../../../services/httpClient";
+import { getApiError } from "../../../utils/apiError";
 
 export default function RoomSearchModal({
   open,
@@ -165,8 +166,10 @@ export default function RoomSearchModal({
       setRooms(roomData);
     } catch (err) {
       setError(
-        err.response?.data?.message ||
+        getApiError(
+          err,
           "Không tìm thấy phòng khả dụng cho dữ liệu đã chọn.",
+        ).message,
       );
     } finally {
       setLoading(false);

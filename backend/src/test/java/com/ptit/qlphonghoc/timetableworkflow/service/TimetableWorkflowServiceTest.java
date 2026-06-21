@@ -76,7 +76,11 @@ class TimetableWorkflowServiceTest {
     void approveRequiresReadyForApproval() {
         when(repository.findSemester(2, true)).thenReturn(Optional.of(state(TimetableWorkflowStatus.DRAFT)));
 
-        assertThrows(BadRequestException.class, () -> service.approve(2, 1));
+        BadRequestException exception = assertThrows(
+                BadRequestException.class,
+                () -> service.approve(2, 1)
+        );
+        assertEquals("INVALID_TIMETABLE_STATUS", exception.getErrorCode());
         verify(repository, never()).updateStatus(2, TimetableWorkflowStatus.APPROVED);
     }
 

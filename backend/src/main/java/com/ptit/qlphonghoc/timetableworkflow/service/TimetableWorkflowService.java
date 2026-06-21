@@ -135,7 +135,10 @@ public class TimetableWorkflowService {
     public TimetableWorkflowSummary lock(Integer semesterId, Integer adminUserId) {
         SemesterWorkflowState semester = findSemester(semesterId, true);
         if (semester.status() == TimetableWorkflowStatus.LOCKED) {
-            throw new BadRequestException(TimetableMutationGuard.LOCKED_ERROR);
+            throw new BadRequestException(
+                    TimetableMutationGuard.LOCKED_ERROR_CODE,
+                    TimetableMutationGuard.LOCKED_MESSAGE
+            );
         }
         if (semester.status() != TimetableWorkflowStatus.PUBLISHED) {
             throw invalidTransition("lock", semester.status(), "PUBLISHED");
@@ -191,21 +194,33 @@ public class TimetableWorkflowService {
 
     private SemesterWorkflowState findSemester(Integer semesterId, boolean forUpdate) {
         return repository.findSemester(semesterId, forUpdate)
-                .orElseThrow(() -> new ResourceNotFoundException("Semester not found."));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "SEMESTER_NOT_FOUND",
+                        "Không tìm thấy học kỳ."
+                ));
     }
 
     private void updateStatus(Integer semesterId, TimetableWorkflowStatus status) {
         if (repository.updateStatus(semesterId, status) != 1) {
-            throw new BadRequestException("Semester timetable status could not be updated.");
+            throw new BadRequestException(
+                    "INVALID_TIMETABLE_STATUS",
+                    "Không thể cập nhật trạng thái thời khóa biểu."
+            );
         }
     }
 
     private void assertNotFinalized(TimetableWorkflowStatus status) {
         if (status == TimetableWorkflowStatus.PUBLISHED) {
-            throw new BadRequestException(TimetableMutationGuard.PUBLISHED_ERROR);
+            throw new BadRequestException(
+                    TimetableMutationGuard.PUBLISHED_ERROR_CODE,
+                    TimetableMutationGuard.PUBLISHED_MESSAGE
+            );
         }
         if (status == TimetableWorkflowStatus.LOCKED) {
-            throw new BadRequestException(TimetableMutationGuard.LOCKED_ERROR);
+            throw new BadRequestException(
+                    TimetableMutationGuard.LOCKED_ERROR_CODE,
+                    TimetableMutationGuard.LOCKED_MESSAGE
+            );
         }
     }
 
@@ -215,8 +230,9 @@ public class TimetableWorkflowService {
             String requiredStatus
     ) {
         return new BadRequestException(
-                "Cannot " + action + " timetable while status is " + currentStatus
-                        + ". Required status: " + requiredStatus + "."
+                "INVALID_TIMETABLE_STATUS",
+                "Không thể " + action + " thời khóa biểu khi trạng thái là " + currentStatus
+                        + ". Trạng thái yêu cầu: " + requiredStatus + "."
         );
     }
 }

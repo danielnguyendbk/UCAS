@@ -29,6 +29,7 @@ import {
   TableRow,
 } from "../components/ui/table";
 import { httpClient } from "@/services/httpClient";
+import { getApiError } from "@/utils/apiError";
 
 const getResponseData = (response) => {
   const payload = response?.data?.data ?? response?.data ?? [];
@@ -142,9 +143,13 @@ const AdminTimetableApprovalPage = () => {
         }
       } catch (err) {
         if (isMounted) {
+          const apiError = getApiError(
+            err,
+            "Không thể tải dữ liệu lớp học phần.",
+          );
           setSections([]);
           setWorkflow(null);
-          setError(err?.response?.data?.message || "Không thể tải dữ liệu lớp học phần.");
+          setError(apiError.message);
         }
       } finally {
         if (isMounted) setLoading(false);
@@ -218,13 +223,16 @@ const AdminTimetableApprovalPage = () => {
         text: response.data?.message || "Cập nhật trạng thái thành công.",
       });
     } catch (requestError) {
-      const failedWorkflow = requestError.response?.data?.data;
+      const apiError = getApiError(
+        requestError,
+        "Không thể cập nhật trạng thái thời khóa biểu.",
+      );
+      const failedWorkflow = apiError.details;
       if (failedWorkflow) setWorkflow(failedWorkflow);
       setActionMessage({
         tone: "error",
-        text:
-          requestError.response?.data?.message ||
-          "Không thể cập nhật trạng thái thời khóa biểu.",
+        errorCode: apiError.errorCode,
+        text: apiError.message,
       });
     } finally {
       setIsActionRunning(false);
