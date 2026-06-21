@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, Calendar, Check, Eye, Loader2, RefreshCw, Search } from "lucide-react";
+import {
+  AlertCircle,
+  Calendar,
+  Check,
+  Eye,
+  Loader2,
+  LockKeyhole,
+  RefreshCw,
+  Search,
+} from "lucide-react";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -256,6 +265,14 @@ const AdminTimetableApprovalPage = () => {
           >
             <Calendar className="mr-2 h-4 w-4" />
             Công bố lịch
+          </Button>
+          <Button
+            variant="outline"
+            disabled={isActionRunning || workflow?.timetableStatus !== "PUBLISHED"}
+            onClick={() => runWorkflowAction("lock")}
+          >
+            <LockKeyhole className="mr-2 h-4 w-4" />
+            Khóa thời khóa biểu
           </Button>
           <Button variant="ghost" onClick={resetFilters}>
             <RefreshCw className="h-4 w-4" />

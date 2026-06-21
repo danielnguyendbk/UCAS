@@ -49,6 +49,7 @@ public class TimetableWorkflowService {
     @Transactional
     public TimetableWorkflowSummary submit(Integer semesterId, Integer staffUserId) {
         SemesterWorkflowState semester = findSemester(semesterId, true);
+        assertNotFinalized(semester.status());
         if (!SUBMITTABLE_STATUSES.contains(semester.status())) {
             throw invalidTransition("submit", semester.status(), "DRAFT or CONFLICT");
         }
@@ -81,6 +82,7 @@ public class TimetableWorkflowService {
     @Transactional
     public TimetableWorkflowSummary approve(Integer semesterId, Integer adminUserId) {
         SemesterWorkflowState semester = findSemester(semesterId, true);
+        assertNotFinalized(semester.status());
         if (semester.status() != TimetableWorkflowStatus.READY_FOR_APPROVAL) {
             throw invalidTransition("approve", semester.status(), "READY_FOR_APPROVAL");
         }
@@ -100,6 +102,7 @@ public class TimetableWorkflowService {
     @Transactional
     public TimetableWorkflowSummary publish(Integer semesterId, Integer adminUserId) {
         SemesterWorkflowState semester = findSemester(semesterId, true);
+        assertNotFinalized(semester.status());
         if (semester.status() != TimetableWorkflowStatus.APPROVED) {
             throw invalidTransition("publish", semester.status(), "APPROVED");
         }
@@ -126,6 +129,28 @@ public class TimetableWorkflowService {
                 semester.withStatus(TimetableWorkflowStatus.PUBLISHED),
                 validation
         );
+    }
+
+    @Transactional
+    public TimetableWorkflowSummary lock(Integer semesterId, Integer adminUserId) {
+        SemesterWorkflowState semester = findSemester(semesterId, true);
+        if (semester.status() == TimetableWorkflowStatus.LOCKED) {
+            throw new BadRequestException(TimetableMutationGuard.LOCKED_ERROR);
+        }
+        if (semester.status() != TimetableWorkflowStatus.PUBLISHED) {
+            throw invalidTransition("lock", semester.status(), "PUBLISHED");
+        }
+
+        updateStatus(semesterId, TimetableWorkflowStatus.LOCKED);
+        auditLogService.logWorkflowTransition(
+                adminUserId,
+                AuditAction.UPDATE,
+                semesterId,
+                semester.status().name(),
+                TimetableWorkflowStatus.LOCKED.name(),
+                "Admin locked timetable"
+        );
+        return buildStoredSummary(semester.withStatus(TimetableWorkflowStatus.LOCKED));
     }
 
     private boolean hasBlockingIssues(AllocationValidationSummary validation) {
@@ -172,6 +197,15 @@ public class TimetableWorkflowService {
     private void updateStatus(Integer semesterId, TimetableWorkflowStatus status) {
         if (repository.updateStatus(semesterId, status) != 1) {
             throw new BadRequestException("Semester timetable status could not be updated.");
+        }
+    }
+
+    private void assertNotFinalized(TimetableWorkflowStatus status) {
+        if (status == TimetableWorkflowStatus.PUBLISHED) {
+            throw new BadRequestException(TimetableMutationGuard.PUBLISHED_ERROR);
+        }
+        if (status == TimetableWorkflowStatus.LOCKED) {
+            throw new BadRequestException(TimetableMutationGuard.LOCKED_ERROR);
         }
     }
 

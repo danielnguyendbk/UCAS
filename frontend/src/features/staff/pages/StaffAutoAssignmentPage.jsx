@@ -118,6 +118,7 @@ const StaffAutoAssignmentPage = () => {
     allocations,
     conflicts,
     workflow,
+    isTimetableReadOnly,
     loadedSemesterId,
     isLoading,
     isRunning,
@@ -375,7 +376,7 @@ const StaffAutoAssignmentPage = () => {
           {activeTab === "pending" && (
             <Button
               onClick={runAutoAssign}
-              disabled={isRunning || !semesterId}
+              disabled={isRunning || !semesterId || isTimetableReadOnly}
               className="bg-blue-600 hover:bg-blue-700"
             >
               {isRunning ? (
@@ -389,7 +390,7 @@ const StaffAutoAssignmentPage = () => {
           <Button
             variant="outline"
             onClick={validateAllocations}
-            disabled={isValidating || !semesterId}
+            disabled={isValidating || !semesterId || isTimetableReadOnly}
           >
             {isValidating ? (
               <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
@@ -402,6 +403,17 @@ const StaffAutoAssignmentPage = () => {
       </div>
 
       <RoomAssignmentSummaryCards {...summary} />
+
+      {isTimetableReadOnly && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0" />
+          <p>
+            {workflow?.timetableStatus === "LOCKED"
+              ? "Thời khóa biểu đã khóa. Mọi thay đổi phải đi qua quy trình yêu cầu."
+              : "Thời khóa biểu đã công bố. Không thể phân phòng lại trực tiếp."}
+          </p>
+        </div>
+      )}
 
       {runDoneMessage && (
         <div className="flex items-start gap-3 p-4 bg-green-50 border border-green-200 rounded-xl text-sm text-green-800">
@@ -534,6 +546,7 @@ const StaffAutoAssignmentPage = () => {
                 allocations={allocations}
                 isLoading={isLoading}
                 onManualAssign={handleOpenRoomSearch}
+                readOnly={isTimetableReadOnly}
               />
               <ListPagination
                 page={pages.conflicts}
@@ -608,6 +621,7 @@ const StaffAutoAssignmentPage = () => {
                       isSubmitting ||
                       !semesterId ||
                       summary.conflicts > 0 ||
+                      isTimetableReadOnly ||
                       !["DRAFT", "CONFLICT"].includes(workflow?.timetableStatus)
                     }
                     className="bg-blue-600 hover:bg-blue-700"

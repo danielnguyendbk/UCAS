@@ -5,6 +5,7 @@ import com.ptit.qlphonghoc.staff.dto.class_section.StaffSectionTableResponse;
 import com.ptit.qlphonghoc.staff.dto.class_section.UpdateSectionRequest;
 import com.ptit.qlphonghoc.staff.entity.ClassSection;
 import com.ptit.qlphonghoc.staff.repository.ClassSectionRepository;
+import com.ptit.qlphonghoc.timetableworkflow.service.TimetableMutationPolicy;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,9 +19,14 @@ import java.util.Locale;
 public class StaffClassSectionService {
 
     private final ClassSectionRepository classSectionRepository;
+    private final TimetableMutationPolicy mutationPolicy;
 
-    public StaffClassSectionService(ClassSectionRepository classSectionRepository) {
+    public StaffClassSectionService(
+            ClassSectionRepository classSectionRepository,
+            TimetableMutationPolicy mutationPolicy
+    ) {
         this.classSectionRepository = classSectionRepository;
+        this.mutationPolicy = mutationPolicy;
     }
 
     @Transactional(readOnly = true)
@@ -43,6 +49,7 @@ public class StaffClassSectionService {
 
     @Transactional
     public StaffSectionTableResponse create(CreateSectionRequest request) {
+        mutationPolicy.assertOriginalTimetableMutable(request.getSemesterId());
         validateMainInput(request);
         String className = normalizeClassName(request.getClassName());
         int enrolledCount = validateClassSelection(className, request.getMaxCapacity());
@@ -67,17 +74,21 @@ public class StaffClassSectionService {
 
     @Transactional
     public StaffSectionTableResponse update(Integer id, UpdateSectionRequest request) {
-        validateMainInput(request);
-        String className = normalizeClassName(request.getClassName());
-        int enrolledCount = validateClassSelection(className, request.getMaxCapacity());
-        checkSemesterStatus(request.getSemesterId());
-        validateScheduleSelection(request);
-
         ClassSection section = classSectionRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Khong tim thay lop hoc phan id = " + id
                 ));
+        mutationPolicy.assertOriginalTimetableMutable(section.getSemesterId());
+        if (!section.getSemesterId().equals(request.getSemesterId())) {
+            mutationPolicy.assertOriginalTimetableMutable(request.getSemesterId());
+        }
+
+        validateMainInput(request);
+        String className = normalizeClassName(request.getClassName());
+        int enrolledCount = validateClassSelection(className, request.getMaxCapacity());
+        checkSemesterStatus(request.getSemesterId());
+        validateScheduleSelection(request);
 
         applyRequestToEntity(section, request, enrolledCount);
         classSectionRepository.saveAndFlush(section);
@@ -100,6 +111,7 @@ public class StaffClassSectionService {
                         HttpStatus.NOT_FOUND,
                         "Khong tim thay lop hoc phan id = " + id
                 ));
+        mutationPolicy.assertOriginalTimetableMutable(section.getSemesterId());
 
         if (classSectionRepository.countActiveEnrollmentsBySectionId(id) > 0) {
             throw new ResponseStatusException(

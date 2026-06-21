@@ -111,6 +111,20 @@ class TimetableWorkflowServiceTest {
         );
     }
 
+    @Test
+    void lockMovesPublishedTimetableToLocked() {
+        when(repository.findSemester(2, true)).thenReturn(Optional.of(state(TimetableWorkflowStatus.PUBLISHED)));
+        when(repository.updateStatus(2, TimetableWorkflowStatus.LOCKED)).thenReturn(1);
+        when(repository.findValidationCounts(2)).thenReturn(new ValidationCounts(48, 48, 0));
+
+        var summary = service.lock(2, 1);
+
+        assertEquals("LOCKED", summary.timetableStatus());
+        verify(auditLogService).logWorkflowTransition(
+                1, AuditAction.UPDATE, 2, "PUBLISHED", "LOCKED", "Admin locked timetable"
+        );
+    }
+
     private SemesterWorkflowState state(TimetableWorkflowStatus status) {
         return new SemesterWorkflowState(2, "Semester 2", status);
     }

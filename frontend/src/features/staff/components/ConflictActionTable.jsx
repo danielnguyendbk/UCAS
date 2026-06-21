@@ -34,6 +34,7 @@ export const ConflictActionTable = ({
   allocations,
   isLoading,
   onManualAssign,
+  readOnly = false,
 }) => {
   const [detailConflict, setDetailConflict] = useState(null);
   const [placeholderOpen, setPlaceholderOpen] = useState(false);
@@ -153,6 +154,8 @@ export const ConflictActionTable = ({
                           variant="ghost"
                           size="sm"
                           className="h-7 px-2 text-xs"
+                          disabled={readOnly}
+                          title={readOnly ? "Thời khóa biểu đang ở chế độ chỉ xem" : undefined}
                           onClick={() => {
                             if (allocation && onManualAssign) {
                               onManualAssign(allocation);

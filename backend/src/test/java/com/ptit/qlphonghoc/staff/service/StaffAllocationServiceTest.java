@@ -3,6 +3,7 @@ package com.ptit.qlphonghoc.staff.service;
 import com.ptit.qlphonghoc.common.exception.BadRequestException;
 import com.ptit.qlphonghoc.staff.dto.allocation.ManualAssignRequest;
 import com.ptit.qlphonghoc.staff.repository.StaffAllocationRepository;
+import com.ptit.qlphonghoc.timetableworkflow.service.TimetableMutationPolicy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -25,12 +26,14 @@ class StaffAllocationServiceTest {
 
     private StaffAllocationRepository repository;
     private StaffAllocationService service;
+    private TimetableMutationPolicy mutationPolicy;
     private StaffAllocationRepository.WeekBoundsProjection weekBounds;
 
     @BeforeEach
     void setUp() {
         repository = mock(StaffAllocationRepository.class);
-        service = new StaffAllocationService(repository);
+        mutationPolicy = mock(TimetableMutationPolicy.class);
+        service = new StaffAllocationService(repository, mutationPolicy);
         weekBounds = mock(StaffAllocationRepository.WeekBoundsProjection.class);
         when(weekBounds.getMinWeekNo()).thenReturn(1);
         when(weekBounds.getMaxWeekNo()).thenReturn(22);
@@ -54,6 +57,7 @@ class StaffAllocationServiceTest {
 
         assertDoesNotThrow(() -> service.manualAssign(request(51, 15), 2));
         verify(repository).upsertRoomAllocation(51, 15, 2);
+        verify(mutationPolicy).assertOriginalTimetableMutable(2);
     }
 
     @Test
@@ -94,6 +98,7 @@ class StaffAllocationServiceTest {
         service.autoAssign(2, 2);
 
         verify(repository).findAvailableRoomForAutoAssign(2, "MON", 1, 4, 3, 7, 99, "LAB", 60);
+        verify(mutationPolicy).assertOriginalTimetableMutable(2);
     }
 
     @Test
@@ -144,6 +149,7 @@ class StaffAllocationServiceTest {
         verify(repository).markSchedulesValid(2);
         verify(repository).markScheduleConflict(1, "ROOM_TIME_CONFLICT");
         verify(repository).markScheduleConflict(2, "ROOM_TIME_CONFLICT");
+        verify(mutationPolicy).assertOriginalTimetableMutable(2);
     }
 
     private StaffAllocationRepository.AssignmentScheduleProjection assignmentSchedule(

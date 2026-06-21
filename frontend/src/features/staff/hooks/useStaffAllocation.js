@@ -28,6 +28,20 @@ export const useStaffAllocation = () => {
   const [selectedSection, setSelectedSection] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const isTimetableReadOnly = ["PUBLISHED", "LOCKED"].includes(
+    workflow?.timetableStatus,
+  );
+  const readOnlyMessage =
+    workflow?.timetableStatus === "LOCKED"
+      ? "Thời khóa biểu đã khóa. Mọi thay đổi phải đi qua quy trình yêu cầu."
+      : "Thời khóa biểu đã công bố. Không thể phân phòng lại trực tiếp.";
+
+  const rejectReadOnlyMutation = () => {
+    if (!isTimetableReadOnly) return false;
+    setActionMessage({ tone: "error", text: readOnlyMessage });
+    return true;
+  };
+
   useEffect(() => {
     const fetchSemesters = async () => {
       try {
@@ -75,6 +89,7 @@ export const useStaffAllocation = () => {
   }, [semesterId]);
 
   const runAutoAssign = async () => {
+    if (rejectReadOnlyMutation()) return;
     if (
       !window.confirm(
         "Hệ thống sẽ tự động phân phòng cho các lớp chưa có chỗ. Tiếp tục?",
@@ -102,6 +117,7 @@ export const useStaffAllocation = () => {
 
   const validateAllocations = async () => {
     if (!semesterId) return;
+    if (rejectReadOnlyMutation()) return;
     setIsValidating(true);
     setActionMessage(null);
     try {
@@ -127,6 +143,7 @@ export const useStaffAllocation = () => {
   };
 
   const handleOpenRoomSearch = (section) => {
+    if (rejectReadOnlyMutation()) return;
     setActionMessage(null);
     setSelectedSection(section);
     setIsRoomSearchOpen(true);
@@ -190,6 +207,7 @@ export const useStaffAllocation = () => {
     allocations,
     conflicts,
     workflow,
+    isTimetableReadOnly,
     loadedSemesterId,
     isLoading,
     isRunning,

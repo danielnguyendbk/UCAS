@@ -53,4 +53,15 @@ public class AdminTimetableWorkflowController {
         }
         return ResponseEntity.ok(ApiResponse.success("Timetable published.", summary));
     }
+
+    @PostMapping("/lock")
+    public ApiResponse<TimetableWorkflowSummary> lock(
+            @RequestParam Integer semesterId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        return ApiResponse.success(
+                "Timetable locked.",
+                service.lock(semesterId, userDetails.getUserId())
+        );
+    }
 }

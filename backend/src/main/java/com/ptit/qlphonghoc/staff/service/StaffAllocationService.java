@@ -6,6 +6,7 @@ import com.ptit.qlphonghoc.staff.dto.allocation.AllocationValidationSummary;
 import com.ptit.qlphonghoc.staff.dto.allocation.ConflictResponse;
 import com.ptit.qlphonghoc.staff.dto.allocation.ManualAssignRequest;
 import com.ptit.qlphonghoc.staff.repository.StaffAllocationRepository;
+import com.ptit.qlphonghoc.timetableworkflow.service.TimetableMutationPolicy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,9 +41,14 @@ public class StaffAllocationService implements AllocationValidationService {
     );
 
     private final StaffAllocationRepository repository;
+    private final TimetableMutationPolicy mutationPolicy;
 
-    public StaffAllocationService(StaffAllocationRepository repository) {
+    public StaffAllocationService(
+            StaffAllocationRepository repository,
+            TimetableMutationPolicy mutationPolicy
+    ) {
         this.repository = repository;
+        this.mutationPolicy = mutationPolicy;
     }
 
     @Transactional(readOnly = true)
@@ -77,6 +83,7 @@ public class StaffAllocationService implements AllocationValidationService {
     @Transactional
     @Override
     public AllocationValidationSummary validateAllocations(Integer semesterId) {
+        mutationPolicy.assertOriginalTimetableMutable(semesterId);
         ConflictCalculation calculation = calculateConflicts(semesterId);
         updateValidationStatuses(semesterId, calculation.conflicts());
 
@@ -140,6 +147,7 @@ public class StaffAllocationService implements AllocationValidationService {
                         .orElseThrow(() -> new BadRequestException("Schedule does not exist."));
 
         validateAssignableSchedule(schedule);
+        mutationPolicy.assertOriginalTimetableMutable(schedule.getSemesterId());
 
         repository.lockClassroom(classroomId)
                 .orElseThrow(() -> new BadRequestException("Classroom does not exist."));
@@ -182,6 +190,7 @@ public class StaffAllocationService implements AllocationValidationService {
 
     @Transactional
     public String autoAssign(Integer semesterId, Integer staffUserId) {
+        mutationPolicy.assertOriginalTimetableMutable(semesterId);
         List<Integer> unassignedIds = repository.findUnassignedScheduleIds(semesterId);
         int successCount = 0;
 
