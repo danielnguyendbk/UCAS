@@ -1,7 +1,12 @@
 package com.ptit.qlphonghoc.staff.dto.allocation;
 
+import jakarta.validation.constraints.NotNull;
+
 public class ManualAssignRequest {
+    @NotNull(message = "scheduleId is required")
     private Integer scheduleId;
+
+    @NotNull(message = "classroomId is required")
     private Integer classroomId;
 
     public Integer getScheduleId() { return scheduleId; }

@@ -20,6 +20,7 @@ export const useStaffAllocation = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [runDoneMessage, setRunDoneMessage] = useState(null);
+  const [actionMessage, setActionMessage] = useState(null);
 
   const [isRoomSearchOpen, setIsRoomSearchOpen] = useState(false);
   const [selectedSection, setSelectedSection] = useState(null);
@@ -49,14 +50,14 @@ export const useStaffAllocation = () => {
     setLoadedSemesterId("");
     setRunDoneMessage(null);
     try {
-      const [allocRes, conflictRes] = await Promise.all([
-        httpClient.get(`/api/staff/allocations?semesterId=${semesterId}`),
-        httpClient.get(
-          `/api/staff/allocations/conflicts?semesterId=${semesterId}`,
-        ),
-      ]);
-      setAllocations(allocRes.data?.data || []);
+      const conflictRes = await httpClient.get(
+        `/api/staff/allocations/conflicts?semesterId=${semesterId}`,
+      );
+      const allocRes = await httpClient.get(
+        `/api/staff/allocations?semesterId=${semesterId}`,
+      );
       setConflicts(conflictRes.data?.data || []);
+      setAllocations(allocRes.data?.data || []);
     } catch (error) {
       console.error("Lỗi lấy dữ liệu:", error);
     } finally {
@@ -78,6 +79,7 @@ export const useStaffAllocation = () => {
       return;
     setIsRunning(true);
     setRunDoneMessage(null);
+    setActionMessage(null);
     try {
       const res = await httpClient.post(
         `/api/staff/allocations/auto-assign?semesterId=${semesterId}`,
@@ -85,13 +87,17 @@ export const useStaffAllocation = () => {
       setRunDoneMessage(res.data?.message || "Phân công tự động hoàn tất!");
       fetchData();
     } catch (error) {
-      alert(error.response?.data?.message || "Lỗi chạy phân công tự động");
+      setActionMessage({
+        tone: "error",
+        text: error.response?.data?.message || "Không thể chạy phân phòng tự động.",
+      });
     } finally {
       setIsRunning(false);
     }
   };
 
   const handleOpenRoomSearch = (section) => {
+    setActionMessage(null);
     setSelectedSection(section);
     setIsRoomSearchOpen(true);
   };
@@ -102,14 +108,19 @@ export const useStaffAllocation = () => {
         scheduleId: selectedSection.scheduleId,
         classroomId: classroomId,
       });
-      alert(`Đã phân phòng ${roomCode} thành công!`);
+      setActionMessage({
+        tone: "success",
+        text: `Đã phân phòng ${roomCode} thành công.`,
+      });
       setIsRoomSearchOpen(false);
       fetchData();
     } catch (error) {
-      alert(
-        error.response?.data?.message ||
-          "Phòng bị trùng lịch hoặc quá sức chứa!",
-      );
+      setActionMessage({
+        tone: "error",
+        text:
+          error.response?.data?.message ||
+          "Không thể phân phòng do xung đột hoặc ràng buộc phòng.",
+      });
     }
   };
 
@@ -147,6 +158,8 @@ export const useStaffAllocation = () => {
     isLoading,
     isRunning,
     runDoneMessage,
+    actionMessage,
+    setActionMessage,
     runAutoAssign,
     isRoomSearchOpen,
     setIsRoomSearchOpen,

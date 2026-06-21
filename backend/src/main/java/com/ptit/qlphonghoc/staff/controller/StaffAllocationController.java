@@ -5,6 +5,7 @@ import com.ptit.qlphonghoc.staff.dto.allocation.AllocationResponse;
 import com.ptit.qlphonghoc.staff.dto.allocation.ConflictResponse;
 import com.ptit.qlphonghoc.staff.dto.allocation.ManualAssignRequest;
 import com.ptit.qlphonghoc.staff.service.StaffAllocationService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -41,19 +42,10 @@ public class StaffAllocationController {
     }
 
     @PostMapping("/manual")
-    public ResponseEntity<Map<String, String>> manualAssign(@RequestBody ManualAssignRequest request,
+    public ResponseEntity<Map<String, String>> manualAssign(@Valid @RequestBody ManualAssignRequest request,
                                                             @AuthenticationPrincipal CustomUserDetails userDetails) {
-        try {
-            service.manualAssign(request, userDetails.getUserId());
-            return ResponseEntity.ok(Map.of("message", "Phân phòng thành công!"));
-        } catch (Exception e) {
-            Throwable rootCause = e;
-            while (rootCause.getCause() != null) {
-                rootCause = rootCause.getCause();
-            }
-
-            return ResponseEntity.status(400).body(Map.of("message", rootCause.getMessage()));
-        }
+        service.manualAssign(request, userDetails.getUserId());
+        return ResponseEntity.ok(Map.of("message", "Phân phòng thành công!"));
     }
 
     @PostMapping("/auto-assign")
@@ -69,14 +61,16 @@ public class StaffAllocationController {
             @RequestParam String dayOfWeek,
             @RequestParam Integer slot,
             @RequestParam Integer expectedAttendees,
-            @RequestParam(required = false, defaultValue = "") String roomType
+            @RequestParam(required = false, defaultValue = "") String roomType,
+            @RequestParam(required = false) Integer scheduleId
     ) {
         return ResponseEntity.ok(service.getAvailableRooms(
                 semesterId,
                 normalizeDayOfWeek(dayOfWeek),
                 slot,
                 expectedAttendees,
-                roomType
+                roomType,
+                scheduleId
         ));
     }
 

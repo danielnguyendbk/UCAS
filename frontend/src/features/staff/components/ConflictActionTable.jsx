@@ -41,9 +41,10 @@ export const ConflictActionTable = ({
   const findAllocation = (conflict) =>
     allocations.find(
       (row) =>
-        row.sectionCode === conflict.sectionCode &&
-        row.dayOfWeek === conflict.dayOfWeek &&
-        Number(row.slotNumber) === Number(conflict.slotNumber),
+        (conflict.scheduleId && Number(row.scheduleId) === Number(conflict.scheduleId)) ||
+        (row.sectionCode === conflict.sectionCode &&
+          row.dayOfWeek === conflict.dayOfWeek &&
+          Number(row.slotNumber) === Number(conflict.slotNumber)),
     );
 
   const openPlaceholder = () => setPlaceholderOpen(true);
@@ -121,9 +122,14 @@ export const ConflictActionTable = ({
                       {formatSchedule(conflict)}
                     </TableCell>
                     <TableCell className="text-xs text-gray-700 max-w-[220px]">
-                      {CONFLICT_TYPE_LABELS[conflict.conflictType] ||
-                        conflict.description ||
-                        "—"}
+                      <p className="font-semibold text-gray-800">
+                        {CONFLICT_TYPE_LABELS[conflict.conflictType] || conflict.conflictType || "—"}
+                      </p>
+                      {conflict.description && (
+                        <p className="mt-0.5 text-[11px] leading-4 text-gray-500">
+                          {conflict.description}
+                        </p>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Badge

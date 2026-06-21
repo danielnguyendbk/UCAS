@@ -1,7 +1,8 @@
 package com.ptit.qlphonghoc.staff.dto.allocation;
 
 public class ConflictResponse {
-    private String conflictType; // UNASSIGNED, CAPACITY_EXCEEDED, LECTURER_CONFLICT
+    private Integer scheduleId;
+    private String conflictType;
     private String severity; // HIGH, MEDIUM, LOW
     private String dayOfWeek;
     private Integer slotNumber;
@@ -12,6 +13,8 @@ public class ConflictResponse {
     private String conflictingWith;
 
     // Getters and Setters
+    public Integer getScheduleId() { return scheduleId; }
+    public void setScheduleId(Integer scheduleId) { this.scheduleId = scheduleId; }
     public String getConflictType() { return conflictType; }
     public void setConflictType(String conflictType) { this.conflictType = conflictType; }
     public String getSeverity() { return severity; }

@@ -63,6 +63,8 @@ const StaffAutoAssignmentPage = () => {
     isLoading,
     isRunning,
     runDoneMessage,
+    actionMessage,
+    setActionMessage,
     runAutoAssign,
     isRoomSearchOpen,
     setIsRoomSearchOpen,
@@ -151,9 +153,10 @@ const StaffAutoAssignmentPage = () => {
       setAllocationTab("allocation");
       handleOpenRoomSearch(targetSection);
     } else {
-      window.alert(
-        "Không tìm thấy lớp học phần này trong danh sách phân phòng. Vui lòng kiểm tra lớp đã có lịch học hay chưa.",
-      );
+      setActionMessage({
+        tone: "error",
+        text: "Không tìm thấy lớp học phần trong danh sách phân phòng. Hãy kiểm tra lớp đã có lịch học hay chưa.",
+      });
     }
 
     navigate(location.pathname, { replace: true, state: null });
@@ -166,6 +169,7 @@ const StaffAutoAssignmentPage = () => {
     allocations,
     setAllocationTab,
     handleOpenRoomSearch,
+    setActionMessage,
     navigate,
     location.pathname,
   ]);
@@ -220,6 +224,23 @@ const StaffAutoAssignmentPage = () => {
             <p className="font-semibold">Hoàn tất!</p>
             <p className="text-xs text-green-700 mt-0.5">{runDoneMessage}</p>
           </div>
+        </div>
+      )}
+
+      {actionMessage && (
+        <div
+          className={`flex items-start gap-3 rounded-xl border p-4 text-sm ${
+            actionMessage.tone === "success"
+              ? "border-green-200 bg-green-50 text-green-800"
+              : "border-red-200 bg-red-50 text-red-800"
+          }`}
+        >
+          {actionMessage.tone === "success" ? (
+            <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0" />
+          ) : (
+            <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0" />
+          )}
+          <p>{actionMessage.text}</p>
         </div>
       )}
 
@@ -369,6 +390,7 @@ const StaffAutoAssignmentPage = () => {
         expectedAttendees={selectedSection?.maxCapacity}
         isAllocationMode
         dayOfWeek={selectedSection?.dayOfWeek}
+        scheduleId={selectedSection?.scheduleId}
       />
     </div>
   );

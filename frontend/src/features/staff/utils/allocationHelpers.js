@@ -44,6 +44,13 @@ export const getCourseCode = (row) =>
 export const CONFLICT_TYPE_LABELS = {
   UNASSIGNED: "Không có phòng phù hợp",
   CAPACITY_EXCEEDED: "Phòng không đủ sức chứa",
+  ROOM_TIME_CONFLICT: "Trùng phòng theo giờ và tuần",
+  LECTURER_TIME_CONFLICT: "Giảng viên trùng lịch",
+  ROOM_TYPE_MISMATCH: "Phòng sai loại yêu cầu",
+  ROOM_INACTIVE_OR_DELETED: "Phòng ngừng hoạt động",
+  CALENDAR_BLOCK_CONFLICT: "Trùng ngày nghỉ / lịch học vụ",
+  INVALID_WEEK_RANGE: "Khoảng tuần không hợp lệ",
+  INVALID_TIME_RANGE: "Khoảng thời gian không hợp lệ",
   ROOM_CONFLICT: "Trùng phòng",
   LECTURER_CONFLICT: "Trùng giảng viên",
   CLASS_CONFLICT: "Trùng lớp hành chính",

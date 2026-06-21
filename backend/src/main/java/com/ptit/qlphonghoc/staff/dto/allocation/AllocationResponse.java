@@ -14,6 +14,11 @@ public class AllocationResponse {
     private Integer roomCapacity;
     private String status;
     private Integer scheduleId;
+    private Integer slotEndNumber;
+    private Integer fromWeekNo;
+    private Integer toWeekNo;
+    private String validationStatus;
+    private String conflictReason;
 
     // Getters and Setters
     public Integer getSectionId() { return sectionId; }
@@ -44,4 +49,14 @@ public class AllocationResponse {
     public void setStatus(String status) { this.status = status; }
     public Integer getScheduleId() { return scheduleId; }
     public void setScheduleId(Integer scheduleId) { this.scheduleId = scheduleId; }
+    public Integer getSlotEndNumber() { return slotEndNumber; }
+    public void setSlotEndNumber(Integer slotEndNumber) { this.slotEndNumber = slotEndNumber; }
+    public Integer getFromWeekNo() { return fromWeekNo; }
+    public void setFromWeekNo(Integer fromWeekNo) { this.fromWeekNo = fromWeekNo; }
+    public Integer getToWeekNo() { return toWeekNo; }
+    public void setToWeekNo(Integer toWeekNo) { this.toWeekNo = toWeekNo; }
+    public String getValidationStatus() { return validationStatus; }
+    public void setValidationStatus(String validationStatus) { this.validationStatus = validationStatus; }
+    public String getConflictReason() { return conflictReason; }
+    public void setConflictReason(String conflictReason) { this.conflictReason = conflictReason; }
 }

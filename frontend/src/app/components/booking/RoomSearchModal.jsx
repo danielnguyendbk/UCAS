@@ -129,6 +129,7 @@ export default function RoomSearchModal({
       if (isAllocationMode) {
         endpoint = "/api/staff/allocations/available-rooms";
         params.dayOfWeek = dayOfWeek;
+        if (scheduleId) params.scheduleId = scheduleId;
       } else if (isEmergencyChangeMode) {
         endpoint = isLecturerChangeMode
           ? "/api/lecturer/room-change-requests/available-rooms"
