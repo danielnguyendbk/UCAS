@@ -2,6 +2,7 @@ package com.ptit.qlphonghoc.staff.service;
 
 import com.ptit.qlphonghoc.common.exception.BadRequestException;
 import com.ptit.qlphonghoc.staff.dto.allocation.AllocationResponse;
+import com.ptit.qlphonghoc.staff.dto.allocation.AllocationValidationSummary;
 import com.ptit.qlphonghoc.staff.dto.allocation.ConflictResponse;
 import com.ptit.qlphonghoc.staff.dto.allocation.ManualAssignRequest;
 import com.ptit.qlphonghoc.staff.repository.StaffAllocationRepository;
@@ -13,9 +14,11 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -44,14 +47,56 @@ public class StaffAllocationService {
 
     @Transactional(readOnly = true)
     public List<AllocationResponse> getAllocations(Integer semesterId) {
+        return getAllocations(semesterId, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<AllocationResponse> getAllocations(Integer semesterId, String search, String status) {
         return repository.findAllSchedulesBySemester(semesterId)
                 .stream()
                 .map(this::toAllocationResponse)
+                .filter(allocation -> matchesAllocationSearch(allocation, search))
+                .filter(allocation -> isBlank(status) || status.equalsIgnoreCase(allocation.getStatus()))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<ConflictResponse> getConflicts(Integer semesterId) {
+        return getConflicts(semesterId, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ConflictResponse> getConflicts(Integer semesterId, String search, String conflictType) {
+        return calculateConflicts(semesterId).conflicts().stream()
+                .filter(conflict -> matchesConflictSearch(conflict, search))
+                .filter(conflict -> isBlank(conflictType)
+                        || conflictType.equalsIgnoreCase(conflict.getConflictType()))
                 .toList();
     }
 
     @Transactional
-    public List<ConflictResponse> getConflicts(Integer semesterId) {
+    public AllocationValidationSummary validateAllocations(Integer semesterId) {
+        ConflictCalculation calculation = calculateConflicts(semesterId);
+        updateValidationStatuses(semesterId, calculation.conflicts());
+
+        Set<Integer> conflictedScheduleIds = calculation.conflicts().stream()
+                .map(ConflictResponse::getScheduleId)
+                .collect(Collectors.toSet());
+        Map<String, Integer> conflictTypeCounts = new LinkedHashMap<>();
+        calculation.conflicts().forEach(conflict ->
+                conflictTypeCounts.merge(conflict.getConflictType(), 1, Integer::sum));
+
+        int totalSchedules = calculation.schedules().size();
+        int conflictCount = conflictedScheduleIds.size();
+        return new AllocationValidationSummary(
+                totalSchedules,
+                totalSchedules - conflictCount,
+                conflictCount,
+                conflictTypeCounts
+        );
+    }
+
+    private ConflictCalculation calculateConflicts(Integer semesterId) {
         List<StaffAllocationRepository.AllocationProjection> schedules =
                 repository.findAllSchedulesBySemester(semesterId);
         StaffAllocationRepository.WeekBoundsProjection bounds = repository.findWeekBounds(semesterId);
@@ -71,21 +116,14 @@ public class StaffAllocationService {
             addSingleScheduleConflicts(conflicts, schedule, bounds, calendarConflicts.get(schedule.getScheduleId()));
         }
 
-        for (int leftIndex = 0; leftIndex < schedules.size(); leftIndex++) {
-            StaffAllocationRepository.AllocationProjection left = schedules.get(leftIndex);
-            for (int rightIndex = leftIndex + 1; rightIndex < schedules.size(); rightIndex++) {
-                StaffAllocationRepository.AllocationProjection right = schedules.get(rightIndex);
-                addPairConflicts(conflicts, left, right, bounds);
-            }
-        }
+        addGroupedPairConflicts(conflicts, schedules, bounds);
 
         conflicts.sort(
                 Comparator.comparing(ConflictResponse::getScheduleId)
                         .thenComparingInt(conflict -> priorityOf(conflict.getConflictType()))
         );
 
-        updateValidationStatuses(semesterId, conflicts);
-        return conflicts;
+        return new ConflictCalculation(schedules, conflicts);
     }
 
     @Transactional
@@ -139,7 +177,6 @@ public class StaffAllocationService {
             throw new BadRequestException("Schedule is no longer assignable. Refresh and try again.");
         }
 
-        getConflicts(schedule.getSemesterId());
     }
 
     @Transactional
@@ -202,8 +239,6 @@ public class StaffAllocationService {
             successCount += repository.upsertRoomAllocation(scheduleId, classroomId, staffUserId);
         }
 
-        getConflicts(semesterId);
-
         int failedCount = unassignedIds.size() - successCount;
         if (failedCount > 0) {
             return "Assigned " + successCount + " schedules. " + failedCount
@@ -219,7 +254,9 @@ public class StaffAllocationService {
             Integer timeSlotId,
             Integer expectedAttendees,
             String roomType,
-            Integer scheduleId
+            Integer scheduleId,
+            Integer buildingId,
+            String search
     ) {
         Integer slotStartId = timeSlotId;
         Integer slotEndId = timeSlotId;
@@ -260,8 +297,11 @@ public class StaffAllocationService {
                 toWeekNo,
                 excludedScheduleId,
                 requiredAttendees,
-                requiredRoomType
-        );
+                requiredRoomType,
+                buildingId
+        ).stream()
+                .filter(room -> isBlank(search) || containsIgnoreCase(room.getRoomCode(), search))
+                .toList();
     }
 
     private AllocationResponse toAllocationResponse(StaffAllocationRepository.AllocationProjection projection) {
@@ -347,35 +387,89 @@ public class StaffAllocationService {
         }
     }
 
-    private void addPairConflicts(
+    private void addGroupedPairConflicts(
             List<ConflictResponse> conflicts,
-            StaffAllocationRepository.AllocationProjection left,
-            StaffAllocationRepository.AllocationProjection right,
+            List<StaffAllocationRepository.AllocationProjection> schedules,
             StaffAllocationRepository.WeekBoundsProjection bounds
     ) {
-        if (!Objects.equals(left.getDayOfWeekCode(), right.getDayOfWeekCode())
-                || !slotsOverlap(left, right)
-                || !weeksOverlap(left, right, bounds)) {
-            return;
+        Map<ConflictGroupKey, List<StaffAllocationRepository.AllocationProjection>> roomGroups =
+                new HashMap<>();
+        Map<ConflictGroupKey, List<StaffAllocationRepository.AllocationProjection>> lecturerGroups =
+                new HashMap<>();
+
+        for (StaffAllocationRepository.AllocationProjection schedule : schedules) {
+            if (schedule.getDayOfWeekCode() == null) {
+                continue;
+            }
+            if (schedule.getAllocationId() != null) {
+                roomGroups.computeIfAbsent(
+                        new ConflictGroupKey(
+                                schedule.getSemesterId(),
+                                schedule.getDayOfWeekCode(),
+                                schedule.getAllocationId()
+                        ),
+                        ignored -> new ArrayList<>()
+                ).add(schedule);
+            }
+            if (schedule.getLecturerId() != null) {
+                lecturerGroups.computeIfAbsent(
+                        new ConflictGroupKey(
+                                schedule.getSemesterId(),
+                                schedule.getDayOfWeekCode(),
+                                schedule.getLecturerId()
+                        ),
+                        ignored -> new ArrayList<>()
+                ).add(schedule);
+            }
         }
 
-        if (left.getAllocationId() != null
-                && Objects.equals(left.getAllocationId(), right.getAllocationId())) {
+        roomGroups.values().forEach(group -> addRoomPairConflicts(conflicts, group, bounds));
+        lecturerGroups.values().forEach(group -> addLecturerPairConflicts(conflicts, group, bounds));
+    }
+
+    private void addRoomPairConflicts(
+            List<ConflictResponse> conflicts,
+            List<StaffAllocationRepository.AllocationProjection> group,
+            StaffAllocationRepository.WeekBoundsProjection bounds
+    ) {
+        forEachOverlappingPair(group, bounds, (left, right) -> {
             conflicts.add(conflict(left, "ROOM_TIME_CONFLICT", "HIGH",
                     "Room " + left.getAssignedRoom() + " overlaps with " + right.getClassCode() + ".",
                     right.getClassCode()));
             conflicts.add(conflict(right, "ROOM_TIME_CONFLICT", "HIGH",
                     "Room " + right.getAssignedRoom() + " overlaps with " + left.getClassCode() + ".",
                     left.getClassCode()));
-        }
+        });
+    }
 
-        if (Objects.equals(left.getLecturerId(), right.getLecturerId())) {
+    private void addLecturerPairConflicts(
+            List<ConflictResponse> conflicts,
+            List<StaffAllocationRepository.AllocationProjection> group,
+            StaffAllocationRepository.WeekBoundsProjection bounds
+    ) {
+        forEachOverlappingPair(group, bounds, (left, right) -> {
             conflicts.add(conflict(left, "LECTURER_TIME_CONFLICT", "HIGH",
                     "Lecturer " + left.getLecturerName() + " also teaches " + right.getClassCode() + ".",
                     right.getClassCode()));
             conflicts.add(conflict(right, "LECTURER_TIME_CONFLICT", "HIGH",
                     "Lecturer " + right.getLecturerName() + " also teaches " + left.getClassCode() + ".",
                     left.getClassCode()));
+        });
+    }
+
+    private void forEachOverlappingPair(
+            List<StaffAllocationRepository.AllocationProjection> group,
+            StaffAllocationRepository.WeekBoundsProjection bounds,
+            SchedulePairConsumer consumer
+    ) {
+        for (int leftIndex = 0; leftIndex < group.size(); leftIndex++) {
+            StaffAllocationRepository.AllocationProjection left = group.get(leftIndex);
+            for (int rightIndex = leftIndex + 1; rightIndex < group.size(); rightIndex++) {
+                StaffAllocationRepository.AllocationProjection right = group.get(rightIndex);
+                if (slotsOverlap(left, right) && weeksOverlap(left, right, bounds)) {
+                    consumer.accept(left, right);
+                }
+            }
         }
     }
 
@@ -393,6 +487,7 @@ public class StaffAllocationService {
         response.setDayOfWeek(schedule.getDayOfWeek());
         response.setSlotNumber(schedule.getSlotNumber());
         response.setRoomCode(schedule.getAssignedRoom());
+        response.setClassCode(schedule.getClassCode());
         response.setSectionCode(schedule.getSectionCode());
         response.setCourseName(schedule.getCourseName());
         response.setDescription(description);
@@ -527,6 +622,10 @@ public class StaffAllocationService {
             StaffAllocationRepository.AllocationProjection left,
             StaffAllocationRepository.AllocationProjection right
     ) {
+        if (left.getSlotNumber() == null || left.getSlotEndNumber() == null
+                || right.getSlotNumber() == null || right.getSlotEndNumber() == null) {
+            return false;
+        }
         return left.getSlotNumber() <= right.getSlotEndNumber()
                 && right.getSlotNumber() <= left.getSlotEndNumber();
     }
@@ -553,5 +652,49 @@ public class StaffAllocationService {
 
     private int priorityOf(String conflictType) {
         return CONFLICT_PRIORITY.getOrDefault(conflictType, Integer.MAX_VALUE);
+    }
+
+    private boolean matchesAllocationSearch(AllocationResponse allocation, String search) {
+        return isBlank(search)
+                || containsIgnoreCase(allocation.getClassCode(), search)
+                || containsIgnoreCase(allocation.getSectionCode(), search)
+                || containsIgnoreCase(allocation.getCourseName(), search)
+                || containsIgnoreCase(allocation.getAssignedRoom(), search);
+    }
+
+    private boolean matchesConflictSearch(ConflictResponse conflict, String search) {
+        return isBlank(search)
+                || containsIgnoreCase(conflict.getClassCode(), search)
+                || containsIgnoreCase(conflict.getSectionCode(), search)
+                || containsIgnoreCase(conflict.getCourseName(), search)
+                || containsIgnoreCase(conflict.getRoomCode(), search)
+                || containsIgnoreCase(conflict.getDescription(), search)
+                || containsIgnoreCase(conflict.getConflictingWith(), search);
+    }
+
+    private boolean containsIgnoreCase(String value, String search) {
+        return value != null && value.toLowerCase(Locale.ROOT)
+                .contains(search.trim().toLowerCase(Locale.ROOT));
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private record ConflictCalculation(
+            List<StaffAllocationRepository.AllocationProjection> schedules,
+            List<ConflictResponse> conflicts
+    ) {
+    }
+
+    private record ConflictGroupKey(Integer semesterId, String dayOfWeek, Integer ownerId) {
+    }
+
+    @FunctionalInterface
+    private interface SchedulePairConsumer {
+        void accept(
+                StaffAllocationRepository.AllocationProjection left,
+                StaffAllocationRepository.AllocationProjection right
+        );
     }
 }

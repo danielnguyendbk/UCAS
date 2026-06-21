@@ -347,6 +347,7 @@ public interface StaffAllocationRepository extends JpaRepository<ClassSection, I
     @Query(value = """
         SELECT
             cr.classroom_id AS classroomId,
+            cr.building_id AS buildingId,
             CONCAT(b.building_code, '-', cr.room_number) AS roomCode,
             cr.capacity AS capacity,
             cr.room_type AS roomType,
@@ -370,6 +371,7 @@ public interface StaffAllocationRepository extends JpaRepository<ClassSection, I
           AND cr.is_deleted = FALSE
           AND cr.capacity >= :expectedAttendees
           AND (:roomType IS NULL OR :roomType = '' OR cr.room_type = :roomType)
+          AND (:buildingId IS NULL OR cr.building_id = :buildingId)
           AND NOT EXISTS (
               SELECT 1
               FROM schedules sch
@@ -396,7 +398,8 @@ public interface StaffAllocationRepository extends JpaRepository<ClassSection, I
             @Param("toWeekNo") Integer toWeekNo,
             @Param("excludedScheduleId") Integer excludedScheduleId,
             @Param("expectedAttendees") Integer expectedAttendees,
-            @Param("roomType") String roomType
+            @Param("roomType") String roomType,
+            @Param("buildingId") Integer buildingId
     );
 
     interface AllocationProjection {
@@ -475,6 +478,7 @@ public interface StaffAllocationRepository extends JpaRepository<ClassSection, I
 
     interface AllocationRoomProjection {
         Integer getClassroomId();
+        Integer getBuildingId();
         String getRoomCode();
         Integer getCapacity();
         String getRoomType();

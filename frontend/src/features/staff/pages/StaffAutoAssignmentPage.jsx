@@ -1,10 +1,12 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import {
   AlertTriangle,
   CheckCircle,
   RefreshCw,
+  Search,
   Send,
+  ShieldCheck,
   Upload,
   Wand2,
 } from "lucide-react";
@@ -23,6 +25,7 @@ import {
 } from "@/app/components/ui/tabs";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent } from "@/app/components/ui/card";
+import { Input } from "@/app/components/ui/input";
 import RoomSearchModal from "@/app/components/booking/RoomSearchModal";
 import { ConflictActionTable } from "@/features/staff/components/ConflictActionTable";
 import { RoomAssignmentSummaryCards } from "@/features/staff/components/RoomAssignmentSummaryCards";
@@ -32,9 +35,49 @@ import {
 } from "@/features/staff/components/RoomAssignmentTables";
 import { useStaffAllocation } from "@/features/staff/hooks/useStaffAllocation";
 import {
+  CONFLICT_TYPE_LABELS,
+  getCourseCode,
   isAssigned,
   isUnassigned,
 } from "@/features/staff/utils/allocationHelpers";
+
+const PAGE_SIZE = 10;
+
+const paginate = (items, page) =>
+  items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+const ListPagination = ({ page, totalItems, onPageChange }) => {
+  if (totalItems === 0) return null;
+  const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-gray-500">
+      <span>
+        Hiển thị {(page - 1) * PAGE_SIZE + 1}–
+        {Math.min(page * PAGE_SIZE, totalItems)} / {totalItems}
+      </span>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={page <= 1}
+          onClick={() => onPageChange(page - 1)}
+        >
+          Trước
+        </Button>
+        <span>Trang {page}/{totalPages}</span>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={page >= totalPages}
+          onClick={() => onPageChange(page + 1)}
+        >
+          Sau
+        </Button>
+      </div>
+    </div>
+  );
+};
 
 const WORKFLOW_TABS = [
   { value: "import", label: "Import thời khóa biểu" },
@@ -52,6 +95,10 @@ const StaffAutoAssignmentPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
   const activeTab = VALID_TABS.has(tabParam) ? tabParam : "pending";
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [conflictTypeFilter, setConflictTypeFilter] = useState("ALL");
+  const [pages, setPages] = useState({ pending: 1, assigned: 1, conflicts: 1 });
 
   const {
     semestersList,
@@ -62,10 +109,12 @@ const StaffAutoAssignmentPage = () => {
     loadedSemesterId,
     isLoading,
     isRunning,
+    isValidating,
     runDoneMessage,
     actionMessage,
     setActionMessage,
     runAutoAssign,
+    validateAllocations,
     isRoomSearchOpen,
     setIsRoomSearchOpen,
     selectedSection,
@@ -80,29 +129,142 @@ const StaffAutoAssignmentPage = () => {
 
   const pendingAssignment = location.state?.openRoomSearch ? location.state : null;
 
-  const unassignedItems = useMemo(
+  const allUnassignedItems = useMemo(
     () => allocations.filter(isUnassigned),
     [allocations],
   );
-  const assignedItems = useMemo(
+  const allAssignedItems = useMemo(
     () => allocations.filter(isAssigned),
     [allocations],
+  );
+
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const allocationMatchesFilters = (allocation) => {
+    const matchesSearch =
+      !normalizedSearch ||
+      [
+        getCourseCode(allocation),
+        allocation.sectionCode,
+        allocation.courseName,
+        allocation.assignedRoom,
+      ].some((value) =>
+        String(value || "").toLowerCase().includes(normalizedSearch),
+      );
+    const matchesStatus =
+      statusFilter === "ALL" ||
+      (statusFilter === "UNASSIGNED" && isUnassigned(allocation)) ||
+      (statusFilter === "ASSIGNED" && isAssigned(allocation)) ||
+      allocation.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  };
+
+  const filteredUnassignedItems = useMemo(
+    () => allUnassignedItems.filter(allocationMatchesFilters),
+    [allUnassignedItems, normalizedSearch, statusFilter],
+  );
+  const filteredAssignedItems = useMemo(
+    () => allAssignedItems.filter(allocationMatchesFilters),
+    [allAssignedItems, normalizedSearch, statusFilter],
+  );
+  const allocationByScheduleId = useMemo(
+    () => new Map(allocations.map((item) => [Number(item.scheduleId), item])),
+    [allocations],
+  );
+  const filteredConflicts = useMemo(
+    () =>
+      conflicts.filter((conflict) => {
+        const allocation = allocationByScheduleId.get(Number(conflict.scheduleId));
+        const matchesSearch =
+          !normalizedSearch ||
+          [
+            getCourseCode(allocation || conflict),
+            conflict.sectionCode,
+            conflict.courseName,
+            conflict.roomCode,
+            conflict.description,
+            allocation?.assignedRoom,
+          ].some((value) =>
+            String(value || "").toLowerCase().includes(normalizedSearch),
+          );
+        const matchesStatus =
+          statusFilter === "ALL" ||
+          (allocation && allocationMatchesFilters(allocation));
+        const matchesType =
+          conflictTypeFilter === "ALL" ||
+          conflict.conflictType === conflictTypeFilter;
+        return matchesSearch && matchesStatus && matchesType;
+      }),
+    [
+      conflicts,
+      allocationByScheduleId,
+      normalizedSearch,
+      statusFilter,
+      conflictTypeFilter,
+    ],
+  );
+  const conflictTypes = useMemo(
+    () =>
+      [...new Set(conflicts.map((item) => item.conflictType).filter(Boolean))].sort(),
+    [conflicts],
+  );
+
+  const pageItems = useMemo(
+    () => ({
+      pending: paginate(filteredUnassignedItems, pages.pending),
+      assigned: paginate(filteredAssignedItems, pages.assigned),
+      conflicts: paginate(filteredConflicts, pages.conflicts),
+    }),
+    [filteredUnassignedItems, filteredAssignedItems, filteredConflicts, pages],
   );
 
   const summary = useMemo(
     () => ({
       total: allocations.length,
-      assigned: assignedItems.length,
-      unassigned: unassignedItems.length,
+      assigned: allAssignedItems.length,
+      unassigned: allUnassignedItems.length,
       conflicts: conflicts.length,
       canSubmit: conflicts.length === 0 && allocations.length > 0,
     }),
-    [allocations.length, assignedItems.length, unassignedItems.length, conflicts.length],
+    [
+      allocations.length,
+      allAssignedItems.length,
+      allUnassignedItems.length,
+      conflicts.length,
+    ],
   );
 
   const setActiveTab = (value) => {
     setSearchParams({ tab: value }, { replace: true });
   };
+
+  const setListPage = (list, page) => {
+    setPages((current) => ({ ...current, [list]: page }));
+  };
+
+  useEffect(() => {
+    setPages({ pending: 1, assigned: 1, conflicts: 1 });
+  }, [searchTerm, statusFilter, conflictTypeFilter, semesterId]);
+
+  useEffect(() => {
+    setPages((current) => ({
+      pending: Math.min(
+        current.pending,
+        Math.max(1, Math.ceil(filteredUnassignedItems.length / PAGE_SIZE)),
+      ),
+      assigned: Math.min(
+        current.assigned,
+        Math.max(1, Math.ceil(filteredAssignedItems.length / PAGE_SIZE)),
+      ),
+      conflicts: Math.min(
+        current.conflicts,
+        Math.max(1, Math.ceil(filteredConflicts.length / PAGE_SIZE)),
+      ),
+    }));
+  }, [
+    filteredUnassignedItems.length,
+    filteredAssignedItems.length,
+    filteredConflicts.length,
+  ]);
 
   useEffect(() => {
     if (!tabParam || !VALID_TABS.has(tabParam)) {
@@ -199,20 +361,34 @@ const StaffAutoAssignmentPage = () => {
           </div>
         </div>
 
-        {activeTab === "pending" && (
+        <div className="flex flex-wrap items-center gap-2">
+          {activeTab === "pending" && (
+            <Button
+              onClick={runAutoAssign}
+              disabled={isRunning || !semesterId}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {isRunning ? (
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Wand2 className="w-4 h-4 mr-2" />
+              )}
+              {isRunning ? "Đang xử lý..." : "Chạy phân phòng tự động"}
+            </Button>
+          )}
           <Button
-            onClick={runAutoAssign}
-            disabled={isRunning || !semesterId}
-            className="bg-blue-600 hover:bg-blue-700"
+            variant="outline"
+            onClick={validateAllocations}
+            disabled={isValidating || !semesterId}
           >
-            {isRunning ? (
-              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+            {isValidating ? (
+              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
             ) : (
-              <Wand2 className="w-4 h-4 mr-2" />
+              <ShieldCheck className="mr-2 h-4 w-4" />
             )}
-            {isRunning ? "Đang xử lý..." : "Chạy phân phòng tự động"}
+            Kiểm tra & cập nhật trạng thái
           </Button>
-        )}
+        </div>
       </div>
 
       <RoomAssignmentSummaryCards {...summary} />
@@ -261,6 +437,49 @@ const StaffAutoAssignmentPage = () => {
               ))}
             </TabsList>
 
+            {["pending", "assigned", "conflicts"].includes(activeTab) && (
+              <div className="mt-4 flex flex-col gap-3 rounded-lg border border-gray-200 bg-gray-50/60 p-3 md:flex-row md:items-center">
+                <div className="relative min-w-0 flex-1">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <Input
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
+                    placeholder="Tìm mã học phần, tên môn hoặc phòng..."
+                    className="bg-white pl-9"
+                  />
+                </div>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-full bg-white md:w-48">
+                    <SelectValue placeholder="Trạng thái" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
+                    <SelectItem value="UNASSIGNED">Chưa phân phòng</SelectItem>
+                    <SelectItem value="VALID">Hợp lệ</SelectItem>
+                    <SelectItem value="CONFLICT">Có xung đột</SelectItem>
+                  </SelectContent>
+                </Select>
+                {activeTab === "conflicts" && (
+                  <Select
+                    value={conflictTypeFilter}
+                    onValueChange={setConflictTypeFilter}
+                  >
+                    <SelectTrigger className="w-full bg-white md:w-64">
+                      <SelectValue placeholder="Loại xung đột" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">Tất cả loại xung đột</SelectItem>
+                      {conflictTypes.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {CONFLICT_TYPE_LABELS[type] || type}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
+
             <TabsContent value="import" className="mt-4">
               <div className="flex flex-col items-center justify-center py-16 bg-gray-50/50 rounded-xl border border-dashed border-gray-200 text-center">
                 <Upload className="w-10 h-10 text-gray-300 mb-3" />
@@ -277,24 +496,39 @@ const StaffAutoAssignmentPage = () => {
 
             <TabsContent value="pending" className="mt-4">
               <UnassignedScheduleTable
-                items={unassignedItems}
+                items={pageItems.pending}
                 isLoading={isLoading}
+              />
+              <ListPagination
+                page={pages.pending}
+                totalItems={filteredUnassignedItems.length}
+                onPageChange={(page) => setListPage("pending", page)}
               />
             </TabsContent>
 
             <TabsContent value="assigned" className="mt-4">
               <AssignedScheduleTable
-                items={assignedItems}
+                items={pageItems.assigned}
                 isLoading={isLoading}
+              />
+              <ListPagination
+                page={pages.assigned}
+                totalItems={filteredAssignedItems.length}
+                onPageChange={(page) => setListPage("assigned", page)}
               />
             </TabsContent>
 
             <TabsContent value="conflicts" className="mt-4">
               <ConflictActionTable
-                conflicts={conflicts}
+                conflicts={pageItems.conflicts}
                 allocations={allocations}
                 isLoading={isLoading}
                 onManualAssign={handleOpenRoomSearch}
+              />
+              <ListPagination
+                page={pages.conflicts}
+                totalItems={filteredConflicts.length}
+                onPageChange={(page) => setListPage("conflicts", page)}
               />
             </TabsContent>
 

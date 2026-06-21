@@ -8,6 +8,7 @@ public class ConflictResponse {
     private Integer slotNumber;
     private String roomCode;
     private String description;
+    private String classCode;
     private String sectionCode;
     private String courseName;
     private String conflictingWith;
@@ -27,6 +28,8 @@ public class ConflictResponse {
     public void setRoomCode(String roomCode) { this.roomCode = roomCode; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+    public String getClassCode() { return classCode; }
+    public void setClassCode(String classCode) { this.classCode = classCode; }
     public String getSectionCode() { return sectionCode; }
     public void setSectionCode(String sectionCode) { this.sectionCode = sectionCode; }
     public String getCourseName() { return courseName; }

@@ -2,8 +2,11 @@ package com.ptit.qlphonghoc.staff.controller;
 
 import com.ptit.qlphonghoc.auth.security.CustomUserDetails;
 import com.ptit.qlphonghoc.staff.dto.allocation.AllocationResponse;
+import com.ptit.qlphonghoc.staff.dto.allocation.AllocationValidationSummary;
 import com.ptit.qlphonghoc.staff.dto.allocation.ConflictResponse;
 import com.ptit.qlphonghoc.staff.dto.allocation.ManualAssignRequest;
+import com.ptit.qlphonghoc.staff.dto.allocation.PageResponse;
+import com.ptit.qlphonghoc.staff.repository.StaffAllocationRepository;
 import com.ptit.qlphonghoc.staff.service.StaffAllocationService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -30,15 +33,38 @@ public class StaffAllocationController {
     }
 
     @GetMapping
-    public ResponseEntity<Map<String, Object>> getAllocations(@RequestParam Integer semesterId) {
-        List<AllocationResponse> list = service.getAllocations(semesterId);
+    public ResponseEntity<?> getAllocations(
+            @RequestParam Integer semesterId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String status
+    ) {
+        List<AllocationResponse> list = service.getAllocations(semesterId, search, status);
+        if (page != null || size != null) {
+            return ResponseEntity.ok(PageResponse.from(list, page, size));
+        }
         return ResponseEntity.ok(Map.of("data", list));
     }
 
     @GetMapping("/conflicts")
-    public ResponseEntity<Map<String, Object>> getConflicts(@RequestParam Integer semesterId) {
-        List<ConflictResponse> list = service.getConflicts(semesterId);
+    public ResponseEntity<?> getConflicts(
+            @RequestParam Integer semesterId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String conflictType
+    ) {
+        List<ConflictResponse> list = service.getConflicts(semesterId, search, conflictType);
+        if (page != null || size != null) {
+            return ResponseEntity.ok(PageResponse.from(list, page, size));
+        }
         return ResponseEntity.ok(Map.of("data", list));
+    }
+
+    @PostMapping("/validate")
+    public ResponseEntity<AllocationValidationSummary> validate(@RequestParam Integer semesterId) {
+        return ResponseEntity.ok(service.validateAllocations(semesterId));
     }
 
     @PostMapping("/manual")
@@ -62,16 +88,26 @@ public class StaffAllocationController {
             @RequestParam Integer slot,
             @RequestParam Integer expectedAttendees,
             @RequestParam(required = false, defaultValue = "") String roomType,
-            @RequestParam(required = false) Integer scheduleId
+            @RequestParam(required = false) Integer scheduleId,
+            @RequestParam(required = false) Integer buildingId,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
     ) {
-        return ResponseEntity.ok(service.getAvailableRooms(
+        List<StaffAllocationRepository.AllocationRoomProjection> rooms = service.getAvailableRooms(
                 semesterId,
                 normalizeDayOfWeek(dayOfWeek),
                 slot,
                 expectedAttendees,
                 roomType,
-                scheduleId
-        ));
+                scheduleId,
+                buildingId,
+                search
+        );
+        if (page != null || size != null) {
+            return ResponseEntity.ok(PageResponse.from(rooms, page, size));
+        }
+        return ResponseEntity.ok(rooms);
     }
 
     private String normalizeDayOfWeek(String dayOfWeek) {

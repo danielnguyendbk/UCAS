@@ -19,6 +19,7 @@ export const useStaffAllocation = () => {
 
   const [isLoading, setIsLoading] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
   const [runDoneMessage, setRunDoneMessage] = useState(null);
   const [actionMessage, setActionMessage] = useState(null);
 
@@ -50,12 +51,12 @@ export const useStaffAllocation = () => {
     setLoadedSemesterId("");
     setRunDoneMessage(null);
     try {
-      const conflictRes = await httpClient.get(
-        `/api/staff/allocations/conflicts?semesterId=${semesterId}`,
-      );
-      const allocRes = await httpClient.get(
-        `/api/staff/allocations?semesterId=${semesterId}`,
-      );
+      const [conflictRes, allocRes] = await Promise.all([
+        httpClient.get(
+          `/api/staff/allocations/conflicts?semesterId=${semesterId}`,
+        ),
+        httpClient.get(`/api/staff/allocations?semesterId=${semesterId}`),
+      ]);
       setConflicts(conflictRes.data?.data || []);
       setAllocations(allocRes.data?.data || []);
     } catch (error) {
@@ -93,6 +94,32 @@ export const useStaffAllocation = () => {
       });
     } finally {
       setIsRunning(false);
+    }
+  };
+
+  const validateAllocations = async () => {
+    if (!semesterId) return;
+    setIsValidating(true);
+    setActionMessage(null);
+    try {
+      const res = await httpClient.post(
+        `/api/staff/allocations/validate?semesterId=${semesterId}`,
+      );
+      const summary = res.data;
+      setActionMessage({
+        tone: "success",
+        text: `Đã kiểm tra ${summary.totalSchedules ?? 0} lịch: ${summary.validCount ?? 0} hợp lệ, ${summary.conflictCount ?? 0} có xung đột.`,
+      });
+      await fetchData();
+    } catch (error) {
+      setActionMessage({
+        tone: "error",
+        text:
+          error.response?.data?.message ||
+          "Không thể cập nhật trạng thái validation.",
+      });
+    } finally {
+      setIsValidating(false);
     }
   };
 
@@ -157,10 +184,12 @@ export const useStaffAllocation = () => {
     loadedSemesterId,
     isLoading,
     isRunning,
+    isValidating,
     runDoneMessage,
     actionMessage,
     setActionMessage,
     runAutoAssign,
+    validateAllocations,
     isRoomSearchOpen,
     setIsRoomSearchOpen,
     selectedSection,

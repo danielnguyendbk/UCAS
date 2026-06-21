@@ -11,11 +11,15 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 
 class StaffAllocationServiceTest {
 
@@ -118,7 +122,28 @@ class StaffAllocationServiceTest {
         long roomConflicts = conflicts.stream()
                 .filter(c -> "ROOM_TIME_CONFLICT".equals(c.getConflictType()))
                 .count();
-        org.junit.jupiter.api.Assertions.assertEquals(2, roomConflicts);
+        assertEquals(2, roomConflicts);
+        verify(repository, never()).markSchedulesValid(2);
+        verify(repository, never()).markScheduleConflict(anyInt(), anyString());
+    }
+
+    @Test
+    void explicitValidationUpdatesStatusesAndReturnsSummary() {
+        var left = allocationSchedule(1, 10, 15, 1, 5);
+        var right = allocationSchedule(2, 11, 15, 5, 10);
+        when(repository.findAllSchedulesBySemester(2)).thenReturn(List.of(left, right));
+        when(repository.findWeekBounds(2)).thenReturn(weekBounds);
+        when(repository.findCalendarBlockConflicts(2)).thenReturn(List.of());
+
+        var summary = service.validateAllocations(2);
+
+        assertEquals(2, summary.totalSchedules());
+        assertEquals(0, summary.validCount());
+        assertEquals(2, summary.conflictCount());
+        assertEquals(2, summary.conflictTypeCounts().get("ROOM_TIME_CONFLICT"));
+        verify(repository).markSchedulesValid(2);
+        verify(repository).markScheduleConflict(1, "ROOM_TIME_CONFLICT");
+        verify(repository).markScheduleConflict(2, "ROOM_TIME_CONFLICT");
     }
 
     private StaffAllocationRepository.AssignmentScheduleProjection assignmentSchedule(
