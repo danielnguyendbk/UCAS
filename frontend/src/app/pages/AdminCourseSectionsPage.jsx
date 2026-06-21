@@ -32,6 +32,7 @@ import {
   TableRow,
 } from "../components/ui/table";
 import { httpClient } from "@/services/httpClient";
+import StaffClassSectionsPage from "@/features/staff/pages/StaffClassSectionsPage";
 
 const EMPTY_FORM = {
   id: null,
@@ -181,7 +182,7 @@ const isOverlapping = (a, b) =>
   asNumber(a.slot_start_id) <= asNumber(b.slot_end_id) &&
   asNumber(b.slot_start_id) <= asNumber(a.slot_end_id);
 
-export const AdminCourseSectionsPage = () => {
+const LegacyAdminCourseSectionsPage = () => {
   const [rawSections, setRawSections] = useState([]);
   const [semesters, setSemesters] = useState([]);
   const [courses, setCourses] = useState([]);
@@ -1086,3 +1087,15 @@ const DetailRow = ({ label, value }) => (
     <span className="col-span-2 text-xs text-gray-800">{value || "---"}</span>
   </div>
 );
+
+// The previous CRUD screen targets retired /api/class-sections and /api/schedules
+// contracts. Keep it available for a later, deliberate CRUD migration while the
+// active Admin route uses the compatible read endpoint already provided by backend.
+const AdminCourseSectionsPage = () => (
+  <StaffClassSectionsPage
+    endpoint="/api/admin/class-sections"
+    description="Admin xem danh sách lớp học phần và trạng thái phân phòng từ database."
+  />
+);
+
+export { AdminCourseSectionsPage, LegacyAdminCourseSectionsPage };

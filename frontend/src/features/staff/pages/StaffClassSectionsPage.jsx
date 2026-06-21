@@ -79,7 +79,10 @@ const formatSchedule = (section) => {
   return "-";
 };
 
-const StaffClassSectionsPage = () => {
+const StaffClassSectionsPage = ({
+  endpoint = "/api/staff/class-sections",
+  description = "Staff chỉ xem danh sách lớp học phần, không thêm sửa xóa.",
+}) => {
   const [sections, setSections] = useState([]);
   const [semestersList, setSemestersList] = useState([]);
   const [facultiesList, setFacultiesList] = useState([]);
@@ -118,7 +121,7 @@ const StaffClassSectionsPage = () => {
     const fetchSections = async () => {
       setIsLoading(true);
       try {
-        const response = await httpClient.get("/api/staff/class-sections", {
+        const response = await httpClient.get(endpoint, {
           params: filterSemester !== "all" ? { semesterId: filterSemester } : {},
         });
         const data = getPayloadList(response).map((item) => ({
@@ -151,7 +154,7 @@ const StaffClassSectionsPage = () => {
     };
 
     fetchSections();
-  }, [filterSemester]);
+  }, [endpoint, filterSemester]);
 
   const filtered = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -199,7 +202,7 @@ const StaffClassSectionsPage = () => {
         <div>
           <h1 className="text-xl font-bold text-gray-900">Lớp học phần</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Staff chỉ xem danh sách lớp học phần, không thêm sửa xóa.
+            {description}
           </p>
         </div>
         <Button variant="outline" disabled className="w-fit border-gray-200">

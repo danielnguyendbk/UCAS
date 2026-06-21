@@ -109,7 +109,7 @@ const appRouter = createBrowserRouter([
       { path: "staff/approval-submit", element: <Navigate to={`${APP_ROUTES.staffAutoAssignment}?tab=submit`} replace /> },
       { path: "staff/room-change-list", Component: StaffRoomChangeListPage },
       { path: "staff/booking-list", Component: StaffBookingListPage },
-      { path: "staff/maintenance-requests", Component: StaffLookupPage },
+      { path: "staff/maintenance-requests", Component: StaffMaintenanceListPage },
       { path: "staff/lookup", Component: StaffLookupPage },
 
       // FACILITY routes

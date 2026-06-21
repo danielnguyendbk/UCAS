@@ -4,7 +4,9 @@ import {
   Calendar,
   CalendarCheck,
   ClipboardCheck,
+  ClipboardList,
   GraduationCap,
+  History,
   Key,
   LayoutDashboard,
   PlusSquare,
@@ -66,11 +68,6 @@ const NAVIGATION_BY_ROLE = {
           id: "admin-timetable-view",
           label: "Thời khóa biểu toàn trường",
           path: APP_ROUTES.adminTimetable,
-        },
-        {
-          id: "admin-auto-assignment",
-          label: "Phân phòng tự động",
-          path: APP_ROUTES.adminAutoAssignment,
         },
         {
           id: "admin-timetable-approval",
@@ -147,12 +144,8 @@ const NAVIGATION_BY_ROLE = {
       label: "Phân phòng học",
       path: APP_ROUTES.staffAutoAssignment,
     },
-    {
-      id: "staff-booking-list",
-      icon: ClipboardCheck,
-      label: "Danh sách đặt phòng",
-      path: APP_ROUTES.staffBookingList,
-    },
+
+    { icon: PlusSquare, label: "Đặt phòng khẩn cấp", path: APP_ROUTES.staffBookings, badge: "G\u1EA5p" },
     {
       id: "staff-maintenance-requests",
       icon: Wrench,
@@ -160,11 +153,18 @@ const NAVIGATION_BY_ROLE = {
       path: APP_ROUTES.staffMaintenanceRequests,
     },
     {
+      id: "staff-booking-list",
+      icon: ClipboardCheck,
+      label: "Danh sách đặt phòng",
+      path: APP_ROUTES.staffBookingList,
+    },
+    {
       id: "staff-room-change-list",
       icon: ArrowLeftRight,
       label: "Danh sách đổi phòng",
       path: APP_ROUTES.staffRoomChangeList,
     },
+    { icon: Wrench, label: "Quản lý sửa chữa", path: APP_ROUTES.staffMaintenanceList, badge: "Mới" }
   ],
 
   Employee: [
@@ -240,18 +240,22 @@ const NAVIGATION_BY_ROLE = {
       label: "Thời khóa biểu",
       path: APP_ROUTES.studentTimetable,
     },
+    { type: "divider", label: "Đặt phòng" },
     {
       id: "student-room-booking",
       icon: PlusSquare,
       label: "Đặt phòng",
       path: APP_ROUTES.studentRoomBooking,
     },
+    { icon: ClipboardList, label: "DS yêu cầu đặt phòng", path: APP_ROUTES.studentBookingHistory },
+    { type: "divider", label: "Sửa chữa" },
     {
       id: "student-maintenance-request",
       icon: Wrench,
       label: "Yêu cầu sửa chữa",
       path: APP_ROUTES.studentMaintenanceRequest,
     },
+    { icon: History, label: "Lịch sử sửa chữa", path: APP_ROUTES.studentMaintenanceHistory },
     {
       id: "student-exams",
       icon: ClipboardCheck,
