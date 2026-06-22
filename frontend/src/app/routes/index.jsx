@@ -20,6 +20,7 @@ import AdminExamsPage from "@/features/admin/pages/ExamsPage";
 import AdminFacilityStaffPage from "@/features/admin/pages/FacilityStaffPage";
 import AdminTimetableVersionsPage from "@/features/admin/pages/AdminTimetableVersionsPage";
 import AdminTimetableDiffPage from "@/features/admin/pages/AdminTimetableDiffPage";
+import AdminAuditHistoryPage from "@/features/admin/pages/AdminAuditHistoryPage";
 import EmployeeUsagePage from "@/features/employee/pages/EmployeeUsagePage";
 import EmployeeMaintenanceRequestPage from "@/features/employee/pages/EmployeeMaintenanceRequestPage";
 import EmployeeMaintenanceHistoryPage from "@/features/employee/pages/EmployeeMaintenanceHistoryPage";
@@ -105,6 +106,7 @@ const appRouter = createBrowserRouter([
       { path: "admin/users", Component: AdminUserManagementPage },
       { path: "admin/facility-staff", Component: AdminFacilityStaffPage },
       { path: "admin/settings", Component: AdminSettingsPage },
+      { path: "admin/audit-logs", Component: AdminAuditHistoryPage },
 
       // STAFF routes
       { path: "staff/dashboard", Component: StaffDashboardPage },

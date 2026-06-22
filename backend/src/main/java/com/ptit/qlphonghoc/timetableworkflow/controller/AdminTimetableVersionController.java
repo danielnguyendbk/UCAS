@@ -1,6 +1,6 @@
 package com.ptit.qlphonghoc.timetableworkflow.controller;
 
-import com.ptit.qlphonghoc.auth.service.CustomUserDetails;
+import com.ptit.qlphonghoc.auth.security.CustomUserDetails;
 import com.ptit.qlphonghoc.common.response.ApiResponse;
 import com.ptit.qlphonghoc.staff.dto.allocation.PageResponse;
 import com.ptit.qlphonghoc.timetableworkflow.dto.TimetableDiffResult;

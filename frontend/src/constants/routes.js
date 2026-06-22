@@ -19,6 +19,7 @@ const APP_ROUTES = {
   adminUsers: "/admin/users",
   adminFacilityStaff: "/admin/facility-staff",
   adminSettings: "/admin/settings",
+  adminAuditLogs: "/admin/audit-logs",
 
   // STAFF
   staffDashboard: "/staff/dashboard",

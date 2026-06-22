@@ -14,6 +14,7 @@ import {
   Settings,
   Upload,
   Wrench,
+  ShieldAlert,
 } from "lucide-react";
 import { APP_ROUTES } from "./routes";
 
@@ -132,6 +133,12 @@ const NAVIGATION_BY_ROLE = {
           id: "admin-settings",
           label: "Cài đặt hệ thống",
           path: APP_ROUTES.adminSettings,
+        },
+        {
+          id: "admin-audit-logs",
+          label: "Nhật ký hệ thống",
+          path: APP_ROUTES.adminAuditLogs,
+          icon: ShieldAlert,
         },
       ],
     },
