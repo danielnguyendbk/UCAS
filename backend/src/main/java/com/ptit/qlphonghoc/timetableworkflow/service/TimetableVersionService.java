@@ -1,11 +1,18 @@
 package com.ptit.qlphonghoc.timetableworkflow.service;
 
+import com.ptit.qlphonghoc.audit.enumtype.AuditAction;
+import com.ptit.qlphonghoc.audit.service.WorkflowAuditLogger;
 import com.ptit.qlphonghoc.common.exception.BadRequestException;
+import com.ptit.qlphonghoc.timetableworkflow.TimetableWorkflowStatus;
 import com.ptit.qlphonghoc.timetableworkflow.dto.TimetableDiffResult;
 import com.ptit.qlphonghoc.timetableworkflow.dto.TimetableDiffResult.ScheduleDiff;
 import com.ptit.qlphonghoc.timetableworkflow.dto.TimetableDiffResult.SectionDiff;
 import com.ptit.qlphonghoc.timetableworkflow.entity.TimetableVersion;
 import com.ptit.qlphonghoc.timetableworkflow.repository.TimetableVersionRepository;
+import com.ptit.qlphonghoc.timetableworkflow.repository.TimetableWorkflowStore;
+import com.ptit.qlphonghoc.timetableworkflow.repository.TimetableWorkflowRepository.SemesterWorkflowState;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,15 +20,33 @@ import org.springframework.transaction.annotation.Transactional;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @Service
 public class TimetableVersionService {
 
+    private static final Logger log = LoggerFactory.getLogger(TimetableVersionService.class);
+
+    private static final Set<TimetableWorkflowStatus> ROLLBACK_ALLOWED = Set.of(
+            TimetableWorkflowStatus.DRAFT,
+            TimetableWorkflowStatus.CONFLICT
+    );
+
     private final TimetableVersionRepository repository;
+    private final TimetableWorkflowStore workflowStore;
+    private final WorkflowAuditLogger auditLogger;
     private final JdbcTemplate jdbcTemplate;
 
-    public TimetableVersionService(TimetableVersionRepository repository, JdbcTemplate jdbcTemplate) {
+    public TimetableVersionService(
+            TimetableVersionRepository repository,
+            TimetableWorkflowStore workflowStore,
+            WorkflowAuditLogger auditLogger,
+            JdbcTemplate jdbcTemplate
+    ) {
         this.repository = repository;
+        this.workflowStore = workflowStore;
+        this.auditLogger = auditLogger;
         this.jdbcTemplate = jdbcTemplate;
     }
 
@@ -35,6 +60,105 @@ public class TimetableVersionService {
     @Transactional(readOnly = true)
     public List<TimetableVersion> getVersions(Integer semesterId, String search) {
         return repository.findAll(semesterId, search);
+    }
+
+    /**
+     * Rollback the timetable of a semester to a specific version.
+     * <p>
+     * Rules:
+     * <ul>
+     *   <li>Only allowed when current status is DRAFT or CONFLICT</li>
+     *   <li>Cannot rollback PUBLISHED or LOCKED timetables</li>
+     *   <li>Deletes schedules created after the target version timestamp</li>
+     *   <li>Deletes class_sections created after the target version timestamp</li>
+     *   <li>Resets semester status to DRAFT</li>
+     *   <li>Creates a new version record and audit log</li>
+     * </ul>
+     */
+    @Transactional
+    public Map<String, Object> rollback(Long semesterId, Integer targetVersionNo, Integer adminUserId) {
+        // 1. Check current workflow status
+        SemesterWorkflowState semester = workflowStore.findSemester(semesterId.intValue(), true)
+                .orElseThrow(() -> new BadRequestException("SEMESTER_NOT_FOUND",
+                        "Không tìm thấy học kỳ."));
+
+        if (!ROLLBACK_ALLOWED.contains(semester.status())) {
+            throw new BadRequestException("ROLLBACK_NOT_ALLOWED",
+                    "Chỉ có thể rollback khi trạng thái là DRAFT hoặc CONFLICT. "
+                            + "Trạng thái hiện tại: " + semester.status().name());
+        }
+
+        // 2. Find target version
+        TimetableVersion targetVersion = repository.findByVersionNo(semesterId, targetVersionNo)
+                .orElseThrow(() -> new BadRequestException("VERSION_NOT_FOUND",
+                        "Không tìm thấy phiên bản " + targetVersionNo + " cho học kỳ này."));
+
+        LocalDateTime cutoffTime = targetVersion.createdAt();
+        Timestamp cutoff = Timestamp.valueOf(cutoffTime);
+
+        // 3. Delete schedules created after the cutoff (for sections in this semester)
+        int deletedSchedules = jdbcTemplate.update("""
+                DELETE sch FROM schedules sch
+                JOIN class_sections cs ON cs.section_id = sch.section_id
+                WHERE cs.semester_id = ?
+                  AND sch.created_at > ?
+                """, semesterId, cutoff);
+
+        // 4. Delete class_sections created after the cutoff
+        int deletedSections = jdbcTemplate.update("""
+                DELETE FROM class_sections
+                WHERE semester_id = ?
+                  AND created_at > ?
+                """, semesterId, cutoff);
+
+        // 5. Revert modifications on surviving records (reset updated_at to created_at for rows modified after cutoff)
+        int revertedSchedules = jdbcTemplate.update("""
+                UPDATE schedules sch
+                JOIN class_sections cs ON cs.section_id = sch.section_id
+                SET sch.updated_at = sch.created_at
+                WHERE cs.semester_id = ?
+                  AND sch.updated_at > ?
+                  AND sch.created_at <= ?
+                """, semesterId, cutoff, cutoff);
+
+        int revertedSections = jdbcTemplate.update("""
+                UPDATE class_sections
+                SET updated_at = created_at
+                WHERE semester_id = ?
+                  AND updated_at > ?
+                  AND created_at <= ?
+                """, semesterId, cutoff, cutoff);
+
+        // 6. Reset semester status to DRAFT
+        String oldStatus = semester.status().name();
+        workflowStore.updateStatus(semesterId.intValue(), TimetableWorkflowStatus.DRAFT);
+
+        // 7. Create a new version record
+        String summary = "Rollback về phiên bản v" + targetVersionNo;
+        createVersion(semesterId, adminUserId, summary);
+
+        // 8. Audit log
+        auditLogger.logWorkflowTransition(
+                adminUserId,
+                AuditAction.ROLLBACK,
+                semesterId.intValue(),
+                oldStatus,
+                TimetableWorkflowStatus.DRAFT.name(),
+                "Admin rollback timetable to version " + targetVersionNo
+        );
+
+        log.info("Rollback semester {} to version {}. Deleted: {} schedules, {} sections. Reverted: {} schedules, {} sections.",
+                semesterId, targetVersionNo, deletedSchedules, deletedSections, revertedSchedules, revertedSections);
+
+        return Map.of(
+                "semesterId", semesterId,
+                "targetVersion", targetVersionNo,
+                "deletedSchedules", deletedSchedules,
+                "deletedSections", deletedSections,
+                "revertedSchedules", revertedSchedules,
+                "revertedSections", revertedSections,
+                "newStatus", TimetableWorkflowStatus.DRAFT.name()
+        );
     }
 
     @Transactional(readOnly = true)
@@ -78,9 +202,7 @@ public class TimetableVersionService {
      */
     private List<SectionDiff> querySectionDiff(Long semesterId, LocalDateTime fromTime, LocalDateTime toTime, boolean added) {
         String condition = added
-                // newly created in this window
                 ? "cs.created_at > ? AND cs.created_at <= ?"
-                // updated in this window but existed before the window
                 : "cs.updated_at > ? AND cs.updated_at <= ? AND cs.created_at <= ?";
 
         String sql = """

@@ -15,5 +15,6 @@ public enum AuditAction {
     GENERATE_SESSION,
     SCHEDULE_EXAM,
     OPEN_ROOM,
-    CLOSE_ROOM
+    CLOSE_ROOM,
+    ROLLBACK
 }

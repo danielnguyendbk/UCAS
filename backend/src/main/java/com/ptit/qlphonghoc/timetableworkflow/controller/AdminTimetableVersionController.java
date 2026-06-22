@@ -1,16 +1,16 @@
 package com.ptit.qlphonghoc.timetableworkflow.controller;
 
+import com.ptit.qlphonghoc.auth.service.CustomUserDetails;
 import com.ptit.qlphonghoc.common.response.ApiResponse;
 import com.ptit.qlphonghoc.staff.dto.allocation.PageResponse;
 import com.ptit.qlphonghoc.timetableworkflow.dto.TimetableDiffResult;
 import com.ptit.qlphonghoc.timetableworkflow.entity.TimetableVersion;
 import com.ptit.qlphonghoc.timetableworkflow.service.TimetableVersionService;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin/timetable-versions")
@@ -47,5 +47,16 @@ public class AdminTimetableVersionController {
     ) {
         TimetableDiffResult result = versionService.computeDiff(semesterId, versionA, versionB);
         return ApiResponse.success("OK", result);
+    }
+
+    @PostMapping("/rollback")
+    public ApiResponse<?> rollback(
+            @RequestBody Map<String, Object> body,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        Long semesterId = Long.valueOf(body.get("semesterId").toString());
+        Integer versionNo = Integer.valueOf(body.get("versionNo").toString());
+        Map<String, Object> result = versionService.rollback(semesterId, versionNo, userDetails.getUserId());
+        return ApiResponse.success("Rollback thành công.", result);
     }
 }
