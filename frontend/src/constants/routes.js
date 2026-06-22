@@ -75,7 +75,7 @@ const APP_ROUTES = {
   staffClassSections: "/staff/timetable-import",
   staffAllocation: "/staff/auto-assignment",
   staffBookings: "/staff/booking-list",
-  staffEmergencyRoomChange: "/staff/conflicts",
+  staffEmergencyRoomChange: "/staff/emergency-room-change",
   staffMaintenanceList: "/staff/maintenance-requests",
 
   lecturerSchedule: "/lecturer/timetable",

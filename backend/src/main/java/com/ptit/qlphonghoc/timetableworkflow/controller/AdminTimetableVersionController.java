@@ -2,6 +2,7 @@ package com.ptit.qlphonghoc.timetableworkflow.controller;
 
 import com.ptit.qlphonghoc.common.response.ApiResponse;
 import com.ptit.qlphonghoc.staff.dto.allocation.PageResponse;
+import com.ptit.qlphonghoc.timetableworkflow.dto.TimetableDiffResult;
 import com.ptit.qlphonghoc.timetableworkflow.entity.TimetableVersion;
 import com.ptit.qlphonghoc.timetableworkflow.service.TimetableVersionService;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -36,5 +37,15 @@ public class AdminTimetableVersionController {
         }
 
         return ApiResponse.success("OK", list);
+    }
+
+    @GetMapping("/diff")
+    public ApiResponse<TimetableDiffResult> getDiff(
+            @RequestParam Long semesterId,
+            @RequestParam Integer versionA,
+            @RequestParam Integer versionB
+    ) {
+        TimetableDiffResult result = versionService.computeDiff(semesterId, versionA, versionB);
+        return ApiResponse.success("OK", result);
     }
 }

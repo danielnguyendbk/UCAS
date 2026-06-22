@@ -11,6 +11,7 @@ import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public class TimetableVersionRepository {
@@ -32,6 +33,22 @@ public class TimetableVersionRepository {
     public Integer findMaxVersionNo(Long semesterId) {
         String sql = "SELECT MAX(version_no) FROM timetable_versions WHERE semester_id = ?";
         return jdbcTemplate.queryForObject(sql, Integer.class, semesterId);
+    }
+
+    public Optional<TimetableVersion> findByVersionNo(Long semesterId, Integer versionNo) {
+        String sql = """
+                SELECT tv.version_id, tv.semester_id, s.semester_code, s.semester_name,
+                       tv.version_no, tv.created_by,
+                       COALESCE(l.full_name, u.username) AS created_by_name,
+                       tv.created_at, tv.summary
+                FROM timetable_versions tv
+                JOIN semesters s ON tv.semester_id = s.semester_id
+                JOIN users u ON tv.created_by = u.user_id
+                LEFT JOIN lecturers l ON u.user_id = l.user_id
+                WHERE tv.semester_id = ? AND tv.version_no = ?
+                """;
+        return jdbcTemplate.query(sql, new TimetableVersionRowMapper(), semesterId, versionNo)
+                .stream().findFirst();
     }
 
     public List<TimetableVersion> findAll(Integer semesterId, String search) {
