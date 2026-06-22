@@ -5,6 +5,7 @@ import com.ptit.qlphonghoc.audit.service.WorkflowAuditLogger;
 import com.ptit.qlphonghoc.common.exception.BadRequestException;
 import com.ptit.qlphonghoc.staff.dto.allocation.AllocationValidationSummary;
 import com.ptit.qlphonghoc.staff.service.AllocationValidationService;
+import com.ptit.qlphonghoc.classsession.service.ClassSessionGenerator;
 import com.ptit.qlphonghoc.timetableworkflow.TimetableWorkflowStatus;
 import com.ptit.qlphonghoc.timetableworkflow.repository.TimetableWorkflowRepository.SemesterWorkflowState;
 import com.ptit.qlphonghoc.timetableworkflow.repository.TimetableWorkflowRepository.ValidationCounts;
@@ -27,6 +28,7 @@ class TimetableWorkflowServiceTest {
     private TimetableWorkflowStore repository;
     private AllocationValidationService allocationService;
     private WorkflowAuditLogger auditLogService;
+    private ClassSessionGenerator classSessionGenerator;
     private TimetableWorkflowService service;
 
     @BeforeEach
@@ -34,7 +36,13 @@ class TimetableWorkflowServiceTest {
         repository = mock(TimetableWorkflowStore.class);
         allocationService = mock(AllocationValidationService.class);
         auditLogService = mock(WorkflowAuditLogger.class);
-        service = new TimetableWorkflowService(repository, allocationService, auditLogService);
+        classSessionGenerator = new ClassSessionGenerator(null) {
+            @Override
+            public void generateClassSessions(Integer semesterId) {
+                // No-op for testing
+            }
+        };
+        service = new TimetableWorkflowService(repository, allocationService, auditLogService, classSessionGenerator);
     }
 
     @Test

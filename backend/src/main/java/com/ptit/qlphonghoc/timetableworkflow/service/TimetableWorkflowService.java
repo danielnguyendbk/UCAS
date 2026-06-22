@@ -6,6 +6,7 @@ import com.ptit.qlphonghoc.common.exception.BadRequestException;
 import com.ptit.qlphonghoc.common.exception.ResourceNotFoundException;
 import com.ptit.qlphonghoc.staff.dto.allocation.AllocationValidationSummary;
 import com.ptit.qlphonghoc.staff.service.AllocationValidationService;
+import com.ptit.qlphonghoc.classsession.service.ClassSessionGenerator;
 import com.ptit.qlphonghoc.timetableworkflow.TimetableWorkflowStatus;
 import com.ptit.qlphonghoc.timetableworkflow.dto.TimetableWorkflowSummary;
 import com.ptit.qlphonghoc.timetableworkflow.repository.TimetableWorkflowRepository.SemesterWorkflowState;
@@ -29,15 +30,18 @@ public class TimetableWorkflowService {
     private final TimetableWorkflowStore repository;
     private final AllocationValidationService allocationService;
     private final WorkflowAuditLogger auditLogService;
+    private final ClassSessionGenerator classSessionGenerator;
 
     public TimetableWorkflowService(
             TimetableWorkflowStore repository,
             AllocationValidationService allocationService,
-            WorkflowAuditLogger auditLogService
+            WorkflowAuditLogger auditLogService,
+            ClassSessionGenerator classSessionGenerator
     ) {
         this.repository = repository;
         this.allocationService = allocationService;
         this.auditLogService = auditLogService;
+        this.classSessionGenerator = classSessionGenerator;
     }
 
     @Transactional(readOnly = true)
@@ -117,6 +121,7 @@ public class TimetableWorkflowService {
         }
 
         updateStatus(semesterId, TimetableWorkflowStatus.PUBLISHED);
+        classSessionGenerator.generateClassSessions(semesterId);
         auditLogService.logWorkflowTransition(
                 adminUserId,
                 AuditAction.UPDATE,
