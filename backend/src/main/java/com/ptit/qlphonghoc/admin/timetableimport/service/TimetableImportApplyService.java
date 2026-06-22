@@ -10,6 +10,7 @@ import com.ptit.qlphonghoc.admin.timetableimport.repository.TimetableImportWrite
 import com.ptit.qlphonghoc.common.exception.BadRequestException;
 import com.ptit.qlphonghoc.common.exception.ResourceNotFoundException;
 import com.ptit.qlphonghoc.timetableworkflow.service.TimetableMutationGuard;
+import com.ptit.qlphonghoc.timetableworkflow.service.TimetableVersionService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -32,15 +33,18 @@ public class TimetableImportApplyService {
     private final TimetableImportValidator validator;
     private final TimetableImportWriteStore writeStore;
     private final TimetableImportAuditLogger auditLogger;
+    private final TimetableVersionService timetableVersionService;
 
     public TimetableImportApplyService(
             TimetableImportValidator validator,
             TimetableImportWriteStore writeStore,
-            TimetableImportAuditLogger auditLogger
+            TimetableImportAuditLogger auditLogger,
+            TimetableVersionService timetableVersionService
     ) {
         this.validator = validator;
         this.writeStore = writeStore;
         this.auditLogger = auditLogger;
+        this.timetableVersionService = timetableVersionService;
     }
 
     @Transactional
@@ -115,6 +119,17 @@ public class TimetableImportApplyService {
             writeStore.markSemesterDraft(lockedSemester.id());
             ImportApplyResponse response = counters.toResponse(batchCode, importMode, lockedSemester, preview.totalRows());
             auditLogger.logTimetableImport(userId, lockedSemester.id(), batchCode, auditSummary(response, source));
+
+            String versionSummary = String.format("Nhập TKB: tạo mới %d lớp, cập nhật %d lớp, tạo mới %d lịch học, cập nhật %d lịch học, hủy %d lịch học (File: %s, Chế độ: %s).",
+                    response.createdSections(),
+                    response.updatedSections(),
+                    response.createdSchedules(),
+                    response.updatedSchedules(),
+                    response.cancelledSchedules(),
+                    source,
+                    importMode.name());
+            timetableVersionService.createVersion(lockedSemester.id(), userId, versionSummary);
+
             return response;
         } catch (BadRequestException exception) {
             throw exception;

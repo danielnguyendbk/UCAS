@@ -31,17 +31,20 @@ public class TimetableWorkflowService {
     private final AllocationValidationService allocationService;
     private final WorkflowAuditLogger auditLogService;
     private final ClassSessionGenerator classSessionGenerator;
+    private final TimetableVersionService timetableVersionService;
 
     public TimetableWorkflowService(
             TimetableWorkflowStore repository,
             AllocationValidationService allocationService,
             WorkflowAuditLogger auditLogService,
-            ClassSessionGenerator classSessionGenerator
+            ClassSessionGenerator classSessionGenerator,
+            TimetableVersionService timetableVersionService
     ) {
         this.repository = repository;
         this.allocationService = allocationService;
         this.auditLogService = auditLogService;
         this.classSessionGenerator = classSessionGenerator;
+        this.timetableVersionService = timetableVersionService;
     }
 
     @Transactional(readOnly = true)
@@ -130,6 +133,7 @@ public class TimetableWorkflowService {
                 TimetableWorkflowStatus.PUBLISHED.name(),
                 "Admin published timetable"
         );
+        timetableVersionService.createVersion(semesterId.longValue(), adminUserId, "Công bố thời khóa biểu chính thức.");
         return fromValidation(
                 semester.withStatus(TimetableWorkflowStatus.PUBLISHED),
                 validation

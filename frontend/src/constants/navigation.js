@@ -86,6 +86,11 @@ const NAVIGATION_BY_ROLE = {
           label: "Ngày nghỉ và lịch học vụ",
           path: APP_ROUTES.adminCalendarBlocks,
         },
+        {
+          id: "admin-timetable-versions",
+          label: "Lịch sử phiên bản",
+          path: APP_ROUTES.adminTimetableVersions,
+        },
       ],
     },
     {

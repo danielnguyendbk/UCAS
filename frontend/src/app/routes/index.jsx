@@ -18,6 +18,8 @@ import AdminTimetableImportPage from "@/features/admin/pages/TimetableImportPage
 import AdminCalendarBlocksPage from "@/features/admin/pages/CalendarBlocksPage";
 import AdminExamsPage from "@/features/admin/pages/ExamsPage";
 import AdminFacilityStaffPage from "@/features/admin/pages/FacilityStaffPage";
+import AdminTimetableVersionsPage from "@/features/admin/pages/AdminTimetableVersionsPage";
+import AdminTimetableDiffPage from "@/features/admin/pages/AdminTimetableDiffPage";
 import EmployeeUsagePage from "@/features/employee/pages/EmployeeUsagePage";
 import EmployeeMaintenanceRequestPage from "@/features/employee/pages/EmployeeMaintenanceRequestPage";
 import EmployeeMaintenanceHistoryPage from "@/features/employee/pages/EmployeeMaintenanceHistoryPage";
@@ -96,6 +98,8 @@ const appRouter = createBrowserRouter([
       { path: "admin/auto-assignment", Component: AdminAutoAssignmentPage },
       { path: "admin/timetable-approval", Component: AdminTimetableApprovalPage },
       { path: "admin/calendar-blocks", Component: AdminCalendarBlocksPage },
+      { path: "admin/timetable-versions", Component: AdminTimetableVersionsPage },
+      { path: "admin/timetable-versions/diff", Component: AdminTimetableDiffPage },
       { path: "admin/exams", Component: AdminExamsPage },
       { path: "admin/reports", Component: AdminReportsPage },
       { path: "admin/users", Component: AdminUserManagementPage },

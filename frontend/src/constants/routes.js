@@ -13,6 +13,7 @@ const APP_ROUTES = {
   adminAutoAssignment: "/admin/auto-assignment",
   adminTimetableApproval: "/admin/timetable-approval",
   adminCalendarBlocks: "/admin/calendar-blocks",
+  adminTimetableVersions: "/admin/timetable-versions",
   adminExams: "/admin/exams",
   adminReports: "/admin/reports",
   adminUsers: "/admin/users",
