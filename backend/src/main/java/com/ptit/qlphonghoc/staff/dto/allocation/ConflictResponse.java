@@ -11,6 +11,11 @@ public class ConflictResponse {
     private String classCode;
     private String sectionCode;
     private String courseName;
+    private String lecturerName;
+    private Integer enrolledCount;
+    private Integer maxCapacity;
+    private String requiredRoomType;
+    private Integer slotEndNumber;
     private String conflictingWith;
 
     // Getters and Setters
@@ -34,6 +39,16 @@ public class ConflictResponse {
     public void setSectionCode(String sectionCode) { this.sectionCode = sectionCode; }
     public String getCourseName() { return courseName; }
     public void setCourseName(String courseName) { this.courseName = courseName; }
+    public String getLecturerName() { return lecturerName; }
+    public void setLecturerName(String lecturerName) { this.lecturerName = lecturerName; }
+    public Integer getEnrolledCount() { return enrolledCount; }
+    public void setEnrolledCount(Integer enrolledCount) { this.enrolledCount = enrolledCount; }
+    public Integer getMaxCapacity() { return maxCapacity; }
+    public void setMaxCapacity(Integer maxCapacity) { this.maxCapacity = maxCapacity; }
+    public String getRequiredRoomType() { return requiredRoomType; }
+    public void setRequiredRoomType(String requiredRoomType) { this.requiredRoomType = requiredRoomType; }
+    public Integer getSlotEndNumber() { return slotEndNumber; }
+    public void setSlotEndNumber(Integer slotEndNumber) { this.slotEndNumber = slotEndNumber; }
     public String getConflictingWith() { return conflictingWith; }
     public void setConflictingWith(String conflictingWith) { this.conflictingWith = conflictingWith; }
 }

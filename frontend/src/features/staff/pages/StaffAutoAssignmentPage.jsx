@@ -126,6 +126,7 @@ const StaffAutoAssignmentPage = () => {
     runDoneMessage,
     actionMessage,
     setActionMessage,
+    dataError,
     runAutoAssign,
     validateAllocations,
     isRoomSearchOpen,
@@ -133,8 +134,11 @@ const StaffAutoAssignmentPage = () => {
     selectedSection,
     handleOpenRoomSearch,
     handleRoomSelect,
+    isAssigning,
+    assigningRoomId,
     isSubmitting,
     submitForApproval,
+    refreshData,
     setActiveTab: setAllocationTab,
   } = useStaffAllocation();
 
@@ -231,16 +235,15 @@ const StaffAutoAssignmentPage = () => {
   const summary = useMemo(
     () => ({
       total: allocations.length,
-      assigned: allAssignedItems.length,
+      assigned: allocations.filter((item) => Boolean(item.assignedRoom)).length,
       unassigned: allUnassignedItems.length,
-      conflicts: conflicts.length,
+      conflicts: new Set(conflicts.map((item) => item.scheduleId)).size,
       canSubmit: conflicts.length === 0 && allocations.length > 0,
     }),
     [
-      allocations.length,
-      allAssignedItems.length,
+      allocations,
       allUnassignedItems.length,
-      conflicts.length,
+      conflicts,
     ],
   );
 
@@ -438,7 +441,12 @@ const StaffAutoAssignmentPage = () => {
           ) : (
             <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0" />
           )}
-          <p>{actionMessage.text}</p>
+          <p>
+            {actionMessage.errorCode && (
+              <span className="mr-1 font-mono font-semibold">[{actionMessage.errorCode}]</span>
+            )}
+            {actionMessage.text}
+          </p>
         </div>
       )}
 
@@ -544,6 +552,9 @@ const StaffAutoAssignmentPage = () => {
                 conflicts={pageItems.conflicts}
                 allocations={allocations}
                 isLoading={isLoading}
+                error={dataError}
+                onRetry={refreshData}
+                reportConflicts={filteredConflicts}
                 onManualAssign={handleOpenRoomSearch}
                 readOnly={isTimetableReadOnly}
               />
@@ -649,6 +660,8 @@ const StaffAutoAssignmentPage = () => {
         isAllocationMode
         dayOfWeek={selectedSection?.dayOfWeek}
         scheduleId={selectedSection?.scheduleId}
+        isSelecting={isAssigning}
+        selectingRoomId={assigningRoomId}
       />
     </div>
   );

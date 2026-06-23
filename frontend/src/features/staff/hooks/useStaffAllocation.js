@@ -24,10 +24,13 @@ export const useStaffAllocation = () => {
   const [isValidating, setIsValidating] = useState(false);
   const [runDoneMessage, setRunDoneMessage] = useState(null);
   const [actionMessage, setActionMessage] = useState(null);
+  const [dataError, setDataError] = useState(null);
 
   const [isRoomSearchOpen, setIsRoomSearchOpen] = useState(false);
   const [selectedSection, setSelectedSection] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAssigning, setIsAssigning] = useState(false);
+  const [assigningRoomId, setAssigningRoomId] = useState(null);
 
   const isTimetableReadOnly = ["PUBLISHED", "LOCKED"].includes(
     workflow?.timetableStatus,
@@ -64,6 +67,7 @@ export const useStaffAllocation = () => {
     setIsLoading(true);
     setLoadedSemesterId("");
     setRunDoneMessage(null);
+    setDataError(null);
     try {
       const [conflictRes, allocRes, workflowRes] = await Promise.all([
         httpClient.get(
@@ -79,6 +83,9 @@ export const useStaffAllocation = () => {
       setWorkflow(workflowRes.data?.data ?? workflowRes.data ?? null);
     } catch (error) {
       console.error("Lỗi lấy dữ liệu:", error);
+      setDataError(
+        getApiError(error, "Không thể tải dữ liệu phân phòng và xung đột."),
+      );
     } finally {
       setLoadedSemesterId(semesterId);
       setIsLoading(false);
@@ -99,13 +106,14 @@ export const useStaffAllocation = () => {
       return;
     setIsRunning(true);
     setRunDoneMessage(null);
+    setDataError(null);
     setActionMessage(null);
     try {
       const res = await httpClient.post(
         `/api/staff/allocations/auto-assign?semesterId=${semesterId}`,
       );
+      await fetchData();
       setRunDoneMessage(res.data?.message || "Phân công tự động hoàn tất!");
-      fetchData();
     } catch (error) {
       const apiError = getApiError(
         error,
@@ -159,6 +167,10 @@ export const useStaffAllocation = () => {
   };
 
   const handleRoomSelect = async (classroomId, roomCode) => {
+    if (!selectedSection?.scheduleId || isAssigning) return;
+    setIsAssigning(true);
+    setAssigningRoomId(classroomId);
+    setActionMessage(null);
     try {
       await httpClient.post("/api/staff/allocations/manual", {
         scheduleId: selectedSection.scheduleId,
@@ -169,7 +181,7 @@ export const useStaffAllocation = () => {
         text: `Đã phân phòng ${roomCode} thành công.`,
       });
       setIsRoomSearchOpen(false);
-      fetchData();
+      await fetchData();
     } catch (error) {
       const apiError = getApiError(
         error,
@@ -180,6 +192,9 @@ export const useStaffAllocation = () => {
         errorCode: apiError.errorCode,
         text: apiError.message,
       });
+    } finally {
+      setIsAssigning(false);
+      setAssigningRoomId(null);
     }
   };
 
@@ -230,6 +245,7 @@ export const useStaffAllocation = () => {
     runDoneMessage,
     actionMessage,
     setActionMessage,
+    dataError,
     runAutoAssign,
     validateAllocations,
     isRoomSearchOpen,
@@ -237,6 +253,8 @@ export const useStaffAllocation = () => {
     selectedSection,
     handleOpenRoomSearch,
     handleRoomSelect,
+    isAssigning,
+    assigningRoomId,
     isSubmitting,
     submitForApproval,
     refreshData: fetchData,

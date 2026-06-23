@@ -14,14 +14,17 @@ export const formatDayOfWeek = (value) => {
   return DAY_LABELS[key] || value;
 };
 
-export const formatSlot = (slotNumber) => {
+export const formatSlot = (slotNumber, slotEndNumber) => {
   if (slotNumber == null) return "—";
+  if (slotEndNumber != null && Number(slotEndNumber) !== Number(slotNumber)) {
+    return `Tiết ${slotNumber}-${slotEndNumber}`;
+  }
   return `Tiết ${slotNumber}`;
 };
 
 export const formatSchedule = (row) => {
   const day = formatDayOfWeek(row.dayOfWeek);
-  const slot = formatSlot(row.slotNumber);
+  const slot = formatSlot(row.slotNumber, row.slotEndNumber);
   return `${day} · ${slot}`;
 };
 
@@ -61,4 +64,24 @@ export const SEVERITY_LABELS = {
   HIGH: "Nghiêm trọng",
   MEDIUM: "Trung bình",
   LOW: "Thấp",
+};
+
+export const getConflictSuggestion = (conflictType) => {
+  const suggestions = {
+    UNASSIGNED: "Chọn một phòng phù hợp hoặc điều chỉnh yêu cầu phòng trong dữ liệu học phần.",
+    CAPACITY_EXCEEDED: "Chọn phòng có sức chứa lớn hơn; nếu không có, Admin cần điều chỉnh dữ liệu hoặc chia lớp qua file import.",
+    ROOM_TIME_CONFLICT: "Chọn phòng khác hoặc điều chỉnh thời gian học bằng file import.",
+    LECTURER_TIME_CONFLICT: "Admin cần đổi giờ, đổi giảng viên hoặc import lại thời khóa biểu.",
+    ROOM_TYPE_MISMATCH: "Chọn đúng loại phòng yêu cầu hoặc đề nghị Admin sửa yêu cầu phòng.",
+    ROOM_INACTIVE_OR_DELETED: "Chọn phòng đang hoạt động khác.",
+    CALENDAR_BLOCK_CONFLICT: "Admin cần đổi lịch học ra ngoài ngày nghỉ hoặc khoảng khóa lịch.",
+    INVALID_WEEK_RANGE: "Admin cần sửa khoảng tuần trong file import.",
+    INVALID_TIME_RANGE: "Admin cần sửa tiết hoặc thời gian bắt đầu/kết thúc trong file import.",
+    ROOM_CONFLICT: "Chọn phòng khác hoặc điều chỉnh thời gian học bằng file import.",
+    LECTURER_CONFLICT: "Admin cần đổi giờ, đổi giảng viên hoặc import lại thời khóa biểu.",
+    CLASS_CONFLICT: "Admin cần điều chỉnh lịch của lớp hành chính trong file import.",
+    CALENDAR_BLOCK: "Admin cần đổi lịch học ra ngoài ngày nghỉ hoặc khoảng khóa lịch.",
+  };
+
+  return suggestions[conflictType] || "Kiểm tra lại lịch học, yêu cầu phòng và dữ liệu import trước khi gửi duyệt.";
 };

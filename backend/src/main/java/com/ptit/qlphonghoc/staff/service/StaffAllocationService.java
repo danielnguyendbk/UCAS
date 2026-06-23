@@ -333,7 +333,11 @@ public class StaffAllocationService implements AllocationValidationService {
                 requiredRoomType,
                 buildingId
         ).stream()
-                .filter(room -> isBlank(search) || containsIgnoreCase(room.getRoomCode(), search))
+                .filter(room -> isBlank(search)
+                        || containsIgnoreCase(room.getRoomCode(), search)
+                        || containsIgnoreCase(room.getBuildingCode(), search)
+                        || containsIgnoreCase(room.getBuildingName(), search)
+                        || containsIgnoreCase(room.getRoomTypeText(), search))
                 .toList();
     }
 
@@ -343,6 +347,7 @@ public class StaffAllocationService implements AllocationValidationService {
         response.setClassCode(projection.getClassCode());
         response.setSectionCode(projection.getSectionCode());
         response.setCourseName(projection.getCourseName());
+        response.setLecturerName(projection.getLecturerName());
         response.setEnrolledCount(projection.getEnrolledCount());
         response.setMaxCapacity(projection.getMaxCapacity());
         response.setRequiredRoomType(projection.getRequiredRoomType());
@@ -523,6 +528,11 @@ public class StaffAllocationService implements AllocationValidationService {
         response.setClassCode(schedule.getClassCode());
         response.setSectionCode(schedule.getSectionCode());
         response.setCourseName(schedule.getCourseName());
+        response.setLecturerName(schedule.getLecturerName());
+        response.setEnrolledCount(schedule.getEnrolledCount());
+        response.setMaxCapacity(schedule.getMaxCapacity());
+        response.setRequiredRoomType(schedule.getRequiredRoomType());
+        response.setSlotEndNumber(schedule.getSlotEndNumber());
         response.setDescription(description);
         response.setConflictingWith(conflictingWith);
         return response;

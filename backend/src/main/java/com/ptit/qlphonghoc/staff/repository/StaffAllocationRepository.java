@@ -348,6 +348,8 @@ public interface StaffAllocationRepository extends JpaRepository<ClassSection, I
         SELECT
             cr.classroom_id AS classroomId,
             cr.building_id AS buildingId,
+            b.building_code AS buildingCode,
+            b.building_name AS buildingName,
             CONCAT(b.building_code, '-', cr.room_number) AS roomCode,
             cr.capacity AS capacity,
             cr.room_type AS roomType,
@@ -479,6 +481,8 @@ public interface StaffAllocationRepository extends JpaRepository<ClassSection, I
     interface AllocationRoomProjection {
         Integer getClassroomId();
         Integer getBuildingId();
+        String getBuildingCode();
+        String getBuildingName();
         String getRoomCode();
         Integer getCapacity();
         String getRoomType();

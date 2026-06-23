@@ -5,6 +5,7 @@ public class AllocationResponse {
     private String classCode;
     private String sectionCode;
     private String courseName;
+    private String lecturerName;
     private Integer enrolledCount;
     private Integer maxCapacity; // THÊM DÒNG NÀY
     private String requiredRoomType;
@@ -29,6 +30,8 @@ public class AllocationResponse {
     public void setSectionCode(String sectionCode) { this.sectionCode = sectionCode; }
     public String getCourseName() { return courseName; }
     public void setCourseName(String courseName) { this.courseName = courseName; }
+    public String getLecturerName() { return lecturerName; }
+    public void setLecturerName(String lecturerName) { this.lecturerName = lecturerName; }
     public Integer getEnrolledCount() { return enrolledCount; }
     public void setEnrolledCount(Integer enrolledCount) { this.enrolledCount = enrolledCount; }
     
