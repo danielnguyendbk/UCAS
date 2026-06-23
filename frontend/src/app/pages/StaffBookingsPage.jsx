@@ -25,6 +25,7 @@ import {
 } from "../components/ui/select";
 import { httpClient } from "../../services/httpClient";
 import { useAuth } from "@/features/auth/hooks/useAuth";
+import { toast } from "sonner";
 
 const weekOptions = Array.from({ length: 20 }, (_, index) => {
   const value = String(index + 1);
@@ -383,7 +384,7 @@ const StaffBookingsPage = () => {
       });
       setErrors({});
     } catch (error) {
-      alert(error.response?.data?.message || "Có lỗi xảy ra khi đặt phòng khẩn cấp.");
+      toast.error(error.response?.data?.message || "Có lỗi xảy ra khi đặt phòng khẩn cấp.");
     } finally {
       setSubmitting(false);
     }
@@ -419,7 +420,7 @@ const StaffBookingsPage = () => {
       });
       setErrors({});
     } catch (error) {
-      alert(error.response?.data?.message || "Có lỗi xảy ra khi đổi phòng khẩn cấp.");
+      toast.error(error.response?.data?.message || "Có lỗi xảy ra khi đổi phòng khẩn cấp.");
     } finally {
       setSubmitting(false);
     }

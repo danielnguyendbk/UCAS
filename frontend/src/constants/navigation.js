@@ -163,8 +163,19 @@ const NAVIGATION_BY_ROLE = {
       label: "Phân phòng học",
       path: APP_ROUTES.staffAutoAssignment,
     },
-
-    { icon: PlusSquare, label: "Đặt phòng khẩn cấp", path: APP_ROUTES.staffEmergencyRoomChange, badge: "Gấp" },
+    {
+      id: "staff-class-sections",
+      icon: GraduationCap,
+      label: "Lớp học phần",
+      path: APP_ROUTES.staffClassSections,
+    },
+    {
+      id: "staff-emergency-room-change",
+      icon: PlusSquare,
+      label: "Đặt/đổi phòng khẩn cấp",
+      path: APP_ROUTES.staffEmergencyRoomChange,
+      badge: "Gấp",
+    },
     {
       id: "staff-maintenance-requests",
       icon: Wrench,
@@ -228,8 +239,14 @@ const NAVIGATION_BY_ROLE = {
     {
       id: "lecturer-room-booking",
       icon: PlusSquare,
-      label: "Đặt phòng",
+      label: "Yêu cầu đặt phòng",
       path: APP_ROUTES.lecturerRoomBooking,
+    },
+    {
+      id: "lecturer-booking-history",
+      icon: ClipboardList,
+      label: "Danh sách yêu cầu đặt phòng",
+      path: APP_ROUTES.lecturerBookingHistory,
     },
     {
       id: "lecturer-maintenance-request",
@@ -238,10 +255,22 @@ const NAVIGATION_BY_ROLE = {
       path: APP_ROUTES.lecturerMaintenanceRequest,
     },
     {
-      id: "lecturer-room-requests",
+      id: "lecturer-maintenance-history",
+      icon: History,
+      label: "Lịch sử sửa chữa",
+      path: APP_ROUTES.lecturerMaintenanceHistory,
+    },
+    {
+      id: "lecturer-room-change-request",
       icon: ArrowLeftRight,
-      label: "Yêu cầu đổi phòng",
-      path: APP_ROUTES.lecturerRoomRequests,
+      label: "Xin đổi phòng",
+      path: APP_ROUTES.lecturerRoomChangeRequest,
+    },
+    {
+      id: "lecturer-room-change-list",
+      icon: ClipboardCheck,
+      label: "Trạng thái đổi phòng",
+      path: APP_ROUTES.lecturerRoomChangeList,
     },
     {
       id: "lecturer-exams",

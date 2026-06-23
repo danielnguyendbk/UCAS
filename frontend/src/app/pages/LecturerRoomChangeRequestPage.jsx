@@ -20,6 +20,7 @@ import {
 } from "../components/ui/select";
 import { APP_ROUTES } from "@/constants/routes";
 import { httpClient } from "@/services/httpClient";
+import { toast } from "sonner";
 
 const weekOptions = Array.from({ length: 20 }, (_, index) => {
   const value = String(index + 1);
@@ -307,7 +308,7 @@ const LecturerRoomChangeRequestPage = () => {
       });
       setErrors({});
     } catch (error) {
-      alert(
+      toast.error(
         error.response?.data?.message ||
           "Có lỗi xảy ra khi gửi yêu cầu đổi phòng.",
       );

@@ -28,10 +28,12 @@ const APP_ROUTES = {
   staffAutoAssignment: "/staff/auto-assignment",
   staffConflicts: "/staff/conflicts",
   staffApprovalSubmit: "/staff/approval-submit",
+  staffClassSections: "/staff/class-sections",
+  staffEmergencyRoomChange: "/staff/emergency-room-change",
   staffRoomChangeList: "/staff/room-change-list",
   staffBookingList: "/staff/booking-list",
   staffMaintenanceRequests: "/staff/maintenance-requests",
-  staffLookup: "/staff/maintenance-requests",
+  staffLookup: "/staff/lookup",
 
   // FACILITY
   facilityTimetable: "/facility/timetable",
@@ -48,7 +50,10 @@ const APP_ROUTES = {
   lecturerRoomRequests: "/lecturer/room-requests",
   lecturerMaintenanceRequest: "/lecturer/maintenance-request",
   lecturerRoomBooking: "/lecturer/room-booking",
+  lecturerBookingHistory: "/lecturer/room-booking/history",
   lecturerMaintenanceHistory: "/lecturer/maintenance-history",
+  lecturerRoomChangeRequest: "/lecturer/room-change-request",
+  lecturerRoomChangeList: "/lecturer/room-change-list",
   /** @deprecated use lecturerTimetable */
   lecturerDashboard: "/lecturer/timetable",
 
@@ -56,6 +61,7 @@ const APP_ROUTES = {
   studentTimetable: "/student/timetable",
   studentExams: "/student/exams",
   studentRoomBooking: "/student/room-booking",
+  studentBookingHistory: "/student/room-booking/history",
   studentMaintenanceRequest: "/student/maintenance-request",
   studentMaintenanceHistory: "/student/maintenance-history",
   /** @deprecated use studentTimetable */
@@ -73,16 +79,12 @@ const APP_ROUTES = {
   settings: "/admin/settings",
 
   staffSchedule: "/staff/timetable",
-  staffClassSections: "/staff/timetable-import",
   staffAllocation: "/staff/auto-assignment",
-  staffBookings: "/staff/booking-list",
-  staffEmergencyRoomChange: "/staff/emergency-room-change",
+  staffBookings: "/staff/emergency-room-change",
   staffMaintenanceList: "/staff/maintenance-requests",
 
   lecturerSchedule: "/lecturer/timetable",
   lecturerBooking: "/lecturer/room-booking",
-  lecturerBookingHistory: "/lecturer/room-requests",
-  lecturerRoomChangeList: "/lecturer/room-requests",
 
   employeeDashboard: "/facility/timetable",
   employeeUsage: "/facility/rooms",
@@ -93,7 +95,6 @@ const APP_ROUTES = {
 
   studentSchedule: "/student/timetable",
   studentBooking: "/student/room-booking",
-  studentBookingHistory: "/student/room-booking",
 };
 
 const ROLE_DEFAULT_PATHS = {

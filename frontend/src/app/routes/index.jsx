@@ -32,21 +32,19 @@ import LecturerMaintenanceRequestPage from "@/features/lecturer/pages/LecturerMa
 import LecturerMaintenanceHistoryPage from "@/features/lecturer/pages/LecturerMaintenanceHistoryPage";
 import LecturerRoomChangeListPage from "@/features/lecturer/pages/LecturerRoomChangeListPage";
 import LecturerRoomChangeRequestPage from "@/features/lecturer/pages/LecturerRoomChangeRequestPage";
-import StaffBookingsPage from "@/features/staff/pages/StaffBookingsPage";
 import StaffBookingListPage from "@/features/staff/pages/StaffBookingListPage";
 import StaffDashboardPage from "@/features/staff/pages/StaffDashboardPage";
 import StaffEmergencyRoomChangePage from "@/features/staff/pages/StaffEmergencyRoomChangePage";
+import StaffClassSectionsPage from "@/features/staff/pages/StaffClassSectionsPage";
 import StaffLookupPage from "@/features/staff/pages/StaffLookupPage";
 import StaffRoomChangeListPage from "@/features/staff/pages/StaffRoomChangeListPage";
 import StaffMaintenanceListPage from "@/features/staff/pages/StaffMaintenanceListPage";
-import StaffSchedulePage from "@/features/staff/pages/StaffSchedulePage";
 import StaffAutoAssignmentPage from "@/features/staff/pages/StaffAutoAssignmentPage";
 import StudentSchedulePage from "@/features/student/pages/StudentSchedulePage";
 import StudentBookingPage from "@/features/student/pages/StudentBookingPage";
 import StudentBookingHistoryPage from "@/features/student/pages/StudentBookingHistoryPage";
 import StudentMaintenanceRequestPage from "@/features/student/pages/StudentMaintenanceRequestPage";
 import StudentMaintenanceHistoryPage from "@/features/student/pages/StudentMaintenanceHistoryPage";
-import TimetablePage from "@/features/timetable/pages/TimetablePage";
 
 import { Info } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
@@ -115,6 +113,8 @@ const appRouter = createBrowserRouter([
       { path: "staff/auto-assignment", Component: StaffAutoAssignmentPage },
       { path: "staff/conflicts", element: <Navigate to={`${APP_ROUTES.staffAutoAssignment}?tab=conflicts`} replace /> },
       { path: "staff/approval-submit", element: <Navigate to={`${APP_ROUTES.staffAutoAssignment}?tab=submit`} replace /> },
+      { path: "staff/class-sections", Component: StaffClassSectionsPage },
+      { path: "staff/emergency-room-change", Component: StaffEmergencyRoomChangePage },
       { path: "staff/room-change-list", Component: StaffRoomChangeListPage },
       { path: "staff/booking-list", Component: StaffBookingListPage },
       { path: "staff/maintenance-requests", Component: StaffMaintenanceListPage },
@@ -138,10 +138,13 @@ const appRouter = createBrowserRouter([
       },
       { path: "lecturer/timetable", Component: LecturerSchedulePage },
       { path: "lecturer/exams", Component: PlaceholderPage },
-      { path: "lecturer/room-requests", Component: LecturerRoomChangeListPage },
+      { path: "lecturer/room-requests", element: <Navigate to={APP_ROUTES.lecturerRoomChangeList} replace /> },
       { path: "lecturer/maintenance-request", Component: LecturerMaintenanceRequestPage },
       { path: "lecturer/maintenance-history", Component: LecturerMaintenanceHistoryPage },
       { path: "lecturer/room-booking", Component: LecturerBookingPage },
+      { path: "lecturer/room-booking/history", Component: LecturerBookingHistoryPage },
+      { path: "lecturer/room-change-request", Component: LecturerRoomChangeRequestPage },
+      { path: "lecturer/room-change-list", Component: LecturerRoomChangeListPage },
 
       // STUDENT routes
       {
@@ -151,6 +154,7 @@ const appRouter = createBrowserRouter([
       { path: "student/timetable", Component: StudentSchedulePage },
       { path: "student/exams", Component: PlaceholderPage },
       { path: "student/room-booking", Component: StudentBookingPage },
+      { path: "student/room-booking/history", Component: StudentBookingHistoryPage },
       { path: "student/maintenance-request", Component: StudentMaintenanceRequestPage },
       { path: "student/maintenance-history", Component: StudentMaintenanceHistoryPage },
     ]

@@ -3,6 +3,8 @@ import {
   AlertTriangle,
   Ban,
   CheckCircle,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   Eye,
   Flame,
@@ -47,6 +49,7 @@ import { categoryLabel } from "@/app/components/maintenance/maintenanceConstants
 import { apiBaseUrl, httpClient } from "@/services/httpClient";
 
 const API_PATH = "/api/staff/maintenance-requests";
+const PAGE_SIZE = 10;
 
 const STATUS_TABS = [
   { value: "ALL", label: "Tất cả" },
@@ -150,6 +153,7 @@ const StaffMaintenanceListPage = () => {
   const [roleFilter, setRoleFilter] = useState("ALL");
   const [priorityFilter, setPriorityFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [page, setPage] = useState(1);
 
   const [semesters, setSemesters] = useState([]);
   const [buildings, setBuildings] = useState([]);
@@ -293,6 +297,30 @@ const StaffMaintenanceListPage = () => {
     semesterFilter,
     searchTerm,
   ]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE));
+  const paginatedRequests = filteredRequests.slice(
+    (page - 1) * PAGE_SIZE,
+    page * PAGE_SIZE,
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [
+    activeTab,
+    searchTerm,
+    semesterFilter,
+    buildingFilter,
+    roomFilter,
+    reporterFilter,
+    roleFilter,
+    priorityFilter,
+    statusFilter,
+  ]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
 
   const replaceRequest = (updatedRequest) => {
     setRequests((prev) =>
@@ -575,7 +603,7 @@ const StaffMaintenanceListPage = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRequests.map((request) => (
+                {paginatedRequests.map((request) => (
                   <TableRow key={request.id} className="hover:bg-gray-50/80">
                     <TableCell className="font-mono text-xs font-bold text-blue-700 whitespace-nowrap">
                       {display(request.requestCode)}
@@ -633,6 +661,34 @@ const StaffMaintenanceListPage = () => {
                 ))}
               </TableBody>
             </Table>
+          </div>
+          <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3">
+            <span className="text-xs text-gray-500">
+              Hiển thị {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filteredRequests.length)} / {filteredRequests.length}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={page === 1}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-xs font-medium text-gray-600">Trang {page}/{totalPages}</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={page === totalPages}
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
       )}

@@ -3,6 +3,8 @@ import {
   AlertCircle,
   CalendarDays,
   CheckCircle,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   Loader2,
   RefreshCw,
@@ -22,6 +24,8 @@ import {
   TableHeader,
   TableRow,
 } from "../ui/table";
+
+const PAGE_SIZE = 10;
 
 const REQUEST_TYPE_LABELS = {
   CLUB_ACTIVITY: "Hoạt động CLB",
@@ -137,6 +141,7 @@ const RoomBorrowRequestHistory = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [page, setPage] = useState(1);
 
   const currentUserId = useMemo(() => {
     const user = authService.getPersistedUser();
@@ -187,6 +192,20 @@ const RoomBorrowRequestHistory = ({
         .some((value) => String(value).toLowerCase().includes(keyword)),
     );
   }, [requests, searchTerm]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE));
+  const paginatedRequests = filteredRequests.slice(
+    (page - 1) * PAGE_SIZE,
+    page * PAGE_SIZE,
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [endpoint, searchTerm]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
 
   return (
     <div className="space-y-5 p-5 md:p-6">
@@ -273,7 +292,7 @@ const RoomBorrowRequestHistory = ({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRequests.map((request) => {
+                {paginatedRequests.map((request) => {
                   const relatedText = getRelatedText(request);
                   const feedback = getFeedbackText(request);
 
@@ -327,6 +346,38 @@ const RoomBorrowRequestHistory = ({
                 })}
               </TableBody>
             </Table>
+          </div>
+        )}
+        {filteredRequests.length > 0 && (
+          <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3">
+            <span className="text-xs text-gray-500">
+              Hiển thị {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filteredRequests.length)} / {filteredRequests.length}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={page === 1}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-xs font-medium text-gray-600">
+                Trang {page}/{totalPages}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={page === totalPages}
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         )}
       </div>

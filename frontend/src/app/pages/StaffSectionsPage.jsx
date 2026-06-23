@@ -33,6 +33,7 @@ import {
   TableRow,
 } from "../components/ui/table";
 import { httpClient } from "../../services/httpClient";
+import { toast } from "sonner";
 
 const statusConfig = {
   assigned: {
@@ -317,22 +318,22 @@ export const StaffSectionsPage = () => {
       const slotEndNo = getTimeSlotNo(slotEnd);
 
       if (selectedClassIds.length < 1 || selectedClassIds.length > 2) {
-        alert("Vui lòng chọn từ 1 đến tối đa 2 classes.");
+        toast.warning("Vui lòng chọn từ 1 đến tối đa 2 classes.");
         return;
       }
 
       if (maxCapacity < selectedStudentTotal) {
-        alert("Sức chứa không được nhỏ hơn tổng số sinh viên của các classes đã chọn.");
+        toast.warning("Sức chứa không được nhỏ hơn tổng số sinh viên của các classes đã chọn.");
         return;
       }
 
       if (!classroomId) {
-        alert("Vui lòng chọn phòng học.");
+        toast.warning("Vui lòng chọn phòng học.");
         return;
       }
 
       if (!slotStartId || !slotEndId || slotEndNo < slotStartNo) {
-        alert("Tiết kết thúc phải lớn hơn hoặc bằng tiết bắt đầu.");
+        toast.warning("Tiết kết thúc phải lớn hơn hoặc bằng tiết bắt đầu.");
         return;
       }
 
@@ -353,20 +354,20 @@ export const StaffSectionsPage = () => {
 
       if (modalMode === "add") {
         await httpClient.post("/api/admin/class-sections", payload);
-        alert("Đã thêm lớp học phần mới thành công!");
+        toast.success("Đã thêm lớp học phần mới thành công!");
       } else {
         await httpClient.put(
           `/api/admin/class-sections/${selectedSection.dbId}`,
           payload,
         );
-        alert("Đã cập nhật lớp học phần thành công!");
+        toast.success("Đã cập nhật lớp học phần thành công!");
       }
 
       setIsModalOpen(false);
       fetchSections();
     } catch (error) {
       console.error("Lỗi:", error);
-      alert(
+      toast.error(
         error.response?.data?.message ||
           "Có lỗi xảy ra, vui lòng kiểm tra lại!",
       );
@@ -388,11 +389,11 @@ export const StaffSectionsPage = () => {
       await httpClient.delete(
         `/api/admin/class-sections/${selectedSection.dbId}`,
       );
-      alert("Đã hủy lớp học phần thành công!");
+      toast.success("Đã hủy lớp học phần thành công!");
       setIsModalOpen(false);
       fetchSections();
     } catch (error) {
-      alert("Lỗi khi xóa lớp!");
+      toast.error(error.response?.data?.message || "Lỗi khi hủy lớp học phần!");
     }
   };
 

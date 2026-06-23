@@ -1,6 +1,6 @@
-import { AdminCourseSectionsPage } from "@/app/pages/AdminCourseSectionsPage";
+import { StaffSectionsPage } from "@/app/pages/StaffSectionsPage";
 
 export {
-  AdminCourseSectionsPage as default
+  StaffSectionsPage as default
 };
 

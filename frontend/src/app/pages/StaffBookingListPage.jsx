@@ -4,6 +4,8 @@ import {
   AlertTriangle,
   CalendarDays,
   CheckCircle,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Eye,
   Loader2,
@@ -40,6 +42,8 @@ import {
   TableHeader,
   TableRow,
 } from "../components/ui/table";
+
+const PAGE_SIZE = 10;
 
 const STATUS_FILTERS = [
   { value: "ALL", label: "Tất cả" },
@@ -240,6 +244,7 @@ const StaffBookingListPage = () => {
   const [bookings, setBookings] = useState([]);
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [searchTerm, setSearchTerm] = useState("");
+  const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [pageError, setPageError] = useState("");
   const [selectedBooking, setSelectedBooking] = useState(null);
@@ -306,6 +311,20 @@ const StaffBookingListPage = () => {
         .some((value) => String(value).toLowerCase().includes(keyword));
     });
   }, [bookings, searchTerm, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(visibleBookings.length / PAGE_SIZE));
+  const paginatedBookings = visibleBookings.slice(
+    (page - 1) * PAGE_SIZE,
+    page * PAGE_SIZE,
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, statusFilter]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
 
   const openDetails = (booking) => {
     setSelectedBooking(booking);
@@ -504,7 +523,7 @@ const StaffBookingListPage = () => {
               </TableHeader>
 
               <TableBody>
-                {visibleBookings.map((booking) => {
+                {paginatedBookings.map((booking) => {
                   const statusConfig = getStatusConfig(booking.status);
                   const availabilityConfig = getAvailabilityConfig(
                     booking.availabilityStatus,
@@ -569,6 +588,34 @@ const StaffBookingListPage = () => {
                 })}
               </TableBody>
             </Table>
+          </div>
+        )}
+        {visibleBookings.length > 0 && (
+          <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3">
+            <span className="text-xs text-gray-500">
+              Hiển thị {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, visibleBookings.length)} / {visibleBookings.length}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={page === 1}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-xs font-medium text-gray-600">Trang {page}/{totalPages}</span>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={page === totalPages}
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         )}
       </div>
