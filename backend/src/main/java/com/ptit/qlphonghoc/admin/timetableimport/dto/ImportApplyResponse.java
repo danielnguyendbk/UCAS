@@ -14,6 +14,7 @@ public record ImportApplyResponse(
         int cancelledSections,
         int unchangedRows,
         int skippedRows,
+        int clearedClassroomAssignments,
         int retainedClassroomAssignments,
         int unassignedSchedules,
         String timetableStatus

@@ -92,6 +92,8 @@ public class JdbcTimetableImportWriteStore implements TimetableImportWriteStore 
         int changed = jdbc.update("""
                 UPDATE schedules
                 SET classroom_id = :classroomId,
+                    assigned_by = CASE WHEN :classroomId IS NULL THEN NULL ELSE assigned_by END,
+                    assigned_at = CASE WHEN :classroomId IS NULL THEN NULL ELSE assigned_at END,
                     start_time = :startTime,
                     end_time = :endTime,
                     from_week_no = :fromWeekNo,

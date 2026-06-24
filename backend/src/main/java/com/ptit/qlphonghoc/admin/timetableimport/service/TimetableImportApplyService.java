@@ -49,11 +49,23 @@ public class TimetableImportApplyService {
 
     @Transactional
     public ImportApplyResponse apply(MultipartFile file, Long semesterId, String semesterCode, Integer userId) {
-        return apply(file, semesterId, semesterCode, null, userId);
+        return apply(file, semesterId, semesterCode, null, false, userId);
     }
 
     @Transactional
     public ImportApplyResponse apply(MultipartFile file, Long semesterId, String semesterCode, String mode, Integer userId) {
+        return apply(file, semesterId, semesterCode, mode, false, userId);
+    }
+
+    @Transactional
+    public ImportApplyResponse apply(
+            MultipartFile file,
+            Long semesterId,
+            String semesterCode,
+            String mode,
+            boolean clearAssignments,
+            Integer userId
+    ) {
         TimetableImportMode importMode = TimetableImportMode.from(mode);
         TimetableImportValidationResult validation = validator.validate(file, semesterId, semesterCode);
         ImportPreviewResponse preview = validation.preview();
@@ -84,7 +96,8 @@ public class TimetableImportApplyService {
         try {
             for (ImportPreviewRow row : preview.rows()) {
                 try {
-                    applyRow(row, lockedSemester.id(), source, batchCode, refs, sections, schedules, counters, fileScheduleKeysBySection);
+                    applyRow(row, lockedSemester.id(), source, batchCode, refs, sections, schedules,
+                            counters, fileScheduleKeysBySection, clearAssignments);
                 } catch (Exception exception) {
                     if (exception instanceof BadRequestException badRequestException) throw badRequestException;
                     if (exception instanceof DuplicateKeyException) {
@@ -120,11 +133,12 @@ public class TimetableImportApplyService {
             ImportApplyResponse response = counters.toResponse(batchCode, importMode, lockedSemester, preview.totalRows());
             auditLogger.logTimetableImport(userId, lockedSemester.id(), batchCode, auditSummary(response, source));
 
-            String versionSummary = String.format("Nhập TKB: tạo mới %d lớp, cập nhật %d lớp, tạo mới %d lịch học, cập nhật %d lịch học, %d lịch chưa phân phòng, hủy %d lịch học (File: %s, Chế độ: %s).",
+            String versionSummary = String.format("Nhập TKB: tạo mới %d lớp, cập nhật %d lớp, tạo mới %d lịch học, cập nhật %d lịch học, xóa %d phân phòng cũ, %d lịch chưa phân phòng, hủy %d lịch học (File: %s, Chế độ: %s).",
                     response.createdSections(),
                     response.updatedSections(),
                     response.createdSchedules(),
                     response.updatedSchedules(),
+                    response.clearedClassroomAssignments(),
                     response.unassignedSchedules(),
                     response.cancelledSchedules(),
                     source,
@@ -152,7 +166,8 @@ public class TimetableImportApplyService {
             Map<String, SectionRef> sections,
             Map<Long, List<ScheduleRef>> schedules,
             Counters counters,
-            Map<Long, Set<ScheduleKey>> fileScheduleKeysBySection
+            Map<Long, Set<ScheduleKey>> fileScheduleKeysBySection,
+            boolean clearAssignments
     ) {
         Map<String, String> values = row.values();
         CourseRef course = refs.courses().get(normalize(values.get("course_code")));
@@ -197,11 +212,14 @@ public class TimetableImportApplyService {
         Long classroomId;
         if (!classroomCode.isBlank()) {
             classroomId = refs.classrooms().get(normalize(classroomCode)).id();
-        } else if (existingSchedule != null) {
+        } else if (existingSchedule != null && !clearAssignments) {
             classroomId = existingSchedule.classroomId();
             if (classroomId != null) counters.retainedClassroomAssignments++;
         } else {
             classroomId = null;
+            if (existingSchedule != null && existingSchedule.classroomId() != null) {
+                counters.clearedClassroomAssignments++;
+            }
         }
         String scheduleStatus = classroomId == null ? "UNASSIGNED" : "ASSIGNED";
         if (classroomId == null) counters.unassignedSchedules++;
@@ -292,6 +310,7 @@ public class TimetableImportApplyService {
         summary.put("cancelledSchedules", response.cancelledSchedules());
         summary.put("cancelledSections", response.cancelledSections());
         summary.put("unchangedRows", response.unchangedRows());
+        summary.put("clearedClassroomAssignments", response.clearedClassroomAssignments());
         summary.put("retainedClassroomAssignments", response.retainedClassroomAssignments());
         summary.put("unassignedSchedules", response.unassignedSchedules());
         summary.put("timetableStatus", response.timetableStatus());
@@ -356,6 +375,7 @@ public class TimetableImportApplyService {
         private int cancelledSchedules;
         private int cancelledSections;
         private int unchangedRows;
+        private int clearedClassroomAssignments;
         private int retainedClassroomAssignments;
         private int unassignedSchedules;
 
@@ -374,6 +394,7 @@ public class TimetableImportApplyService {
                     cancelledSections,
                     unchangedRows,
                     0,
+                    clearedClassroomAssignments,
                     retainedClassroomAssignments,
                     unassignedSchedules,
                     "DRAFT"

@@ -235,13 +235,17 @@ const StaffAutoAssignmentPage = () => {
   const summary = useMemo(
     () => ({
       total: allocations.length,
-      assigned: allocations.filter((item) => Boolean(item.assignedRoom)).length,
+      assigned: allAssignedItems.length,
       unassigned: allUnassignedItems.length,
       conflicts: new Set(conflicts.map((item) => item.scheduleId)).size,
-      canSubmit: conflicts.length === 0 && allocations.length > 0,
+      canSubmit:
+        conflicts.length === 0 &&
+        allUnassignedItems.length === 0 &&
+        allocations.length > 0,
     }),
     [
       allocations,
+      allAssignedItems.length,
       allUnassignedItems.length,
       conflicts,
     ],
@@ -257,7 +261,7 @@ const StaffAutoAssignmentPage = () => {
 
   useEffect(() => {
     setPages({ pending: 1, assigned: 1, conflicts: 1 });
-  }, [searchTerm, statusFilter, conflictTypeFilter, semesterId]);
+  }, [activeTab, searchTerm, statusFilter, conflictTypeFilter, semesterId]);
 
   useEffect(() => {
     setPages((current) => ({

@@ -12,7 +12,10 @@ public class AllocationResponse {
     private String dayOfWeek;
     private Integer slotNumber;
     private String assignedRoom;
+    private Integer classroomId;
     private Integer roomCapacity;
+    private String scheduleStatus;
+    private String allocationStatus;
     private String status;
     private Integer scheduleId;
     private Integer slotEndNumber;
@@ -46,8 +49,14 @@ public class AllocationResponse {
     public void setSlotNumber(Integer slotNumber) { this.slotNumber = slotNumber; }
     public String getAssignedRoom() { return assignedRoom; }
     public void setAssignedRoom(String assignedRoom) { this.assignedRoom = assignedRoom; }
+    public Integer getClassroomId() { return classroomId; }
+    public void setClassroomId(Integer classroomId) { this.classroomId = classroomId; }
     public Integer getRoomCapacity() { return roomCapacity; }
     public void setRoomCapacity(Integer roomCapacity) { this.roomCapacity = roomCapacity; }
+    public String getScheduleStatus() { return scheduleStatus; }
+    public void setScheduleStatus(String scheduleStatus) { this.scheduleStatus = scheduleStatus; }
+    public String getAllocationStatus() { return allocationStatus; }
+    public void setAllocationStatus(String allocationStatus) { this.allocationStatus = allocationStatus; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public Integer getScheduleId() { return scheduleId; }

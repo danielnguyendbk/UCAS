@@ -7,6 +7,7 @@ import com.ptit.qlphonghoc.admin.timetableimport.dto.ImportPreviewRow;
 import com.ptit.qlphonghoc.admin.timetableimport.repository.TimetableImportReadRepository.*;
 import com.ptit.qlphonghoc.admin.timetableimport.repository.TimetableImportWriteStore;
 import com.ptit.qlphonghoc.common.exception.BadRequestException;
+import com.ptit.qlphonghoc.timetableworkflow.service.TimetableVersionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.dao.DuplicateKeyException;
@@ -80,6 +81,20 @@ class TimetableImportApplyServiceTest {
     }
 
     @Test
+    void clearsExistingClassroomWhenRequested() {
+        FakeWriteStore store = new FakeWriteStore("DRAFT");
+        TimetableImportApplyService service = service(validation(validRow("NO_CHANGE"), referenceData(true)), store);
+
+        ImportApplyResponse response = service.apply(file, 1L, null, null, true, 99);
+
+        assertThat(response.clearedClassroomAssignments()).isEqualTo(1);
+        assertThat(response.retainedClassroomAssignments()).isZero();
+        assertThat(response.unassignedSchedules()).isEqualTo(1);
+        assertThat(store.lastSchedule.classroomId()).isNull();
+        assertThat(store.lastSchedule.status()).isEqualTo("UNASSIGNED");
+    }
+
+    @Test
     void syncFileScopeCancelsExistingSchedulesOutsideImportedSectionKeys() {
         FakeWriteStore store = new FakeWriteStore("DRAFT");
         TimetableImportApplyService service = service(validation(validRow("NO_CHANGE"), referenceDataWithExtraSchedule()), store);
@@ -108,7 +123,13 @@ class TimetableImportApplyServiceTest {
         TimetableImportValidator validator = (ignoredFile, ignoredId, ignoredCode) -> {
             throw new AssertionError("validator should not run for invalid mode");
         };
-        TimetableImportApplyService service = new TimetableImportApplyService(validator, store, (userId, semesterId, batchCode, summary) -> { });
+        TimetableImportAuditLogger logger = (userId, semesterId, batchCode, summary) -> { };
+        TimetableImportApplyService service = new TimetableImportApplyService(
+                validator,
+                store,
+                logger,
+                versionService()
+        );
 
         assertThatThrownBy(() -> service.apply(file, 1L, null, "FULL_SYNC", 99))
                 .isInstanceOf(BadRequestException.class)
@@ -136,7 +157,21 @@ class TimetableImportApplyServiceTest {
     private TimetableImportApplyService service(TimetableImportValidationResult result, FakeWriteStore store) {
         TimetableImportValidator validator = (ignoredFile, ignoredId, ignoredCode) -> result;
         TimetableImportAuditLogger logger = (userId, semesterId, batchCode, summary) -> { };
-        return new TimetableImportApplyService(validator, store, logger);
+        return new TimetableImportApplyService(
+                validator,
+                store,
+                logger,
+                versionService()
+        );
+    }
+
+    private TimetableVersionService versionService() {
+        return new TimetableVersionService(null, null, null, null) {
+            @Override
+            public void createVersion(Long semesterId, Integer userId, String summary) {
+                // No-op for the apply service unit tests.
+            }
+        };
     }
 
     private TimetableImportValidationResult validation(ImportPreviewRow row, ReferenceData refs) {

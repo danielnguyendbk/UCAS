@@ -28,12 +28,26 @@ export const formatSchedule = (row) => {
   return `${day} · ${slot}`;
 };
 
-export const isUnassigned = (row) =>
-  row.status === "UNASSIGNED" || !row.assignedRoom;
+const hasClassroomIdField = (row) =>
+  Object.prototype.hasOwnProperty.call(row || {}, "classroomId");
 
-export const isAssigned = (row) =>
-  (row.status === "VALID" || row.status === "ASSIGNED") &&
-  Boolean(row.assignedRoom);
+export const isUnassigned = (row) => {
+  if (!row) return false;
+  if (row.allocationStatus) return row.allocationStatus === "UNASSIGNED";
+  if (row.scheduleStatus === "UNASSIGNED" || row.status === "UNASSIGNED") return true;
+  return hasClassroomIdField(row) ? row.classroomId == null : !row.assignedRoom;
+};
+
+export const isAssigned = (row) => {
+  if (!row) return false;
+  if (row.allocationStatus) {
+    return row.allocationStatus === "ASSIGNED" && row.classroomId != null;
+  }
+  if (hasClassroomIdField(row)) {
+    return row.scheduleStatus === "ASSIGNED" && row.classroomId != null;
+  }
+  return ["VALID", "CONFLICT", "ASSIGNED"].includes(row.status) && Boolean(row.assignedRoom);
+};
 
 export const extractBuilding = (roomCode) => {
   if (!roomCode) return "—";

@@ -20,7 +20,11 @@ export const applyTimetableImport = async ({ file, semesterId, mode = "MERGE_ONL
   const formData = new FormData();
   formData.append("file", file);
   const response = await httpClient.post("/api/admin/timetable-import/apply", formData, {
-    params: { ...(semesterId ? { semesterId } : {}), mode },
+    params: {
+      ...(semesterId ? { semesterId } : {}),
+      mode,
+      clearAssignments: true,
+    },
     headers: { "Content-Type": "multipart/form-data" },
     timeout: 60_000,
   });

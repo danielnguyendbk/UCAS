@@ -63,7 +63,9 @@ public class StaffAllocationService implements AllocationValidationService {
                 .stream()
                 .map(this::toAllocationResponse)
                 .filter(allocation -> matchesAllocationSearch(allocation, search))
-                .filter(allocation -> isBlank(status) || status.equalsIgnoreCase(allocation.getStatus()))
+                .filter(allocation -> isBlank(status)
+                        || status.equalsIgnoreCase(allocation.getAllocationStatus())
+                        || status.equalsIgnoreCase(allocation.getStatus()))
                 .toList();
     }
 
@@ -358,11 +360,16 @@ public class StaffAllocationService implements AllocationValidationService {
         response.setToWeekNo(projection.getToWeekNo());
         response.setScheduleId(projection.getScheduleId());
         response.setAssignedRoom(projection.getAssignedRoom());
+        response.setClassroomId(projection.getAllocationId());
         response.setRoomCapacity(projection.getRoomCapacity());
+        response.setScheduleStatus(projection.getScheduleStatus());
         response.setValidationStatus(projection.getValidationStatus());
         response.setConflictReason(projection.getConflictReason());
 
-        if (projection.getAllocationId() == null) {
+        boolean unassigned = projection.getAllocationId() == null
+                || "UNASSIGNED".equalsIgnoreCase(projection.getScheduleStatus());
+        response.setAllocationStatus(unassigned ? "UNASSIGNED" : "ASSIGNED");
+        if (unassigned) {
             response.setStatus("UNASSIGNED");
         } else if ("CONFLICT".equalsIgnoreCase(projection.getValidationStatus())) {
             response.setStatus("CONFLICT");

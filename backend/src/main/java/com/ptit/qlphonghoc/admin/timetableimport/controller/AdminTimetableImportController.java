@@ -49,11 +49,12 @@ public class AdminTimetableImportController {
             @RequestParam(required = false) Long semesterId,
             @RequestParam(required = false) String semesterCode,
             @RequestParam(required = false) String mode,
+            @RequestParam(defaultValue = "true") boolean clearAssignments,
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
         return ApiResponse.success(
                 "Đã áp dụng file import thành công.",
-                applyService.apply(file, semesterId, semesterCode, mode, userDetails.getUserId())
+                applyService.apply(file, semesterId, semesterCode, mode, clearAssignments, userDetails.getUserId())
         );
     }
 

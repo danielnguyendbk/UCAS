@@ -303,6 +303,7 @@ export default function TimetableImportPage() {
                   <span>Cập nhật lớp: <strong>{applyResult.updatedSections}</strong></span>
                   <span>Tạo lịch: <strong>{applyResult.createdSchedules}</strong></span>
                   <span>Cập nhật lịch: <strong>{applyResult.updatedSchedules}</strong></span>
+                  <span>Xóa phân phòng cũ: <strong>{applyResult.clearedClassroomAssignments ?? 0}</strong></span>
                   <span>Chưa phân phòng: <strong>{applyResult.unassignedSchedules ?? 0}</strong></span>
                   <span>Hủy mềm lịch: <strong>{applyResult.cancelledSchedules ?? 0}</strong></span>
                   <span>Giữ phòng cũ: <strong>{applyResult.retainedClassroomAssignments}</strong></span>
@@ -417,6 +418,9 @@ export default function TimetableImportPage() {
             <p className="mt-1"><span className="font-medium text-slate-800">Học kỳ:</span> {semesterNameOf(selectedSemester)} · <span className="font-mono">{semesterCodeOf(selectedSemester)}</span></p>
             <p className="mt-1"><span className="font-medium text-slate-800">Mode:</span> {IMPORT_MODES[importMode]?.label} — {IMPORT_MODES[importMode]?.description}</p>
             <p className="mt-1"><span className="font-medium text-slate-800">Preview:</span> {preview?.importBatchCode} · {preview?.totalRows ?? 0} dòng · {preview?.warningRows ?? 0} cảnh báo</p>
+            <p className="mt-2 font-medium text-amber-800">
+              Các dòng không chỉ định phòng sẽ xóa phân phòng cũ và chuyển về Chưa phân phòng.
+            </p>
             <p className="mt-2 text-amber-700">
               {importMode === "SYNC_FILE_SCOPE"
                 ? "Sẽ hủy mềm lịch cũ của các học phần xuất hiện trong file nếu lịch đó không còn trong file. Không sinh class sessions."
