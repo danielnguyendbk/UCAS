@@ -198,6 +198,29 @@ export const useStaffAllocation = () => {
     }
   };
 
+  const saveScheduleNote = async (scheduleId, note) => {
+    if (rejectReadOnlyMutation()) return false;
+    setActionMessage(null);
+    try {
+      const response = await httpClient.put(
+        `/api/staff/allocations/schedules/${scheduleId}/note`,
+        { note },
+      );
+      setActionMessage({
+        tone: "success",
+        text: response.data?.message || "Đã lưu ghi chú cho Admin.",
+      });
+      await fetchData();
+      return true;
+    } catch (error) {
+      setActionMessage({
+        tone: "error",
+        text: getApiError(error, "Không thể lưu ghi chú cho Admin.").message,
+      });
+      return false;
+    }
+  };
+
   const submitForApproval = async () => {
     setIsSubmitting(true);
     setActionMessage(null);
@@ -253,6 +276,7 @@ export const useStaffAllocation = () => {
     selectedSection,
     handleOpenRoomSearch,
     handleRoomSelect,
+    saveScheduleNote,
     isAssigning,
     assigningRoomId,
     isSubmitting,

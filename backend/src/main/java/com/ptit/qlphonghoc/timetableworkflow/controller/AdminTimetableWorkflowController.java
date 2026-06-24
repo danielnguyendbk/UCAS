@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+
 @RestController
 @RequestMapping("/api/admin/timetable-workflow")
 public class AdminTimetableWorkflowController {
@@ -37,6 +38,17 @@ public class AdminTimetableWorkflowController {
         return ApiResponse.success(
                 "Timetable approved.",
                 service.approve(semesterId, userDetails.getUserId())
+        );
+    }
+
+    @PostMapping("/validate")
+    public ApiResponse<TimetableWorkflowSummary> validate(
+            @RequestParam Integer semesterId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        return ApiResponse.success(
+                "Timetable validation completed.",
+                service.validate(semesterId, userDetails.getUserId())
         );
     }
 
@@ -66,4 +78,25 @@ public class AdminTimetableWorkflowController {
                 service.lock(semesterId, userDetails.getUserId())
         );
     }
+
+    @PostMapping("/reopen")
+    public ApiResponse<TimetableWorkflowSummary> reopen(
+            @RequestParam Integer semesterId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        if (userDetails == null) {
+            throw new BadRequestException(
+                    "UNAUTHENTICATED",
+                    "Không xác định được người dùng hiện tại."
+            );
+        }
+
+        TimetableWorkflowSummary summary = service.reopen(
+                semesterId,
+                userDetails.getUserId()
+        );
+
+        return ApiResponse.success("Đã mở lại thời khóa biểu để chỉnh sửa.", summary);
+    }
+
 }

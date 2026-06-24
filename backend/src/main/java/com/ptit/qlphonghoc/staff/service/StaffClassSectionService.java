@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.Locale;
 
 @Service
-public class StaffClassSectionService {
+public class StaffClassSectionService implements ClassSectionTableReader {
 
     private final ClassSectionRepository classSectionRepository;
     private final TimetableMutationPolicy mutationPolicy;
@@ -38,6 +38,7 @@ public class StaffClassSectionService {
     }
 
     @Transactional(readOnly = true)
+    @Override
     public StaffSectionTableResponse getById(Integer id) {
         return classSectionRepository.findStaffTableById(id)
                 .map(this::toResponse)
@@ -272,6 +273,7 @@ public class StaffClassSectionService {
         StaffSectionTableResponse response = new StaffSectionTableResponse();
 
         response.setId(projection.getId());
+        response.setScheduleId(projection.getScheduleId());
         response.setClassCode(projection.getClassCode());
         response.setCourseName(projection.getCourseName());
         response.setFacultyCode(projection.getFacultyCode());
@@ -302,6 +304,7 @@ public class StaffClassSectionService {
         response.setScheduleStatus(projection.getScheduleStatus());
         response.setValidationStatus(projection.getValidationStatus());
         response.setConflictReason(projection.getConflictReason());
+        response.setNote(projection.getNote());
         response.setAllocationStatus(projection.getAllocationStatus());
         response.setStatusText(projection.getStatusText());
         response.setSectionStatus(projection.getSectionStatus());

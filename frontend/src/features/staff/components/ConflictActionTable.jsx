@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
-import { Copy, Download, Eye, FileWarning, RefreshCw } from "lucide-react";
+import { Copy, Download, Eye, FileWarning, MessageSquareText, RefreshCw } from "lucide-react";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
+import { Textarea } from "@/app/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -44,11 +45,24 @@ export const ConflictActionTable = ({
   error,
   onRetry,
   onManualAssign,
+  onSaveNote,
   readOnly = false,
 }) => {
   const [detailConflict, setDetailConflict] = useState(null);
   const [reportConflict, setReportConflict] = useState(null);
   const [copyStatus, setCopyStatus] = useState("");
+  const [noteConflict, setNoteConflict] = useState(null);
+  const [noteValue, setNoteValue] = useState("");
+  const [isSavingNote, setIsSavingNote] = useState(false);
+
+  const staffRoomConflictTypes = new Set([
+    "UNASSIGNED",
+    "ROOM_TIME_CONFLICT",
+    "ROOM_TYPE_MISMATCH",
+    "ROOM_INACTIVE_OR_DELETED",
+    "CAPACITY_EXCEEDED",
+    "ROOM_CONFLICT",
+  ]);
 
   const findAllocation = (conflict) =>
     allocations.find(
@@ -171,7 +185,8 @@ export const ConflictActionTable = ({
             <TableBody>
               {conflicts?.map((conflict, index) => {
                 const allocation = findAllocation(conflict);
-                const canAssign = Boolean(allocation && onManualAssign && !readOnly);
+                const isStaffRoomConflict = staffRoomConflictTypes.has(conflict.conflictType);
+                const canAssign = Boolean(isStaffRoomConflict && allocation && onManualAssign && !readOnly);
                 return (
                   <TableRow
                     key={`${conflict.scheduleId || conflict.sectionCode}-${conflict.conflictType}-${index}`}
@@ -216,16 +231,20 @@ export const ConflictActionTable = ({
                         <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-blue-600" onClick={() => setDetailConflict(conflict)}>
                           <Eye className="mr-1 h-3 w-3" />Chi tiết
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2 text-xs"
-                          disabled={!canAssign}
-                          title={readOnly ? "Thời khóa biểu đang ở chế độ chỉ xem" : !allocation ? "Không tìm thấy lịch tương ứng" : undefined}
-                          onClick={() => onManualAssign(allocation)}
-                        >
-                          Chọn phòng
-                        </Button>
+                        {isStaffRoomConflict ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            disabled={!canAssign}
+                            title={readOnly ? "Thời khóa biểu đang ở chế độ chỉ xem" : !allocation ? "Không tìm thấy lịch tương ứng" : undefined}
+                            onClick={() => onManualAssign(allocation)}
+                          >
+                            Chọn phòng
+                          </Button>
+                        ) : (
+                          <Badge className="border-0 bg-amber-100 text-amber-800">Cần Admin xử lý</Badge>
+                        )}
                         <span title="Chưa hỗ trợ tách lớp trực tiếp. Vui lòng xử lý bằng file import.">
                           <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" disabled>
                             Tách lớp
@@ -242,6 +261,21 @@ export const ConflictActionTable = ({
                         >
                           Báo cáo Admin
                         </Button>
+                        {onSaveNote && allocation?.scheduleId && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            disabled={readOnly}
+                            onClick={() => {
+                              setNoteConflict({ conflict, allocation });
+                              setNoteValue(allocation.note || "");
+                            }}
+                          >
+                            <MessageSquareText className="mr-1 h-3 w-3" />
+                            Ghi chú Admin
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -324,6 +358,39 @@ export const ConflictActionTable = ({
             </Button>
             <Button onClick={copyReport}>
               <Copy className="mr-2 h-4 w-4" />Sao chép báo cáo
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(noteConflict)} onOpenChange={(open) => !open && setNoteConflict(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Ghi chú cho Admin</DialogTitle>
+            <DialogDescription>
+              Ghi chú được lưu cùng lịch học và hiển thị trong modal chi tiết của Admin.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={noteValue}
+            maxLength={255}
+            onChange={(event) => setNoteValue(event.target.value)}
+            placeholder="Ví dụ: [SPLIT_SUGGESTION] Đề xuất tách lớp do sĩ số vượt sức chứa phòng."
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" disabled={isSavingNote} onClick={() => setNoteConflict(null)}>
+              Hủy
+            </Button>
+            <Button
+              disabled={isSavingNote || !noteValue.trim()}
+              onClick={async () => {
+                setIsSavingNote(true);
+                const saved = await onSaveNote(noteConflict.allocation.scheduleId, noteValue.trim());
+                setIsSavingNote(false);
+                if (saved) setNoteConflict(null);
+              }}
+            >
+              Lưu ghi chú
             </Button>
           </div>
         </DialogContent>

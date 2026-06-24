@@ -208,6 +208,25 @@ public class StaffAllocationService implements AllocationValidationService {
     }
 
     @Transactional
+    public void saveScheduleNote(Integer scheduleId, String note) {
+        repository.lockSchedule(scheduleId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "SCHEDULE_NOT_FOUND",
+                        "Không tìm thấy lịch học."
+                ));
+        StaffAllocationRepository.AssignmentScheduleProjection schedule =
+                repository.findScheduleForAssignment(scheduleId)
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "SCHEDULE_NOT_FOUND",
+                                "Không tìm thấy lịch học."
+                        ));
+        mutationPolicy.assertOriginalTimetableMutable(schedule.getSemesterId());
+        if (repository.updateScheduleNote(scheduleId, note.trim()) != 1) {
+            throw new BadRequestException("SCHEDULE_NOTE_FAILED", "Không thể lưu ghi chú cho lịch học.");
+        }
+    }
+
+    @Transactional
     public String autoAssign(Integer semesterId, Integer staffUserId) {
         mutationPolicy.assertOriginalTimetableMutable(semesterId);
         List<Integer> unassignedIds = repository.findUnassignedScheduleIds(semesterId);
@@ -365,6 +384,7 @@ public class StaffAllocationService implements AllocationValidationService {
         response.setScheduleStatus(projection.getScheduleStatus());
         response.setValidationStatus(projection.getValidationStatus());
         response.setConflictReason(projection.getConflictReason());
+        response.setNote(projection.getNote());
 
         boolean unassigned = projection.getAllocationId() == null
                 || "UNASSIGNED".equalsIgnoreCase(projection.getScheduleStatus());

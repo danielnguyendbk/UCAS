@@ -23,6 +23,7 @@ public class AllocationResponse {
     private Integer toWeekNo;
     private String validationStatus;
     private String conflictReason;
+    private String note;
 
     // Getters and Setters
     public Integer getSectionId() { return sectionId; }
@@ -71,4 +72,6 @@ public class AllocationResponse {
     public void setValidationStatus(String validationStatus) { this.validationStatus = validationStatus; }
     public String getConflictReason() { return conflictReason; }
     public void setConflictReason(String conflictReason) { this.conflictReason = conflictReason; }
+    public String getNote() { return note; }
+    public void setNote(String note) { this.note = note; }
 }

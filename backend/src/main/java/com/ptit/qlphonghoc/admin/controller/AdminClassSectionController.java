@@ -1,5 +1,8 @@
 package com.ptit.qlphonghoc.admin.controller;
 
+import com.ptit.qlphonghoc.admin.dto.AdminScheduleUpdateRequest;
+import com.ptit.qlphonghoc.admin.service.AdminScheduleEditService;
+import com.ptit.qlphonghoc.auth.security.CustomUserDetails;
 import com.ptit.qlphonghoc.staff.dto.class_section.CreateSectionRequest;
 import com.ptit.qlphonghoc.staff.dto.class_section.StaffSectionTableResponse;
 import com.ptit.qlphonghoc.staff.dto.class_section.UpdateSectionRequest;
@@ -16,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
 import java.net.URI;
 import java.util.List;
@@ -26,9 +30,14 @@ import java.util.List;
 public class AdminClassSectionController {
 
     private final StaffClassSectionService classSectionService;
+    private final AdminScheduleEditService scheduleEditService;
 
-    public AdminClassSectionController(StaffClassSectionService classSectionService) {
+    public AdminClassSectionController(
+            StaffClassSectionService classSectionService,
+            AdminScheduleEditService scheduleEditService
+    ) {
         this.classSectionService = classSectionService;
+        this.scheduleEditService = scheduleEditService;
     }
 
     @GetMapping
@@ -60,6 +69,18 @@ public class AdminClassSectionController {
             @Valid @RequestBody UpdateSectionRequest request
     ) {
         return ResponseEntity.ok(classSectionService.update(id, request));
+    }
+
+    @PutMapping("/{sectionId}/schedules/{scheduleId}")
+    public ResponseEntity<StaffSectionTableResponse> updateSchedule(
+            @PathVariable Integer sectionId,
+            @PathVariable Integer scheduleId,
+            @Valid @RequestBody AdminScheduleUpdateRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        return ResponseEntity.ok(
+                scheduleEditService.update(sectionId, scheduleId, request, userDetails.getUserId())
+        );
     }
 
     @DeleteMapping("/{id}")

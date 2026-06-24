@@ -209,8 +209,11 @@ const mapScheduleItem = (item) => {
   };
 };
 
-const getSectionsEndpoint = (backendRole) =>
-  backendRole === "ADMIN" ? "/api/admin/class-sections" : "/api/staff/class-sections";
+const getSectionsEndpoint = (backendRole) => {
+  if (backendRole === "ADMIN") return "/api/admin/class-sections";
+  if (backendRole === "FACILITY") return "/api/facility/timetable";
+  return "/api/staff/class-sections";
+};
 
 const isInSelectedWeek = (item, selectedWeek) => {
   const weekNo = Number(selectedWeek);
@@ -452,6 +455,9 @@ const WeeklySchedulePage = () => {
     () => semesters.find((semester) => String(semester.id) === String(selectedSemester)),
     [semesters, selectedSemester],
   );
+  const isFacilityUnpublished =
+    backendRole === "FACILITY" &&
+    !["PUBLISHED", "LOCKED"].includes(selectedSemesterData?.timetableStatus);
 
   const weekOptions = useMemo(() => buildWeekOptions(selectedSemesterData), [selectedSemesterData]);
 
@@ -735,6 +741,13 @@ const WeeklySchedulePage = () => {
 
       {isLoading ? (
         <LoadingSkeleton />
+      ) : isFacilityUnpublished ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-6 py-12 text-center">
+          <CalendarDays className="mx-auto h-9 w-9 text-amber-500" />
+          <p className="mt-3 text-sm font-semibold text-amber-900">
+            Thời khóa biểu chưa được công bố, chưa thể dùng để vận hành mở phòng.
+          </p>
+        </div>
       ) : groups.length === 0 ||
         groups.every((group) => group.items.length === 0 && selectedRoom !== "all") ? (
         <EmptyState />

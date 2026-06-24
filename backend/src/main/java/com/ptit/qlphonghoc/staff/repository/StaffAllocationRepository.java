@@ -42,6 +42,7 @@ public interface StaffAllocationRepository extends JpaRepository<ClassSection, I
             sch.status AS scheduleStatus,
             sch.validation_status AS validationStatus,
             sch.conflict_reason AS conflictReason,
+            sch.note AS note,
             CASE
                 WHEN cr.classroom_id IS NULL THEN NULL
                 ELSE CONCAT(b.building_code, '-', cr.room_number)
@@ -318,6 +319,18 @@ public interface StaffAllocationRepository extends JpaRepository<ClassSection, I
             @Param("conflictReason") String conflictReason
     );
 
+    @Modifying
+    @Query(value = """
+        UPDATE schedules
+        SET note = :note
+        WHERE schedule_id = :scheduleId
+          AND status NOT IN ('CANCELLED', 'INACTIVE')
+        """, nativeQuery = true)
+    int updateScheduleNote(
+            @Param("scheduleId") Integer scheduleId,
+            @Param("note") String note
+    );
+
     @Query(value = "SELECT day_of_week FROM schedules WHERE schedule_id = :scheduleId", nativeQuery = true)
     String getDayOfWeekBySchedule(@Param("scheduleId") Integer scheduleId);
 
@@ -433,6 +446,7 @@ public interface StaffAllocationRepository extends JpaRepository<ClassSection, I
         String getScheduleStatus();
         String getValidationStatus();
         String getConflictReason();
+        String getNote();
         Integer getScheduleId();
         Integer getAllocationId();
     }

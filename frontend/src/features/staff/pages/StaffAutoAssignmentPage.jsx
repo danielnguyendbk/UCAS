@@ -134,6 +134,7 @@ const StaffAutoAssignmentPage = () => {
     selectedSection,
     handleOpenRoomSearch,
     handleRoomSelect,
+    saveScheduleNote,
     isAssigning,
     assigningRoomId,
     isSubmitting,
@@ -560,6 +561,7 @@ const StaffAutoAssignmentPage = () => {
                 onRetry={refreshData}
                 reportConflicts={filteredConflicts}
                 onManualAssign={handleOpenRoomSearch}
+                onSaveNote={saveScheduleNote}
                 readOnly={isTimetableReadOnly}
               />
               <ListPagination

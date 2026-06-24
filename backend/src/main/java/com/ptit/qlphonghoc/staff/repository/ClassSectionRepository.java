@@ -14,6 +14,7 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
     String TABLE_SELECT = """
         SELECT
             cs.section_id AS id,
+            sch.schedule_id AS scheduleId,
             cs.semester_id AS semesterId,
             cs.course_id AS courseId,
             cs.lecturer_id AS lecturerId,
@@ -78,6 +79,7 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
             sch.status AS scheduleStatus,
             sch.validation_status AS validationStatus,
             sch.conflict_reason AS conflictReason,
+            sch.note AS note,
 
             CASE
                 WHEN sch.schedule_id IS NULL THEN 'NO_SCHEDULE'
@@ -264,6 +266,7 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
 
     interface StaffSectionTableProjection {
         Integer getId();
+        Integer getScheduleId();
         String getClassCode();
         String getCourseName();
         String getFacultyCode();
@@ -291,6 +294,7 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
         String getScheduleStatus();
         String getValidationStatus();
         String getConflictReason();
+        String getNote();
         String getAllocationStatus();
         String getStatusText();
         String getSectionStatus();

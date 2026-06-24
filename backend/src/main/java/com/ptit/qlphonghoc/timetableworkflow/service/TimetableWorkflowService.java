@@ -87,11 +87,64 @@ public class TimetableWorkflowService {
     }
 
     @Transactional
+    public TimetableWorkflowSummary validate(Integer semesterId, Integer adminUserId) {
+        SemesterWorkflowState semester = findSemester(semesterId, true);
+        if (!Set.of(
+                TimetableWorkflowStatus.DRAFT,
+                TimetableWorkflowStatus.CONFLICT,
+                TimetableWorkflowStatus.READY_FOR_APPROVAL,
+                TimetableWorkflowStatus.APPROVED
+        ).contains(semester.status())) {
+            throw invalidTransition(
+                    "validate",
+                    semester.status(),
+                    "DRAFT, CONFLICT, READY_FOR_APPROVAL or APPROVED"
+            );
+        }
+
+        AllocationValidationSummary validation = allocationService.validateAllocations(semesterId);
+        if (hasBlockingIssues(validation)) {
+            updateStatus(semesterId, TimetableWorkflowStatus.CONFLICT);
+            if (semester.status() != TimetableWorkflowStatus.CONFLICT) {
+                auditLogService.logWorkflowTransition(
+                        adminUserId,
+                        AuditAction.UPDATE,
+                        semesterId,
+                        semester.status().name(),
+                        TimetableWorkflowStatus.CONFLICT.name(),
+                        "Admin validation detected timetable conflicts"
+                );
+            }
+            return fromValidation(semester.withStatus(TimetableWorkflowStatus.CONFLICT), validation);
+        }
+
+        return fromValidation(semester, validation);
+    }
+
+    @Transactional
     public TimetableWorkflowSummary approve(Integer semesterId, Integer adminUserId) {
         SemesterWorkflowState semester = findSemester(semesterId, true);
         assertNotFinalized(semester.status());
-        if (semester.status() != TimetableWorkflowStatus.READY_FOR_APPROVAL) {
-            throw invalidTransition("approve", semester.status(), "READY_FOR_APPROVAL");
+        if (!Set.of(
+                TimetableWorkflowStatus.DRAFT,
+                TimetableWorkflowStatus.CONFLICT,
+                TimetableWorkflowStatus.READY_FOR_APPROVAL
+        ).contains(semester.status())) {
+            throw invalidTransition("approve", semester.status(), "DRAFT, CONFLICT or READY_FOR_APPROVAL");
+        }
+
+        AllocationValidationSummary validation = null;
+        if (semester.status() == TimetableWorkflowStatus.DRAFT
+                || semester.status() == TimetableWorkflowStatus.CONFLICT) {
+            validation = allocationService.validateAllocations(semesterId);
+            if (hasBlockingIssues(validation)) {
+                updateStatus(semesterId, TimetableWorkflowStatus.CONFLICT);
+                throw new BadRequestException(
+                        "ALLOCATION_CONFLICT",
+                        "Thời khóa biểu còn xung đột hoặc lịch chưa được phân phòng.",
+                        fromValidation(semester.withStatus(TimetableWorkflowStatus.CONFLICT), validation)
+                );
+            }
         }
 
         updateStatus(semesterId, TimetableWorkflowStatus.APPROVED);
@@ -101,9 +154,13 @@ public class TimetableWorkflowService {
                 semesterId,
                 semester.status().name(),
                 TimetableWorkflowStatus.APPROVED.name(),
-                "Admin approved timetable"
+                semester.status() == TimetableWorkflowStatus.READY_FOR_APPROVAL
+                        ? "Admin approved timetable"
+                        : "Admin approved reopened timetable"
         );
-        return buildStoredSummary(semester.withStatus(TimetableWorkflowStatus.APPROVED));
+        return validation == null
+                ? buildStoredSummary(semester.withStatus(TimetableWorkflowStatus.APPROVED))
+                : fromValidation(semester.withStatus(TimetableWorkflowStatus.APPROVED), validation);
     }
 
     @Transactional
@@ -243,5 +300,28 @@ public class TimetableWorkflowService {
                 "Không thể " + action + " thời khóa biểu khi trạng thái là " + currentStatus
                         + ". Trạng thái yêu cầu: " + requiredStatus + "."
         );
+    }
+
+    @Transactional
+    public TimetableWorkflowSummary reopen(Integer semesterId, Integer adminUserId) {
+        SemesterWorkflowState semester = findSemester(semesterId, true);
+
+        if (semester.status() != TimetableWorkflowStatus.PUBLISHED
+                && semester.status() != TimetableWorkflowStatus.LOCKED) {
+            throw invalidTransition("reopen", semester.status(), "PUBLISHED or LOCKED");
+        }
+
+        updateStatus(semesterId, TimetableWorkflowStatus.DRAFT);
+
+        auditLogService.logWorkflowTransition(
+                adminUserId,
+                AuditAction.UPDATE,
+                semesterId,
+                semester.status().name(),
+                TimetableWorkflowStatus.DRAFT.name(),
+                "Admin reopened timetable for revision"
+        );
+
+        return buildStoredSummary(semester.withStatus(TimetableWorkflowStatus.DRAFT));
     }
 }

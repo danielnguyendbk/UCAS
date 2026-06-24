@@ -29,6 +29,7 @@ class TimetableWorkflowServiceTest {
     private AllocationValidationService allocationService;
     private WorkflowAuditLogger auditLogService;
     private ClassSessionGenerator classSessionGenerator;
+    private TimetableVersionService versionService;
     private TimetableWorkflowService service;
 
     @BeforeEach
@@ -36,13 +37,20 @@ class TimetableWorkflowServiceTest {
         repository = mock(TimetableWorkflowStore.class);
         allocationService = mock(AllocationValidationService.class);
         auditLogService = mock(WorkflowAuditLogger.class);
+        // Use a no-op TimetableVersionService to avoid mocking issues
+        versionService = new TimetableVersionService(null, null, null, null) {
+            @Override
+            public void createVersion(Long semesterId, Integer userId, String summary) {
+                // no-op for tests
+            }
+        };
         classSessionGenerator = new ClassSessionGenerator(null) {
             @Override
             public void generateClassSessions(Integer semesterId) {
                 // No-op for testing
             }
         };
-        service = new TimetableWorkflowService(repository, allocationService, auditLogService, classSessionGenerator);
+        service = new TimetableWorkflowService(repository, allocationService, auditLogService, classSessionGenerator, versionService);
     }
 
     @Test
@@ -81,15 +89,63 @@ class TimetableWorkflowServiceTest {
     }
 
     @Test
-    void approveRequiresReadyForApproval() {
+    void approveDraftRevalidatesAndMovesToApproved() {
         when(repository.findSemester(2, true)).thenReturn(Optional.of(state(TimetableWorkflowStatus.DRAFT)));
-
-        BadRequestException exception = assertThrows(
-                BadRequestException.class,
-                () -> service.approve(2, 1)
+        when(repository.updateStatus(2, TimetableWorkflowStatus.APPROVED)).thenReturn(1);
+        when(allocationService.validateAllocations(2)).thenReturn(
+                new AllocationValidationSummary(48, 48, 0, Map.of())
         );
-        assertEquals("INVALID_TIMETABLE_STATUS", exception.getErrorCode());
+
+        var summary = service.approve(2, 1);
+
+        assertEquals("APPROVED", summary.timetableStatus());
+        verify(auditLogService).logWorkflowTransition(
+                1, AuditAction.APPROVE, 2, "DRAFT", "APPROVED", "Admin approved reopened timetable"
+        );
+    }
+
+    @Test
+    void approveDraftRejectsBlockingAllocationAndPersistsConflict() {
+        when(repository.findSemester(2, true)).thenReturn(Optional.of(state(TimetableWorkflowStatus.DRAFT)));
+        when(repository.updateStatus(2, TimetableWorkflowStatus.CONFLICT)).thenReturn(1);
+        when(allocationService.validateAllocations(2)).thenReturn(
+                new AllocationValidationSummary(48, 47, 1, Map.of("UNASSIGNED", 1))
+        );
+
+        BadRequestException exception = assertThrows(BadRequestException.class, () -> service.approve(2, 1));
+
+        assertEquals("ALLOCATION_CONFLICT", exception.getErrorCode());
         verify(repository, never()).updateStatus(2, TimetableWorkflowStatus.APPROVED);
+    }
+
+    @Test
+    void validateDraftKeepsDraftWhenAllocationIsValid() {
+        when(repository.findSemester(2, true)).thenReturn(Optional.of(state(TimetableWorkflowStatus.DRAFT)));
+        when(allocationService.validateAllocations(2)).thenReturn(
+                new AllocationValidationSummary(48, 48, 0, Map.of())
+        );
+
+        var summary = service.validate(2, 1);
+
+        assertEquals("DRAFT", summary.timetableStatus());
+        assertEquals(0, summary.conflictCount());
+        verify(repository, never()).updateStatus(2, TimetableWorkflowStatus.APPROVED);
+    }
+
+    @Test
+    void validateApprovedMovesToConflictWhenAllocationIsInvalid() {
+        when(repository.findSemester(2, true)).thenReturn(Optional.of(state(TimetableWorkflowStatus.APPROVED)));
+        when(repository.updateStatus(2, TimetableWorkflowStatus.CONFLICT)).thenReturn(1);
+        when(allocationService.validateAllocations(2)).thenReturn(
+                new AllocationValidationSummary(48, 47, 1, Map.of("ROOM_TIME_CONFLICT", 1))
+        );
+
+        var summary = service.validate(2, 1);
+
+        assertEquals("CONFLICT", summary.timetableStatus());
+        verify(auditLogService).logWorkflowTransition(
+                1, AuditAction.UPDATE, 2, "APPROVED", "CONFLICT", "Admin validation detected timetable conflicts"
+        );
     }
 
     @Test
@@ -134,6 +190,20 @@ class TimetableWorkflowServiceTest {
         assertEquals("LOCKED", summary.timetableStatus());
         verify(auditLogService).logWorkflowTransition(
                 1, AuditAction.UPDATE, 2, "PUBLISHED", "LOCKED", "Admin locked timetable"
+        );
+    }
+
+    @Test
+    void reopenMovesLockedTimetableToDraft() {
+        when(repository.findSemester(2, true)).thenReturn(Optional.of(state(TimetableWorkflowStatus.LOCKED)));
+        when(repository.updateStatus(2, TimetableWorkflowStatus.DRAFT)).thenReturn(1);
+        when(repository.findValidationCounts(2)).thenReturn(new ValidationCounts(48, 48, 0));
+
+        var summary = service.reopen(2, 1);
+
+        assertEquals("DRAFT", summary.timetableStatus());
+        verify(auditLogService).logWorkflowTransition(
+                1, AuditAction.UPDATE, 2, "LOCKED", "DRAFT", "Admin reopened timetable for revision"
         );
     }
 

@@ -4,6 +4,7 @@ import java.util.List;
 
 public class StaffSectionTableResponse {
     private Integer id;
+    private Integer scheduleId;
     private String classCode;
     private String courseName;
     private String facultyCode;
@@ -27,6 +28,7 @@ public class StaffSectionTableResponse {
     private String scheduleStatus;
     private String validationStatus;
     private String conflictReason;
+    private String note;
     private String allocationStatus;
     private String statusText;
     private String sectionStatus;
@@ -40,6 +42,9 @@ public class StaffSectionTableResponse {
 
     public Integer getId() { return id; }
     public void setId(Integer id) { this.id = id; }
+
+    public Integer getScheduleId() { return scheduleId; }
+    public void setScheduleId(Integer scheduleId) { this.scheduleId = scheduleId; }
 
     public String getClassCode() { return classCode; }
     public void setClassCode(String classCode) { this.classCode = classCode; }
@@ -109,6 +114,9 @@ public class StaffSectionTableResponse {
 
     public String getConflictReason() { return conflictReason; }
     public void setConflictReason(String conflictReason) { this.conflictReason = conflictReason; }
+
+    public String getNote() { return note; }
+    public void setNote(String note) { this.note = note; }
 
     public String getAllocationStatus() { return allocationStatus; }
     public void setAllocationStatus(String allocationStatus) { this.allocationStatus = allocationStatus; }
