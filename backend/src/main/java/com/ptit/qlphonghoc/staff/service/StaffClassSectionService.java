@@ -298,6 +298,10 @@ public class StaffClassSectionService {
         response.setSchedule(projection.getSchedule());
         response.setClassroomId(projection.getClassroomId());
         response.setRoom(projection.getRoom());
+        response.setClassroomCode(projection.getClassroomCode());
+        response.setScheduleStatus(projection.getScheduleStatus());
+        response.setValidationStatus(projection.getValidationStatus());
+        response.setConflictReason(projection.getConflictReason());
         response.setAllocationStatus(projection.getAllocationStatus());
         response.setStatusText(projection.getStatusText());
         response.setSectionStatus(projection.getSectionStatus());

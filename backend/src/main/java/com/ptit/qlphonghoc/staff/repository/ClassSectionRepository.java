@@ -70,40 +70,26 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
                 WHEN cr.classroom_id IS NULL THEN NULL
                 ELSE CONCAT(b.building_code, '-', cr.room_number)
             END AS room,
+            CASE
+                WHEN cr.classroom_id IS NULL THEN NULL
+                ELSE CONCAT(b.building_code, '-', cr.room_number)
+            END AS classroomCode,
+
+            sch.status AS scheduleStatus,
+            sch.validation_status AS validationStatus,
+            sch.conflict_reason AS conflictReason,
 
             CASE
                 WHEN sch.schedule_id IS NULL THEN 'NO_SCHEDULE'
                 WHEN sch.status = 'UNASSIGNED' OR sch.classroom_id IS NULL THEN 'UNASSIGNED'
-                WHEN EXISTS (
-                    SELECT 1
-                    FROM schedules sch2
-                    JOIN class_sections cs2 ON cs2.section_id = sch2.section_id
-                    WHERE sch2.status = 'ASSIGNED'
-                      AND cs2.status <> 'CANCELLED'
-                      AND sch2.classroom_id = sch.classroom_id
-                      AND sch2.day_of_week = sch.day_of_week
-                      AND sch2.slot_start_id <= sch.slot_end_id
-                      AND sch2.slot_end_id >= sch.slot_start_id
-                      AND sch2.schedule_id <> sch.schedule_id
-                ) THEN 'CONFLICT'
+                WHEN sch.validation_status = 'CONFLICT' THEN 'CONFLICT'
                 ELSE 'ASSIGNED'
             END AS allocationStatus,
 
             CASE
                 WHEN sch.schedule_id IS NULL THEN 'Chua co lich'
                 WHEN sch.status = 'UNASSIGNED' OR sch.classroom_id IS NULL THEN 'Chua phan phong'
-                WHEN EXISTS (
-                    SELECT 1
-                    FROM schedules sch2
-                    JOIN class_sections cs2 ON cs2.section_id = sch2.section_id
-                    WHERE sch2.status = 'ASSIGNED'
-                      AND cs2.status <> 'CANCELLED'
-                      AND sch2.classroom_id = sch.classroom_id
-                      AND sch2.day_of_week = sch.day_of_week
-                      AND sch2.slot_start_id <= sch.slot_end_id
-                      AND sch2.slot_end_id >= sch.slot_start_id
-                      AND sch2.schedule_id <> sch.schedule_id
-                ) THEN 'Xung dot lich'
+                WHEN sch.validation_status = 'CONFLICT' THEN 'Xung dot lich'
                 ELSE 'Da phan phong'
             END AS statusText,
 
@@ -301,6 +287,10 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
         String getSchedule();
         Integer getClassroomId();
         String getRoom();
+        String getClassroomCode();
+        String getScheduleStatus();
+        String getValidationStatus();
+        String getConflictReason();
         String getAllocationStatus();
         String getStatusText();
         String getSectionStatus();

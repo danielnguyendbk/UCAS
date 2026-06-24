@@ -23,6 +23,10 @@ public class StaffSectionTableResponse {
     private String schedule;
     private Integer classroomId;
     private String room;
+    private String classroomCode;
+    private String scheduleStatus;
+    private String validationStatus;
+    private String conflictReason;
     private String allocationStatus;
     private String statusText;
     private String sectionStatus;
@@ -93,6 +97,18 @@ public class StaffSectionTableResponse {
 
     public String getRoom() { return room; }
     public void setRoom(String room) { this.room = room; }
+
+    public String getClassroomCode() { return classroomCode; }
+    public void setClassroomCode(String classroomCode) { this.classroomCode = classroomCode; }
+
+    public String getScheduleStatus() { return scheduleStatus; }
+    public void setScheduleStatus(String scheduleStatus) { this.scheduleStatus = scheduleStatus; }
+
+    public String getValidationStatus() { return validationStatus; }
+    public void setValidationStatus(String validationStatus) { this.validationStatus = validationStatus; }
+
+    public String getConflictReason() { return conflictReason; }
+    public void setConflictReason(String conflictReason) { this.conflictReason = conflictReason; }
 
     public String getAllocationStatus() { return allocationStatus; }
     public void setAllocationStatus(String allocationStatus) { this.allocationStatus = allocationStatus; }

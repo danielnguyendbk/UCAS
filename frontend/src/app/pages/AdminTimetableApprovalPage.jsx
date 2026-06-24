@@ -66,7 +66,15 @@ const WORKFLOW_STATUS_LABEL = {
 
 const PAGE_SIZE = 10;
 
-const getStatus = (section) => section.allocationStatus || section.statusText || "NO_SCHEDULE";
+const getStatus = (section) => {
+  if (section.allocationStatus) return section.allocationStatus;
+  if (section.scheduleStatus === "UNASSIGNED" || section.classroomId == null) {
+    return "UNASSIGNED";
+  }
+  if (section.validationStatus === "CONFLICT") return "CONFLICT";
+  if (section.scheduleStatus === "ASSIGNED") return "ASSIGNED";
+  return section.statusText || "NO_SCHEDULE";
+};
 
 const getCourseCode = (section) => {
   const value = section.classCode || "";
@@ -89,6 +97,7 @@ const AdminTimetableApprovalPage = () => {
   const [actionMessage, setActionMessage] = useState(null);
   const [isActionRunning, setIsActionRunning] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [refreshVersion, setRefreshVersion] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -160,7 +169,7 @@ const AdminTimetableApprovalPage = () => {
     return () => {
       isMounted = false;
     };
-  }, [selectedSemester]);
+  }, [selectedSemester, refreshVersion]);
 
   const filteredSections = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -193,6 +202,11 @@ const AdminTimetableApprovalPage = () => {
         currentPage * PAGE_SIZE,
       ),
     [currentPage, filteredSections],
+  );
+
+  const hasBlockingRows = useMemo(
+    () => sections.some((section) => ["CONFLICT", "UNASSIGNED"].includes(getStatus(section))),
+    [sections],
   );
 
   useEffect(() => {
@@ -239,11 +253,8 @@ const AdminTimetableApprovalPage = () => {
     }
   };
 
-  const resetFilters = () => {
-    setSearchTerm("");
-    setSelectedStatus("all");
-    setSelectedDepartment("all");
-    setSelectedClass("all");
+  const refreshData = () => {
+    setRefreshVersion((version) => version + 1);
   };
 
   return (
@@ -259,7 +270,10 @@ const AdminTimetableApprovalPage = () => {
           <Button
             variant="outline"
             disabled={
-              isActionRunning || workflow?.timetableStatus !== "READY_FOR_APPROVAL"
+              isActionRunning ||
+              workflow?.timetableStatus !== "READY_FOR_APPROVAL" ||
+              (workflow?.conflictCount ?? 0) > 0 ||
+              hasBlockingRows
             }
             onClick={() => runWorkflowAction("approve")}
           >
@@ -267,7 +281,12 @@ const AdminTimetableApprovalPage = () => {
             Duyệt hợp lệ
           </Button>
           <Button
-            disabled={isActionRunning || workflow?.timetableStatus !== "APPROVED"}
+            disabled={
+              isActionRunning ||
+              workflow?.timetableStatus !== "APPROVED" ||
+              (workflow?.conflictCount ?? 0) > 0 ||
+              hasBlockingRows
+            }
             onClick={() => runWorkflowAction("publish")}
             className="bg-blue-600 hover:bg-blue-700"
           >
@@ -282,8 +301,13 @@ const AdminTimetableApprovalPage = () => {
             <LockKeyhole className="mr-2 h-4 w-4" />
             Khóa thời khóa biểu
           </Button>
-          <Button variant="ghost" onClick={resetFilters}>
-            <RefreshCw className="h-4 w-4" />
+          <Button
+            variant="ghost"
+            disabled={loading}
+            onClick={refreshData}
+            title="Tải lại summary và danh sách lớp học phần"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
         </div>
       </div>
@@ -434,7 +458,7 @@ const AdminTimetableApprovalPage = () => {
                       <TableCell className="text-xs text-gray-600">{section.lecturerName || "-"}</TableCell>
                       <TableCell className="text-xs text-gray-600">{section.day || "-"}</TableCell>
                       <TableCell className="text-xs text-gray-600">{section.slotStart && section.slotEnd ? `${section.slotStart}-${section.slotEnd}` : "-"}</TableCell>
-                      <TableCell className="text-xs font-semibold text-blue-600">{section.room || "Chưa phân"}</TableCell>
+                      <TableCell className="text-xs font-semibold text-blue-600">{section.classroomCode || section.room || "Chưa phân"}</TableCell>
                       <TableCell className="text-xs text-gray-600">{section.studentCount ?? 0}</TableCell>
                       <TableCell>
                         <Badge className={STATUS_BADGE[status] || "bg-gray-100 text-gray-700 border-0"}>
