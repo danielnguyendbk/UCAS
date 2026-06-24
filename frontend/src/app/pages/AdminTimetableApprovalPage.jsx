@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
+  AlertTriangle,
   Calendar,
   Check,
   Eye,
@@ -9,6 +10,7 @@ import {
   Pencil,
   RefreshCw,
   Search,
+  Scissors,
   ShieldCheck,
   UnlockKeyhole,
 } from "lucide-react";
@@ -105,19 +107,187 @@ const roomLabel = (room) => {
   return room.roomName || room.name || `Phòng ${room.id}`;
 };
 
+const hasSplitSuggestion = (section) =>
+  String(section?.note || "").toUpperCase().includes("[SPLIT_SUGGESTION]");
+
+const isCapacityConflict = (section) =>
+  String(section?.conflictReason || "").toUpperCase() === "CAPACITY_EXCEEDED";
+
+const isSplitCandidate = (section) =>
+  Boolean(section?.scheduleId && (isCapacityConflict(section) || hasSplitSuggestion(section)));
+
+const getRawSectionCode = (section) => {
+  if (section?.sectionCode) return section.sectionCode;
+  const classCode = String(section?.classCode || "");
+  return classCode.includes(".L") ? classCode.split(".L").slice(1).join(".L") : classCode;
+};
+
 const detailRows = (section) => [
   ["Mã môn", getCourseCode(section)],
+  ["Mã nhóm", section.sectionCode || getRawSectionCode(section) || "—"],
   ["Tên môn", section.courseName || "—"],
   ["Lớp", section.classCodes || section.classNames || "—"],
   ["Giảng viên", section.lecturerName || "—"],
   ["Thứ / tiết", `${section.day || "—"} / ${section.slotStart ?? "—"}-${section.slotEnd ?? "—"}`],
   ["Tuần học", `${section.fromWeekNo ?? "—"}-${section.toWeekNo ?? "—"}`],
   ["Phòng", section.classroomCode || section.room || "Chưa phân"],
+  ["Loại phòng yêu cầu", section.requiredRoomType || "—"],
+  ["Sức chứa phòng hiện tại", section.roomCapacity ?? "—"],
   ["Trạng thái lịch", section.scheduleStatus || "—"],
   ["Trạng thái kiểm tra", section.validationStatus || "NOT_CHECKED"],
   ["Lý do xung đột", section.conflictReason || "—"],
   ["Ghi chú xử lý", section.note || "—"],
 ];
+
+const createSplitParts = (section, count) => {
+  const total = Number(section?.studentCount || 0);
+  const base = Math.floor(total / count);
+  const remainder = total % count;
+  const courseCode = getCourseCode(section);
+  const rawCode = getRawSectionCode(section);
+  return Array.from({ length: count }, (_, index) => ({
+    sectionCode: `${courseCode}.L${rawCode}-${index + 1}`,
+    studentCount: String(base + (index < remainder ? 1 : 0)),
+    lecturerId: section?.lecturerId ? String(section.lecturerId) : "",
+    dayOfWeek: section?.dayCode || "MON",
+    slotStartId: section?.slotStartId ? String(section.slotStartId) : "",
+    slotEndId: section?.slotEndId ? String(section.slotEndId) : "",
+  }));
+};
+
+const SplitSectionDialog = ({
+  section,
+  open,
+  onOpenChange,
+  lecturers,
+  timeSlots,
+  onSubmit,
+  isSubmitting,
+}) => {
+  const [partCount, setPartCount] = useState("2");
+  const [parts, setParts] = useState([]);
+  const [roomCheck, setRoomCheck] = useState({ loading: false, rooms: [] });
+
+  useEffect(() => {
+    if (!open || !section) return;
+    setPartCount("2");
+    setParts(createSplitParts(section, 2));
+    let mounted = true;
+    const checkLargerRooms = async () => {
+      setRoomCheck({ loading: true, rooms: [] });
+      try {
+        const response = await httpClient.get("/api/staff/allocations/available-rooms", {
+          params: {
+            semesterId: section.semesterId,
+            dayOfWeek: section.dayCode,
+            slot: section.slotStart,
+            expectedAttendees: section.studentCount,
+            roomType: section.requiredRoomType || "",
+            scheduleId: section.scheduleId,
+          },
+        });
+        if (mounted) setRoomCheck({ loading: false, rooms: unwrapList(response) });
+      } catch {
+        if (mounted) setRoomCheck({ loading: false, rooms: [] });
+      }
+    };
+    checkLargerRooms();
+    return () => { mounted = false; };
+  }, [open, section]);
+
+  const totalStudents = parts.reduce((sum, part) => sum + Number(part.studentCount || 0), 0);
+  const expectedStudents = Number(section?.studentCount || 0);
+  const totalMatches = totalStudents === expectedStudents;
+  const updatePart = (index, field, value) => {
+    setParts((current) => current.map((part, partIndex) => (
+      partIndex === index ? { ...part, [field]: value } : part
+    )));
+  };
+  const changePartCount = (value) => {
+    setPartCount(value);
+    setParts(createSplitParts(section, Number(value)));
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>Tách lớp do vượt sức chứa</DialogTitle>
+          <DialogDescription>
+            Chia sĩ số và tạo các lịch mới ở trạng thái chờ phân phòng. Enrollment sinh viên không được chia tự động.
+          </DialogDescription>
+        </DialogHeader>
+
+        {section && (
+          <>
+            <div className="grid gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm sm:grid-cols-4">
+              <div><p className="text-xs text-gray-500">Học phần</p><p className="mt-1 font-semibold">{section.classCode}</p></div>
+              <div><p className="text-xs text-gray-500">Sĩ số gốc</p><p className="mt-1 font-semibold">{section.studentCount ?? 0} sinh viên</p></div>
+              <div><p className="text-xs text-gray-500">Phòng hiện tại</p><p className="mt-1 font-semibold">{section.classroomCode || "Chưa phân"} · {section.roomCapacity ?? "—"} chỗ</p></div>
+              <div><p className="text-xs text-gray-500">Loại phòng yêu cầu</p><p className="mt-1 font-semibold">{section.requiredRoomType || "—"}</p></div>
+              <div className="sm:col-span-2"><p className="text-xs text-gray-500">Conflict</p><p className="mt-1 font-medium text-red-700">{section.conflictReason || "Đề xuất học vụ"}</p></div>
+              <div className="sm:col-span-2"><p className="text-xs text-gray-500">Ghi chú Staff</p><p className="mt-1 font-medium">{section.note || "Không có ghi chú"}</p></div>
+            </div>
+
+            <div className={`rounded-lg border px-4 py-3 text-sm ${roomCheck.rooms.length > 0 ? "border-blue-200 bg-blue-50 text-blue-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+              {roomCheck.loading
+                ? "Đang kiểm tra phòng lớn hơn khả dụng..."
+                : roomCheck.rooms.length > 0
+                  ? `Có ${roomCheck.rooms.length} phòng đủ sức chứa đang khả dụng. Nên cân nhắc đổi phòng trước khi tách lớp.`
+                  : "Không tìm thấy phòng cùng loại đủ sức chứa ở thời gian hiện tại; tách lớp là phương án phù hợp."}
+            </div>
+
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div className="w-52 space-y-1.5">
+                <Label>Số nhóm sau tách</Label>
+                <Select value={partCount} onValueChange={changePartCount}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="2">2 nhóm</SelectItem><SelectItem value="3">3 nhóm</SelectItem></SelectContent>
+                </Select>
+              </div>
+              <Button type="button" variant="outline" onClick={() => setParts(createSplitParts(section, Number(partCount)))}>
+                Chia đều sĩ số
+              </Button>
+            </div>
+
+            <div className="space-y-3">
+              {parts.map((part, index) => (
+                <div key={index} className="rounded-xl border border-gray-200 p-4">
+                  <div className="mb-3 flex items-center justify-between"><p className="font-semibold text-gray-900">Nhóm {index + 1}</p><Badge className="border-0 bg-slate-100 text-slate-700">{part.studentCount || 0} SV</Badge></div>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                    <div className="space-y-1.5 lg:col-span-2"><Label>Mã nhóm</Label><Input value={part.sectionCode} maxLength={40} onChange={(event) => updatePart(index, "sectionCode", event.target.value)} /></div>
+                    <div className="space-y-1.5"><Label>Sĩ số</Label><Input type="number" min="1" value={part.studentCount} onChange={(event) => updatePart(index, "studentCount", event.target.value)} /></div>
+                    <div className="space-y-1.5 lg:col-span-2"><Label>Giảng viên</Label><Select value={part.lecturerId} onValueChange={(value) => updatePart(index, "lecturerId", value)}><SelectTrigger><SelectValue placeholder="Chọn giảng viên" /></SelectTrigger><SelectContent>{lecturers.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.name || item.staffCode}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-1.5"><Label>Thứ</Label><Select value={part.dayOfWeek} onValueChange={(value) => updatePart(index, "dayOfWeek", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{DAY_OPTIONS.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-1.5 lg:col-span-2"><Label>Tiết bắt đầu</Label><Select value={part.slotStartId} onValueChange={(value) => updatePart(index, "slotStartId", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{timeSlots.map((item) => <SelectItem key={item.slotId} value={String(item.slotId)}>Tiết {item.slotNo} ({String(item.startTime).slice(0, 5)})</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-1.5 lg:col-span-2"><Label>Tiết kết thúc</Label><Select value={part.slotEndId} onValueChange={(value) => updatePart(index, "slotEndId", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{timeSlots.map((item) => <SelectItem key={item.slotId} value={String(item.slotId)}>Tiết {item.slotNo} ({String(item.endTime).slice(0, 5)})</SelectItem>)}</SelectContent></Select></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <span className="inline-flex items-center gap-2"><AlertTriangle className="h-4 w-4" />Nếu giữ cùng giảng viên và cùng thời gian, hệ thống có thể phát sinh conflict giảng viên.</span>
+              <span className={totalMatches ? "font-semibold text-emerald-700" : "font-semibold text-red-700"}>Tổng: {totalStudents}/{expectedStudents} SV</span>
+            </div>
+          </>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" disabled={isSubmitting} onClick={() => onOpenChange(false)}>Hủy</Button>
+          <Button
+            disabled={isSubmitting || !totalMatches || parts.some((part) => !part.sectionCode.trim() || !part.lecturerId || !part.slotStartId || !part.slotEndId)}
+            onClick={() => onSubmit(parts)}
+            className="bg-amber-600 hover:bg-amber-700"
+          >
+            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Scissors className="mr-2 h-4 w-4" />}
+            Xác nhận tách lớp
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 const AdminTimetableApprovalPage = () => {
   const [sections, setSections] = useState([]);
@@ -142,6 +312,7 @@ const AdminTimetableApprovalPage = () => {
   const [detailSection, setDetailSection] = useState(null);
   const [editSection, setEditSection] = useState(null);
   const [editForm, setEditForm] = useState(null);
+  const [splitSection, setSplitSection] = useState(null);
   const [isReopenConfirmOpen, setIsReopenConfirmOpen] = useState(false);
 
   useEffect(() => {
@@ -340,6 +511,42 @@ const AdminTimetableApprovalPage = () => {
     }
   };
 
+  const saveSplit = async (parts) => {
+    if (!splitSection?.scheduleId) return;
+    setIsActionRunning(true);
+    setActionMessage(null);
+    try {
+      await httpClient.post(
+        `/api/admin/class-sections/${splitSection.id}/split`,
+        {
+          scheduleId: splitSection.scheduleId,
+          clearRoomAssignments: true,
+          parts: parts.map((part) => ({
+            sectionCode: part.sectionCode.trim(),
+            studentCount: Number(part.studentCount),
+            lecturerId: Number(part.lecturerId),
+            dayOfWeek: part.dayOfWeek,
+            slotStartId: Number(part.slotStartId),
+            slotEndId: Number(part.slotEndId),
+          })),
+        },
+      );
+      setSplitSection(null);
+      setActionMessage({
+        tone: "success",
+        text: "Đã tách lớp. Vui lòng phân phòng/kiểm tra xung đột lại.",
+      });
+      refreshData();
+    } catch (requestError) {
+      setActionMessage({
+        tone: "error",
+        text: getApiError(requestError, "Không thể tách lớp học phần.").message,
+      });
+    } finally {
+      setIsActionRunning(false);
+    }
+  };
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-start">
@@ -461,6 +668,7 @@ const AdminTimetableApprovalPage = () => {
               <TableBody>
                 {pagedSections.map((section) => {
                   const status = getStatus(section);
+                  const splitCandidate = isSplitCandidate(section);
                   return <TableRow key={`${section.id}-${section.scheduleId || "none"}`}>
                     <TableCell className="text-xs font-semibold">{getCourseCode(section)}</TableCell>
                     <TableCell className="text-xs">{section.courseName || "—"}</TableCell>
@@ -470,10 +678,11 @@ const AdminTimetableApprovalPage = () => {
                     <TableCell className="text-xs">{section.slotStart && section.slotEnd ? `${section.slotStart}-${section.slotEnd}` : "—"}</TableCell>
                     <TableCell className="text-xs font-semibold text-blue-700">{section.classroomCode || section.room || "Chưa phân"}</TableCell>
                     <TableCell className="text-xs">{section.studentCount ?? 0}</TableCell>
-                    <TableCell><Badge className={STATUS_BADGE[status]}>{STATUS_LABEL[status] || status}</Badge></TableCell>
+                    <TableCell><div className="flex flex-col items-start gap-1"><Badge className={STATUS_BADGE[status]}>{STATUS_LABEL[status] || status}</Badge>{hasSplitSuggestion(section) && <Badge className="border-0 bg-amber-100 text-amber-800">Có đề xuất</Badge>}</div></TableCell>
                     <TableCell><div className="flex justify-end gap-1">
                       <Button variant="ghost" size="xs" onClick={() => setDetailSection(section)} title="Xem chi tiết"><Eye className="h-3.5 w-3.5" /></Button>
                       <Button variant="ghost" size="xs" disabled={!canEdit || !section.scheduleId} onClick={() => openEdit(section)} title={canEdit ? "Sửa lịch" : "Chỉ sửa khi workflow là DRAFT hoặc CONFLICT"}><Pencil className="h-3.5 w-3.5" /></Button>
+                      {splitCandidate && <Button variant="ghost" size="xs" disabled={!canEdit} onClick={() => setSplitSection(section)} title={canEdit ? "Tách lớp do vượt sức chứa" : "Mở lại chỉnh sửa trước khi tách lớp"} className="text-amber-700 hover:bg-amber-50 hover:text-amber-800"><Scissors className="mr-1 h-3.5 w-3.5" />Tách lớp</Button>}
                     </div></TableCell>
                   </TableRow>;
                 })}
@@ -490,9 +699,20 @@ const AdminTimetableApprovalPage = () => {
 
       <Dialog open={Boolean(detailSection)} onOpenChange={(open) => !open && setDetailSection(null)}>
         <DialogContent><DialogHeader><DialogTitle>Chi tiết lịch học</DialogTitle><DialogDescription>Dữ liệu lịch và kết quả kiểm tra gần nhất.</DialogDescription></DialogHeader>
+          {detailSection && hasSplitSuggestion(detailSection) && <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><p className="font-semibold">Có đề xuất tách lớp từ Staff</p><p className="mt-1">{detailSection.note}</p></div>}
           {detailSection && <dl className="grid grid-cols-[140px_1fr] gap-x-4 gap-y-3 text-sm">{detailRows(detailSection).map(([label, value]) => <div key={label} className="contents"><dt className="font-medium text-gray-500">{label}</dt><dd className="text-gray-900">{value}</dd></div>)}</dl>}
         </DialogContent>
       </Dialog>
+
+      <SplitSectionDialog
+        section={splitSection}
+        open={Boolean(splitSection)}
+        onOpenChange={(open) => !open && !isActionRunning && setSplitSection(null)}
+        lecturers={lecturers}
+        timeSlots={timeSlots}
+        onSubmit={saveSplit}
+        isSubmitting={isActionRunning}
+      />
 
       <Dialog open={Boolean(editSection)} onOpenChange={(open) => { if (!open && !isActionRunning) { setEditSection(null); setEditForm(null); } }}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl"><DialogHeader><DialogTitle>Sửa lịch học</DialogTitle><DialogDescription>Sau khi lưu, kết quả kiểm tra được reset về NOT_CHECKED.</DialogDescription></DialogHeader>

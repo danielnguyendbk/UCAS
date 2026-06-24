@@ -15,6 +15,7 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
         SELECT
             cs.section_id AS id,
             sch.schedule_id AS scheduleId,
+            cs.section_code AS sectionCode,
             cs.semester_id AS semesterId,
             cs.course_id AS courseId,
             cs.lecturer_id AS lecturerId,
@@ -24,6 +25,7 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
             NULL AS facultyCode,
             d.department_code AS departmentCode,
             c.credits AS credits,
+            c.required_room_type AS requiredRoomType,
             cs.enrolled_count AS studentCount,
             l.full_name AS lecturerName,
 
@@ -67,6 +69,7 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
             END AS schedule,
 
             cr.classroom_id AS classroomId,
+            cr.capacity AS roomCapacity,
             CASE
                 WHEN cr.classroom_id IS NULL THEN NULL
                 ELSE CONCAT(b.building_code, '-', cr.room_number)
@@ -267,6 +270,7 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
     interface StaffSectionTableProjection {
         Integer getId();
         Integer getScheduleId();
+        String getSectionCode();
         String getClassCode();
         String getCourseName();
         String getFacultyCode();
@@ -276,6 +280,7 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
         Integer getLecturerId();
         Integer getMaxCapacity();
         Integer getCredits();
+        String getRequiredRoomType();
         Integer getStudentCount();
         String getLecturerName();
         String getDay();
@@ -289,6 +294,7 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
         Integer getToWeekNo();
         String getSchedule();
         Integer getClassroomId();
+        Integer getRoomCapacity();
         String getRoom();
         String getClassroomCode();
         String getScheduleStatus();

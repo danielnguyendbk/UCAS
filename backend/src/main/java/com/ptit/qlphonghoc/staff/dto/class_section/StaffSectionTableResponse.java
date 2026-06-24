@@ -5,6 +5,7 @@ import java.util.List;
 public class StaffSectionTableResponse {
     private Integer id;
     private Integer scheduleId;
+    private String sectionCode;
     private String classCode;
     private String courseName;
     private String facultyCode;
@@ -36,6 +37,8 @@ public class StaffSectionTableResponse {
     private Integer courseId;
     private Integer lecturerId;
     private Integer maxCapacity;
+    private String requiredRoomType;
+    private Integer roomCapacity;
     private List<Integer> classIds;
     private String classCodes;
     private String classNames;
@@ -45,6 +48,9 @@ public class StaffSectionTableResponse {
 
     public Integer getScheduleId() { return scheduleId; }
     public void setScheduleId(Integer scheduleId) { this.scheduleId = scheduleId; }
+
+    public String getSectionCode() { return sectionCode; }
+    public void setSectionCode(String sectionCode) { this.sectionCode = sectionCode; }
 
     public String getClassCode() { return classCode; }
     public void setClassCode(String classCode) { this.classCode = classCode; }
@@ -138,6 +144,12 @@ public class StaffSectionTableResponse {
 
     public Integer getMaxCapacity() { return maxCapacity; }
     public void setMaxCapacity(Integer maxCapacity) { this.maxCapacity = maxCapacity; }
+
+    public String getRequiredRoomType() { return requiredRoomType; }
+    public void setRequiredRoomType(String requiredRoomType) { this.requiredRoomType = requiredRoomType; }
+
+    public Integer getRoomCapacity() { return roomCapacity; }
+    public void setRoomCapacity(Integer roomCapacity) { this.roomCapacity = roomCapacity; }
 
     public List<Integer> getClassIds() { return classIds; }
     public void setClassIds(List<Integer> classIds) { this.classIds = classIds; }

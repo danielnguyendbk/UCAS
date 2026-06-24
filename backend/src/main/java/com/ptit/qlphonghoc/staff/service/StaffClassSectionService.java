@@ -274,11 +274,13 @@ public class StaffClassSectionService implements ClassSectionTableReader {
 
         response.setId(projection.getId());
         response.setScheduleId(projection.getScheduleId());
+        response.setSectionCode(projection.getSectionCode());
         response.setClassCode(projection.getClassCode());
         response.setCourseName(projection.getCourseName());
         response.setFacultyCode(projection.getFacultyCode());
         response.setDepartmentCode(projection.getDepartmentCode());
         response.setCredits(projection.getCredits());
+        response.setRequiredRoomType(projection.getRequiredRoomType());
         response.setStudentCount(projection.getStudentCount());
         response.setSemesterId(projection.getSemesterId());
         response.setCourseId(projection.getCourseId());
@@ -299,6 +301,7 @@ public class StaffClassSectionService implements ClassSectionTableReader {
         response.setToWeekNo(projection.getToWeekNo());
         response.setSchedule(projection.getSchedule());
         response.setClassroomId(projection.getClassroomId());
+        response.setRoomCapacity(projection.getRoomCapacity());
         response.setRoom(projection.getRoom());
         response.setClassroomCode(projection.getClassroomCode());
         response.setScheduleStatus(projection.getScheduleStatus());

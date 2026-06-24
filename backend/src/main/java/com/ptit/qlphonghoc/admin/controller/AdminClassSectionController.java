@@ -1,6 +1,9 @@
 package com.ptit.qlphonghoc.admin.controller;
 
 import com.ptit.qlphonghoc.admin.dto.AdminScheduleUpdateRequest;
+import com.ptit.qlphonghoc.admin.dto.AdminSplitSectionRequest;
+import com.ptit.qlphonghoc.admin.dto.AdminSplitSectionResponse;
+import com.ptit.qlphonghoc.admin.service.AdminSectionSplitService;
 import com.ptit.qlphonghoc.admin.service.AdminScheduleEditService;
 import com.ptit.qlphonghoc.auth.security.CustomUserDetails;
 import com.ptit.qlphonghoc.staff.dto.class_section.CreateSectionRequest;
@@ -31,13 +34,16 @@ public class AdminClassSectionController {
 
     private final StaffClassSectionService classSectionService;
     private final AdminScheduleEditService scheduleEditService;
+    private final AdminSectionSplitService sectionSplitService;
 
     public AdminClassSectionController(
             StaffClassSectionService classSectionService,
-            AdminScheduleEditService scheduleEditService
+            AdminScheduleEditService scheduleEditService,
+            AdminSectionSplitService sectionSplitService
     ) {
         this.classSectionService = classSectionService;
         this.scheduleEditService = scheduleEditService;
+        this.sectionSplitService = sectionSplitService;
     }
 
     @GetMapping
@@ -80,6 +86,17 @@ public class AdminClassSectionController {
     ) {
         return ResponseEntity.ok(
                 scheduleEditService.update(sectionId, scheduleId, request, userDetails.getUserId())
+        );
+    }
+
+    @PostMapping("/{sectionId}/split")
+    public ResponseEntity<AdminSplitSectionResponse> splitSection(
+            @PathVariable Integer sectionId,
+            @Valid @RequestBody AdminSplitSectionRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        return ResponseEntity.ok(
+                sectionSplitService.split(sectionId, request, userDetails.getUserId())
         );
     }
 
