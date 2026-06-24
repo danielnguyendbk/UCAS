@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "react-router";
 import {
   Search,
   Plus,
@@ -13,6 +14,7 @@ import {
   ChevronRight,
   Edit,
   Trash2,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -95,9 +97,12 @@ const getClassroomLabel = (room) => {
 };
 
 export const StaffSectionsPage = () => {
+  const location = useLocation();
+  const importedSemesterId = location.state?.semesterId;
   // --- STATE QUẢN LÝ DỮ LIỆU & BẢNG ---
   const [sections, setSections] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedSection, setSelectedSection] = useState(null);
 
   // --- STATE QUẢN LÝ DANH MỤC (Lấy từ Database) ---
@@ -175,8 +180,14 @@ export const StaffSectionsPage = () => {
       const semesters = semRes.data.data || [];
       setSemestersList(semesters);
       const activeSemesterId = getActiveSemesterId(semesters);
-      if (activeSemesterId) {
-        setFilterSemester(activeSemesterId);
+      const requestedSemesterExists = semesters.some(
+        (semester) => String(semester.id) === String(importedSemesterId),
+      );
+      const initialSemesterId = requestedSemesterExists
+        ? String(importedSemesterId)
+        : activeSemesterId;
+      if (initialSemesterId) {
+        setFilterSemester(initialSemesterId);
       }
       setCoursesList(couRes.data.data || []);
       setLecturersList(lecRes.data.data || []);
@@ -189,8 +200,9 @@ export const StaffSectionsPage = () => {
   };
 
   // Gọi API lấy danh sách Lớp học phần
-  const fetchSections = async () => {
-    setIsLoading(true);
+  const fetchSections = async (background = false) => {
+    if (background) setIsRefreshing(true);
+    else setIsLoading(true);
     try {
       const response = await httpClient.get("/api/admin/class-sections");
       const rawData = Array.isArray(response.data)
@@ -238,8 +250,10 @@ export const StaffSectionsPage = () => {
       setSelectedSection(null);
     } catch (error) {
       console.error("Lỗi kết nối API:", error);
+      toast.error("Không thể tải dữ liệu lớp học phần.");
     } finally {
-      setIsLoading(false);
+      if (background) setIsRefreshing(false);
+      else setIsLoading(false);
     }
   };
 
@@ -498,6 +512,16 @@ export const StaffSectionsPage = () => {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 text-sm"
+            disabled={isRefreshing}
+            onClick={() => fetchSections(true)}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+            Làm mới
+          </Button>
           {/* NÚT SỬA */}
           <Button
             variant="outline"
@@ -519,6 +543,13 @@ export const StaffSectionsPage = () => {
           </Button>
         </div>
       </div>
+
+      {location.state?.refreshAfterImport && (
+        <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+          <CheckCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>Dữ liệu được tải lại từ database sau import. Bộ lọc đang mở đúng học kỳ vừa áp dụng.</span>
+        </div>
+      )}
 
       {/* THỐNG KÊ */}
       <div className="flex flex-wrap gap-2">

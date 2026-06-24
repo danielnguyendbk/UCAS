@@ -120,11 +120,12 @@ public class TimetableImportApplyService {
             ImportApplyResponse response = counters.toResponse(batchCode, importMode, lockedSemester, preview.totalRows());
             auditLogger.logTimetableImport(userId, lockedSemester.id(), batchCode, auditSummary(response, source));
 
-            String versionSummary = String.format("Nhập TKB: tạo mới %d lớp, cập nhật %d lớp, tạo mới %d lịch học, cập nhật %d lịch học, hủy %d lịch học (File: %s, Chế độ: %s).",
+            String versionSummary = String.format("Nhập TKB: tạo mới %d lớp, cập nhật %d lớp, tạo mới %d lịch học, cập nhật %d lịch học, %d lịch chưa phân phòng, hủy %d lịch học (File: %s, Chế độ: %s).",
                     response.createdSections(),
                     response.updatedSections(),
                     response.createdSchedules(),
                     response.updatedSchedules(),
+                    response.unassignedSchedules(),
                     response.cancelledSchedules(),
                     source,
                     importMode.name());
@@ -203,6 +204,7 @@ public class TimetableImportApplyService {
             classroomId = null;
         }
         String scheduleStatus = classroomId == null ? "UNASSIGNED" : "ASSIGNED";
+        if (classroomId == null) counters.unassignedSchedules++;
         ScheduleWrite scheduleWrite = new ScheduleWrite(
                 sectionId,
                 classroomId,
@@ -291,6 +293,7 @@ public class TimetableImportApplyService {
         summary.put("cancelledSections", response.cancelledSections());
         summary.put("unchangedRows", response.unchangedRows());
         summary.put("retainedClassroomAssignments", response.retainedClassroomAssignments());
+        summary.put("unassignedSchedules", response.unassignedSchedules());
         summary.put("timetableStatus", response.timetableStatus());
         return summary;
     }
@@ -354,6 +357,7 @@ public class TimetableImportApplyService {
         private int cancelledSections;
         private int unchangedRows;
         private int retainedClassroomAssignments;
+        private int unassignedSchedules;
 
         private ImportApplyResponse toResponse(String batchCode, TimetableImportMode importMode, SemesterRef semester, int totalRows) {
             return new ImportApplyResponse(
@@ -371,6 +375,7 @@ public class TimetableImportApplyService {
                     unchangedRows,
                     0,
                     retainedClassroomAssignments,
+                    unassignedSchedules,
                     "DRAFT"
             );
         }

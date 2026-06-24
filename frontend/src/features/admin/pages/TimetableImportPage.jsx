@@ -25,6 +25,12 @@ import {
 } from "@/features/admin/services/timetableImportService";
 
 const PAGE_SIZES = [10, 20, 50];
+const semesterIdOf = (semester) => semester?.id ?? semester?.semester_id;
+const semesterCodeOf = (semester) => semester?.code ?? semester?.semester_code ?? "—";
+const semesterNameOf = (semester) => semester?.name ?? semester?.semester_name ?? semesterCodeOf(semester);
+const academicStatusOf = (semester) => String(semester?.status ?? "").toUpperCase();
+const timetableStatusOf = (semester) => String(semester?.timetable_status ?? semester?.timetableStatus ?? "DRAFT").toUpperCase();
+const isEditableSemester = (semester) => !["PUBLISHED", "LOCKED"].includes(timetableStatusOf(semester));
 const IMPORT_MODES = {
   MERGE_ONLY: {
     label: "Merge only",
@@ -72,12 +78,19 @@ export default function TimetableImportPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
+  const selectedSemester = useMemo(
+    () => semesters.find((item) => String(semesterIdOf(item)) === semesterId),
+    [semesters, semesterId],
+  );
+
   useEffect(() => {
     getImportSemesters()
       .then((items) => {
         setSemesters(items);
-        const editable = items.find((item) => !["PUBLISHED", "LOCKED"].includes(String(item.timetable_status ?? item.timetableStatus).toUpperCase()));
-        if (editable) setSemesterId(String(editable.id ?? editable.semester_id));
+        const editableItems = items.filter(isEditableSemester);
+        const active = editableItems.find((item) => academicStatusOf(item) === "ACTIVE");
+        const defaultSemester = active ?? editableItems[0];
+        if (defaultSemester) setSemesterId(String(semesterIdOf(defaultSemester)));
       })
       .catch(() => toast.error("Không thể tải danh sách học kỳ."));
   }, []);
@@ -129,7 +142,7 @@ export default function TimetableImportPage() {
       const result = await applyTimetableImport({ file, semesterId, mode: importMode });
       setApplyResult(result);
       setConfirmOpen(false);
-      toast.success("Đã áp dụng import thành công. Học kỳ được đưa về trạng thái DRAFT.");
+      toast.success(`Đã import vào ${result.semesterCode || semesterCodeOf(selectedSemester)} và đưa thời khóa biểu về DRAFT.`);
     } catch (error) {
       const apiError = getApiError(error, "Không thể áp dụng file import.");
       if (apiError.errorCode === "IMPORT_HAS_ERRORS") {
@@ -173,8 +186,14 @@ export default function TimetableImportPage() {
               <SelectTrigger className="bg-slate-50"><SelectValue placeholder="Chọn học kỳ" /></SelectTrigger>
               <SelectContent>
                 {semesters.map((semester) => (
-                  <SelectItem key={semester.id ?? semester.semester_id} value={String(semester.id ?? semester.semester_id)}>
-                    {semester.name ?? semester.semester_name ?? semester.code}
+                  <SelectItem
+                    key={semesterIdOf(semester)}
+                    value={String(semesterIdOf(semester))}
+                    disabled={!isEditableSemester(semester)}
+                  >
+                    {semesterNameOf(semester)} · {semesterCodeOf(semester)}
+                    {academicStatusOf(semester) === "ACTIVE" ? " · Đang hoạt động" : ""}
+                    {!isEditableSemester(semester) ? " · Chỉ xem" : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -273,7 +292,10 @@ export default function TimetableImportPage() {
                   <div className="flex items-center gap-2 text-sm font-semibold text-emerald-900">
                     <CheckCircle2 className="h-5 w-5" /> Import đã được commit
                   </div>
-                  <p className="mt-1 font-mono text-xs text-emerald-700">{applyResult.importBatchCode} · {applyResult.semesterCode} · DRAFT</p>
+                  <p className="mt-1 text-xs text-emerald-800">
+                    Học kỳ: <strong>{semesterNameOf(selectedSemester)}</strong> · <span className="font-mono">{applyResult.semesterCode}</span> · DRAFT
+                  </p>
+                  <p className="mt-1 font-mono text-[11px] text-emerald-700">Batch {applyResult.importBatchCode}</p>
                 </div>
                 <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-emerald-800">
                   <span>Mode: <strong>{applyResult.importMode}</strong></span>
@@ -281,13 +303,27 @@ export default function TimetableImportPage() {
                   <span>Cập nhật lớp: <strong>{applyResult.updatedSections}</strong></span>
                   <span>Tạo lịch: <strong>{applyResult.createdSchedules}</strong></span>
                   <span>Cập nhật lịch: <strong>{applyResult.updatedSchedules}</strong></span>
+                  <span>Chưa phân phòng: <strong>{applyResult.unassignedSchedules ?? 0}</strong></span>
                   <span>Hủy mềm lịch: <strong>{applyResult.cancelledSchedules ?? 0}</strong></span>
                   <span>Giữ phòng cũ: <strong>{applyResult.retainedClassroomAssignments}</strong></span>
                 </div>
-                <Button variant="outline" onClick={() => navigate(APP_ROUTES.adminAutoAssignment)} className="border-emerald-300 bg-white text-emerald-800 hover:bg-emerald-100">
-                  Chuyển sang phân phòng <ArrowRight className="ml-2 h-4 w-4" />
+                <Button
+                  variant="outline"
+                  onClick={() => navigate(APP_ROUTES.adminSections, { state: { semesterId: String(applyResult.semesterId), refreshAfterImport: true } })}
+                  className="border-emerald-300 bg-white text-emerald-800 hover:bg-emerald-100"
+                >
+                  Xem lớp học phần <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </div>
+              {(applyResult.retainedClassroomAssignments ?? 0) > 0 && (
+                <div className="mt-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>Một số lịch giữ nguyên phòng cũ vì file không chỉ định phòng và natural key không thay đổi.</span>
+                </div>
+              )}
+              <p className="mt-3 text-xs text-emerald-800">
+                Bước tiếp theo: Admin kiểm tra lớp học phần; Staff xử lý các lịch chưa phân phòng, validate và gửi duyệt.
+              </p>
             </section>
           )}
 
@@ -378,6 +414,7 @@ export default function TimetableImportPage() {
           </DialogHeader>
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
             <p><span className="font-medium text-slate-800">File:</span> {file?.name}</p>
+            <p className="mt-1"><span className="font-medium text-slate-800">Học kỳ:</span> {semesterNameOf(selectedSemester)} · <span className="font-mono">{semesterCodeOf(selectedSemester)}</span></p>
             <p className="mt-1"><span className="font-medium text-slate-800">Mode:</span> {IMPORT_MODES[importMode]?.label} — {IMPORT_MODES[importMode]?.description}</p>
             <p className="mt-1"><span className="font-medium text-slate-800">Preview:</span> {preview?.importBatchCode} · {preview?.totalRows ?? 0} dòng · {preview?.warningRows ?? 0} cảnh báo</p>
             <p className="mt-2 text-amber-700">
