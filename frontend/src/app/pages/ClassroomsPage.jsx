@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import ExcelImportActions from "@/features/admin/components/ExcelImportActions";
 import {
   Users,
   MapPin,
@@ -315,13 +316,17 @@ export const ClassroomsPage = () => {
           </p>
         </div>
 
-        <Button
-          className="bg-blue-600 hover:bg-blue-700"
-          onClick={openCreateDialog}
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Thêm phòng học
-        </Button>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <ExcelImportActions type="classroom" onImported={loadData} />
+
+          <Button
+            className="bg-blue-600 hover:bg-blue-700"
+            onClick={openCreateDialog}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Thêm phòng học
+          </Button>
+        </div>
       </div>
 
       {errorMessage && (
