@@ -22,7 +22,8 @@ public record AdminSplitSectionRequest(
             Integer slotStartId,
             Integer slotStartNo,
             Integer slotEndId,
-            Integer slotEndNo
+            Integer slotEndNo,
+            Integer classroomId
     ) {
     }
 }

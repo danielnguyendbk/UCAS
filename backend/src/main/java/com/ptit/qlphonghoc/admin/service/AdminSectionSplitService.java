@@ -3,9 +3,16 @@ package com.ptit.qlphonghoc.admin.service;
 import com.ptit.qlphonghoc.admin.dto.AdminSplitSectionRequest;
 import com.ptit.qlphonghoc.admin.dto.AdminSplitSectionRequest.SplitPart;
 import com.ptit.qlphonghoc.admin.dto.AdminSplitSectionResponse;
+import com.ptit.qlphonghoc.admin.dto.AdminSplitSuggestionRequest;
+import com.ptit.qlphonghoc.admin.dto.AdminSplitSuggestionResponse;
+import com.ptit.qlphonghoc.admin.dto.AdminSplitSuggestionResponse.SplitPartSuggestion;
+import com.ptit.qlphonghoc.admin.dto.AdminSplitSuggestionResponse.SplitSuggestion;
 import com.ptit.qlphonghoc.admin.repository.AdminSectionSplitRepository;
+import com.ptit.qlphonghoc.admin.repository.AdminSectionSplitRepository.RoomRef;
 import com.ptit.qlphonghoc.admin.repository.AdminSectionSplitRepository.SlotRef;
+import com.ptit.qlphonghoc.admin.repository.AdminSectionSplitRepository.SlotRangeRef;
 import com.ptit.qlphonghoc.admin.repository.AdminSectionSplitRepository.SplitContext;
+import com.ptit.qlphonghoc.admin.repository.AdminSectionSplitRepository.WeekBoundsRef;
 import com.ptit.qlphonghoc.audit.enumtype.AuditAction;
 import com.ptit.qlphonghoc.audit.service.WorkflowAuditLogger;
 import com.ptit.qlphonghoc.common.exception.BadRequestException;
@@ -17,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -28,6 +36,8 @@ public class AdminSectionSplitService {
             TimetableWorkflowStatus.DRAFT.name(),
             TimetableWorkflowStatus.CONFLICT.name()
     );
+    private static final List<String> DAY_ORDER = List.of("MON", "TUE", "WED", "THU", "FRI", "SAT");
+    private static final int MAX_SUGGESTIONS = 5;
 
     private final AdminSectionSplitRepository repository;
     private final WorkflowAuditLogger auditLogger;
@@ -38,6 +48,80 @@ public class AdminSectionSplitService {
     ) {
         this.repository = repository;
         this.auditLogger = auditLogger;
+    }
+
+    @Transactional(readOnly = true)
+    public AdminSplitSuggestionResponse suggest(
+            Integer sectionId,
+            AdminSplitSuggestionRequest request
+    ) {
+        SplitContext context = repository.findContext(sectionId, request.scheduleId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "SCHEDULE_NOT_FOUND",
+                        "Khong tim thay lich thuoc lop hoc phan can tach."
+                ));
+        String workflowStatus = context.timetableStatus().toUpperCase(Locale.ROOT);
+        if (!SPLITTABLE_STATUSES.contains(workflowStatus)) {
+            throw new BadRequestException(
+                    "TIMETABLE_NOT_EDITABLE",
+                    "Chi duoc tach lop khi thoi khoa bieu o trang thai DRAFT hoac CONFLICT."
+            );
+        }
+        if (request.parts().size() != request.partCount()) {
+            throw new BadRequestException("INVALID_SPLIT_PARTS", "So nhom va danh sach nhom khong khop.");
+        }
+
+        List<SuggestionInput> inputs = normalizeSuggestionInputs(context, request);
+        int totalStudents = inputs.stream().mapToInt(SuggestionInput::studentCount).sum();
+        if (totalStudents != context.enrolledCount()) {
+            throw new BadRequestException(
+                    "INVALID_SPLIT_TOTAL",
+                    "Tong si so cac nhom phai bang si so lop hoc phan goc: " + context.enrolledCount() + "."
+            );
+        }
+
+        List<String> failureReasons = validateSuggestionBase(context, inputs);
+        if (!failureReasons.isEmpty()) {
+            return new AdminSplitSuggestionResponse(List.of(), failureReasons, true);
+        }
+
+        int slotSpan = Math.max(1, inputs.get(0).slotEndNo() - inputs.get(0).slotStartNo() + 1);
+        List<SlotRangeRef> slotRanges = repository.findSlotRanges(slotSpan);
+        if (slotRanges.isEmpty()) {
+            return new AdminSplitSuggestionResponse(
+                    List.of(),
+                    List.of("Khong tim thay khoang tiet hop le co do dai " + slotSpan + " tiet."),
+                    true
+            );
+        }
+
+        List<CandidateTime> candidateTimes = buildCandidateTimes(slotRanges);
+        List<SplitSuggestion> suggestions = new ArrayList<>();
+        LinkedHashSet<String> rejectedReasons = new LinkedHashSet<>();
+        int offsetLimit = Math.min(candidateTimes.size(), 24);
+
+        for (int offset = 0; offset < offsetLimit && suggestions.size() < MAX_SUGGESTIONS; offset++) {
+            List<SplitPartSuggestion> parts = buildSuggestionParts(
+                    context,
+                    request.scheduleId(),
+                    inputs,
+                    candidateTimes,
+                    offset,
+                    rejectedReasons
+            );
+            if (parts.size() == inputs.size()) {
+                suggestions.add(new SplitSuggestion(
+                        "SUGGESTION_" + (suggestions.size() + 1),
+                        "Phuong an " + (suggestions.size() + 1),
+                        parts
+                ));
+            }
+        }
+
+        List<String> reasons = rejectedReasons.isEmpty()
+                ? List.of("Khong tim thay to hop phong va thoi gian thoa tat ca rang buoc.")
+                : List.copyOf(rejectedReasons);
+        return new AdminSplitSuggestionResponse(suggestions, suggestions.isEmpty() ? reasons : List.of(), true);
     }
 
     @Transactional
@@ -74,6 +158,7 @@ public class AdminSectionSplitService {
             );
         }
         validateLecturerConflicts(request.scheduleId(), context, parts);
+        validateRoomAssignments(request.scheduleId(), context, parts);
 
         NormalizedPart first = parts.get(0);
         if (repository.updateOriginalSection(
@@ -87,6 +172,8 @@ public class AdminSectionSplitService {
                 first.dayOfWeek(),
                 first.slotStartId(),
                 first.slotEndId(),
+                first.classroomId(),
+                adminUserId,
                 "[SPLIT_PART] Tách từ " + context.courseCode() + ".L" + context.sectionCode()
         ) != 1) {
             throw new BadRequestException("SECTION_SPLIT_FAILED", "Không thể cập nhật nhóm đầu tiên sau tách.");
@@ -109,6 +196,8 @@ public class AdminSectionSplitService {
                     part.dayOfWeek(),
                     part.slotStartId(),
                     part.slotEndId(),
+                    part.classroomId(),
+                    adminUserId,
                     "[SPLIT_PART] Tách từ " + context.courseCode() + ".L" + context.sectionCode()
             );
             createdSectionIds.add(createdSectionId);
@@ -127,12 +216,15 @@ public class AdminSectionSplitService {
                 "Admin split class section due to capacity conflict."
         );
 
+        boolean hasAssignedRooms = parts.stream().anyMatch(part -> part.classroomId() != null);
         return new AdminSplitSectionResponse(
                 sectionId,
                 createdSectionIds,
                 updatedScheduleIds,
                 TimetableWorkflowStatus.DRAFT.name(),
-                "Đã tách lớp. Các lịch mới đang chờ phân phòng."
+                hasAssignedRooms
+                        ? "Đã tách lớp theo phương án đề xuất. Vui lòng kiểm tra xung đột lại."
+                        : "Đã tách lớp. Các lịch mới đang chờ phân phòng."
         );
     }
 
@@ -176,10 +268,271 @@ public class AdminSectionSplitService {
                     start.id(),
                     end.id(),
                     start.number(),
-                    end.number()
+                    end.number(),
+                    part.classroomId()
             ));
         }
         return parts;
+    }
+
+    private List<SuggestionInput> normalizeSuggestionInputs(
+            SplitContext context,
+            AdminSplitSuggestionRequest request
+    ) {
+        List<SuggestionInput> inputs = new ArrayList<>();
+        Set<String> requestCodes = new HashSet<>();
+        for (int index = 0; index < request.parts().size(); index++) {
+            AdminSplitSuggestionRequest.SuggestionPart part = request.parts().get(index);
+            if (!repository.lecturerExists(part.lecturerId())) {
+                throw new BadRequestException("LECTURER_NOT_FOUND", "Giang vien cua nhom tach khong ton tai.");
+            }
+            String sectionCode = normalizeSectionCode(context.courseCode(), part.sectionCode());
+            String codeKey = sectionCode.toUpperCase(Locale.ROOT);
+            if (!requestCodes.add(codeKey)) {
+                throw new BadRequestException("DUPLICATE_SECTION_CODE", "Ma nhom " + sectionCode + " bi trung.");
+            }
+            inputs.add(new SuggestionInput(
+                    index,
+                    sectionCode,
+                    part.studentCount(),
+                    part.lecturerId(),
+                    context.slotStartNo(),
+                    context.slotEndNo()
+            ));
+        }
+        return inputs;
+    }
+
+    private List<String> validateSuggestionBase(SplitContext context, List<SuggestionInput> inputs) {
+        List<String> reasons = new ArrayList<>();
+        WeekBoundsRef bounds = repository.findWeekBounds(context.semesterId());
+        if (hasInvalidWeekRange(context.fromWeekNo(), context.toWeekNo(), bounds)) {
+            reasons.add("Khoang tuan cua lich goc khong hop le hoac nam ngoai hoc ky.");
+        }
+        if (context.requiredRoomType() == null || context.requiredRoomType().isBlank()) {
+            reasons.add("Hoc phan chua co loai phong yeu cau.");
+        }
+        if (context.slotStartNo() == null || context.slotEndNo() == null || context.slotEndNo() < context.slotStartNo()) {
+            reasons.add("Khoang tiet cua lich goc khong hop le.");
+        }
+        for (SuggestionInput input : inputs) {
+            if (input.studentCount() == null || input.studentCount() <= 0) {
+                reasons.add("Si so nhom " + input.sectionCode() + " phai lon hon 0.");
+            }
+        }
+        return reasons.stream().distinct().toList();
+    }
+
+    private List<CandidateTime> buildCandidateTimes(List<SlotRangeRef> slotRanges) {
+        List<CandidateTime> times = new ArrayList<>();
+        for (String day : DAY_ORDER) {
+            for (SlotRangeRef slot : slotRanges) {
+                times.add(new CandidateTime(day, slot));
+            }
+        }
+        return times;
+    }
+
+    private List<SplitPartSuggestion> buildSuggestionParts(
+            SplitContext context,
+            Integer originalScheduleId,
+            List<SuggestionInput> inputs,
+            List<CandidateTime> candidateTimes,
+            int offset,
+            LinkedHashSet<String> rejectedReasons
+    ) {
+        List<SplitPartSuggestion> parts = new ArrayList<>();
+        List<PlacedPart> placed = new ArrayList<>();
+
+        for (int inputIndex = 0; inputIndex < inputs.size(); inputIndex++) {
+            SuggestionInput input = inputs.get(inputIndex);
+            SplitPartSuggestion selected = null;
+            for (int attempt = 0; attempt < candidateTimes.size(); attempt++) {
+                CandidateTime candidate = candidateTimes.get((offset + inputIndex + attempt) % candidateTimes.size());
+                if (repository.countCalendarBlockConflicts(
+                        context.semesterId(),
+                        candidate.dayOfWeek(),
+                        context.fromWeekNo(),
+                        context.toWeekNo()
+                ) > 0) {
+                    rejectedReasons.add("Mot so khung gio bi chan boi lich hoc vu.");
+                    continue;
+                }
+                if (repository.lecturerHasOverlap(
+                        context.semesterId(),
+                        input.lecturerId(),
+                        candidate.dayOfWeek(),
+                        candidate.slot().startId(),
+                        candidate.slot().endId(),
+                        context.fromWeekNo(),
+                        context.toWeekNo(),
+                        originalScheduleId
+                ) || conflictsWithPlacedLecturer(input.lecturerId(), candidate, placed)) {
+                    rejectedReasons.add("Mot so khung gio bi trung lich giang vien.");
+                    continue;
+                }
+
+                List<RoomRef> rooms = repository.findAvailableRooms(
+                        context.semesterId(),
+                        candidate.dayOfWeek(),
+                        candidate.slot().startId(),
+                        candidate.slot().endId(),
+                        context.fromWeekNo(),
+                        context.toWeekNo(),
+                        originalScheduleId,
+                        context.requiredRoomType(),
+                        input.studentCount(),
+                        List.of(),
+                        3
+                );
+                if (rooms.isEmpty()) {
+                    rejectedReasons.add("Khong co phong dung loai, du suc chua va khong trung lich cho mot so nhom.");
+                    continue;
+                }
+                RoomRef room = rooms.stream()
+                        .filter(candidateRoom -> !conflictsWithPlacedRoom(candidateRoom.id(), candidate, placed))
+                        .findFirst()
+                        .orElse(null);
+                if (room == null) {
+                    rejectedReasons.add("Mot so phong bi trung trong chinh phuong an tach lop.");
+                    continue;
+                }
+                selected = new SplitPartSuggestion(
+                        input.partIndex(),
+                        input.sectionCode(),
+                        input.studentCount(),
+                        input.lecturerId(),
+                        candidate.dayOfWeek(),
+                        dayLabel(candidate.dayOfWeek()),
+                        candidate.slot().startId(),
+                        candidate.slot().endId(),
+                        candidate.slot().startNo(),
+                        candidate.slot().endNo(),
+                        room.id(),
+                        room.code(),
+                        room.capacity(),
+                        room.roomType()
+                );
+                placed.add(new PlacedPart(input.lecturerId(), room.id(), candidate));
+                break;
+            }
+            if (selected == null) {
+                return parts;
+            }
+            parts.add(selected);
+        }
+        return parts;
+    }
+
+    private boolean conflictsWithPlacedLecturer(Integer lecturerId, CandidateTime candidate, List<PlacedPart> placed) {
+        for (PlacedPart part : placed) {
+            CandidateTime other = part.time();
+            if (lecturerId.equals(part.lecturerId())
+                    && candidate.dayOfWeek().equals(other.dayOfWeek())
+                    && candidate.slot().startNo() <= other.slot().endNo()
+                    && other.slot().startNo() <= candidate.slot().endNo()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean conflictsWithPlacedRoom(Integer roomId, CandidateTime candidate, List<PlacedPart> placed) {
+        for (PlacedPart part : placed) {
+            CandidateTime other = part.time();
+            if (roomId.equals(part.roomId())
+                    && candidate.dayOfWeek().equals(other.dayOfWeek())
+                    && candidate.slot().startNo() <= other.slot().endNo()
+                    && other.slot().startNo() <= candidate.slot().endNo()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void validateRoomAssignments(
+            Integer originalScheduleId,
+            SplitContext context,
+            List<NormalizedPart> parts
+    ) {
+        for (int index = 0; index < parts.size(); index++) {
+            NormalizedPart part = parts.get(index);
+            if (repository.countCalendarBlockConflicts(
+                    context.semesterId(),
+                    part.dayOfWeek(),
+                    context.fromWeekNo(),
+                    context.toWeekNo()
+            ) > 0) {
+                throw new BadRequestException(
+                        "CALENDAR_BLOCK_CONFLICT",
+                        "Lich cua nhom " + part.sectionCode() + " roi vao khoang hoc vu bi chan."
+                );
+            }
+            if (part.classroomId() == null) {
+                continue;
+            }
+            RoomRef room = repository.findRoom(part.classroomId())
+                    .orElseThrow(() -> new BadRequestException("CLASSROOM_NOT_FOUND", "Khong tim thay phong hoc da chon."));
+            validateRoomForPart(context, part, room);
+            if (repository.roomHasOverlap(
+                    context.semesterId(),
+                    part.classroomId(),
+                    part.dayOfWeek(),
+                    part.slotStartId(),
+                    part.slotEndId(),
+                    context.fromWeekNo(),
+                    context.toWeekNo(),
+                    originalScheduleId
+            )) {
+                throw new BadRequestException(
+                        "ROOM_TIME_CONFLICT",
+                        "Phong " + room.code() + " bi trung lich voi lop khac."
+                );
+            }
+            for (int otherIndex = index + 1; otherIndex < parts.size(); otherIndex++) {
+                NormalizedPart other = parts.get(otherIndex);
+                if (part.classroomId().equals(other.classroomId())
+                        && part.dayOfWeek().equals(other.dayOfWeek())
+                        && part.slotStartNo() <= other.slotEndNo()
+                        && other.slotStartNo() <= part.slotEndNo()) {
+                    throw new BadRequestException(
+                            "ROOM_TIME_CONFLICT",
+                            "Phong " + room.code() + " bi trung giua cac nhom tach."
+                    );
+                }
+            }
+        }
+    }
+
+    private void validateRoomForPart(SplitContext context, NormalizedPart part, RoomRef room) {
+        if (!Boolean.TRUE.equals(room.active()) || Boolean.TRUE.equals(room.deleted())) {
+            throw new BadRequestException("ROOM_INACTIVE_OR_DELETED", "Phong " + room.code() + " khong con hoat dong.");
+        }
+        if (context.requiredRoomType() != null
+                && !context.requiredRoomType().isBlank()
+                && !context.requiredRoomType().equalsIgnoreCase(room.roomType())) {
+            throw new BadRequestException(
+                    "ROOM_TYPE_MISMATCH",
+                    "Nhom " + part.sectionCode() + " yeu cau phong " + context.requiredRoomType()
+                            + " nhung phong " + room.code() + " la " + room.roomType() + "."
+            );
+        }
+        if (room.capacity() == null || room.capacity() < part.studentCount()) {
+            throw new BadRequestException(
+                    "CAPACITY_EXCEEDED",
+                    "Phong " + room.code() + " khong du suc chua cho nhom " + part.sectionCode() + "."
+            );
+        }
+    }
+
+    private boolean hasInvalidWeekRange(Integer fromWeekNo, Integer toWeekNo, WeekBoundsRef bounds) {
+        if (fromWeekNo == null && toWeekNo != null) return true;
+        if (fromWeekNo != null && fromWeekNo <= 0) return true;
+        if (toWeekNo != null && (toWeekNo <= 0 || fromWeekNo == null || toWeekNo < fromWeekNo)) return true;
+        if (bounds == null || bounds.minWeekNo() == null || bounds.maxWeekNo() == null) return false;
+        int effectiveFrom = fromWeekNo == null ? bounds.minWeekNo() : fromWeekNo;
+        int effectiveTo = toWeekNo == null ? bounds.maxWeekNo() : toWeekNo;
+        return effectiveFrom < bounds.minWeekNo() || effectiveTo > bounds.maxWeekNo();
     }
 
     private void validateLecturerConflicts(
@@ -255,6 +608,19 @@ public class AdminSectionSplitService {
         };
     }
 
+    private String dayLabel(String dayOfWeek) {
+        return switch (dayOfWeek) {
+            case "MON" -> "Thu 2";
+            case "TUE" -> "Thu 3";
+            case "WED" -> "Thu 4";
+            case "THU" -> "Thu 5";
+            case "FRI" -> "Thu 6";
+            case "SAT" -> "Thu 7";
+            case "SUN" -> "Chu nhat";
+            default -> dayOfWeek;
+        };
+    }
+
     private record NormalizedPart(
             String sectionCode,
             Integer studentCount,
@@ -263,7 +629,24 @@ public class AdminSectionSplitService {
             Integer slotStartId,
             Integer slotEndId,
             Integer slotStartNo,
+            Integer slotEndNo,
+            Integer classroomId
+    ) {
+    }
+
+    private record SuggestionInput(
+            Integer partIndex,
+            String sectionCode,
+            Integer studentCount,
+            Integer lecturerId,
+            Integer slotStartNo,
             Integer slotEndNo
     ) {
+    }
+
+    private record CandidateTime(String dayOfWeek, SlotRangeRef slot) {
+    }
+
+    private record PlacedPart(Integer lecturerId, Integer roomId, CandidateTime time) {
     }
 }

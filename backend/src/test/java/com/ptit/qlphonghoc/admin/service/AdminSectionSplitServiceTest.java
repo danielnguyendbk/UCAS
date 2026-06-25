@@ -3,8 +3,10 @@ package com.ptit.qlphonghoc.admin.service;
 import com.ptit.qlphonghoc.admin.dto.AdminSplitSectionRequest;
 import com.ptit.qlphonghoc.admin.dto.AdminSplitSectionRequest.SplitPart;
 import com.ptit.qlphonghoc.admin.repository.AdminSectionSplitRepository;
+import com.ptit.qlphonghoc.admin.repository.AdminSectionSplitRepository.RoomRef;
 import com.ptit.qlphonghoc.admin.repository.AdminSectionSplitRepository.SlotRef;
 import com.ptit.qlphonghoc.admin.repository.AdminSectionSplitRepository.SplitContext;
+import com.ptit.qlphonghoc.admin.repository.AdminSectionSplitRepository.WeekBoundsRef;
 import com.ptit.qlphonghoc.audit.enumtype.AuditAction;
 import com.ptit.qlphonghoc.audit.service.WorkflowAuditLogger;
 import com.ptit.qlphonghoc.common.exception.BadRequestException;
@@ -42,10 +44,10 @@ class AdminSectionSplitServiceTest {
         mockValidLookups();
         when(repository.updateOriginalSection(101, "01-1", 48, 6)).thenReturn(1);
         when(repository.updateOriginalSchedule(
-                101, 123, "MON", 1, 4, "[SPLIT_PART] Tách từ BUS102.L01"
+                101, 123, "MON", 1, 4, null, 1, "[SPLIT_PART] Tách từ BUS102.L01"
         )).thenReturn(1);
-        when(repository.insertSection(context(), "01-2", 47, 7)).thenReturn(150);
-        when(repository.insertSchedule(150, context(), "TUE", 1, 4, "[SPLIT_PART] Tách từ BUS102.L01"))
+        when(repository.insertSection(any(), anyString(), anyInt(), anyInt())).thenReturn(150);
+        when(repository.insertSchedule(150, context(), "TUE", 1, 4, null, 1, "[SPLIT_PART] Tách từ BUS102.L01"))
                 .thenReturn(180);
         when(repository.markSemesterDraft(2)).thenReturn(1);
 
@@ -61,6 +63,30 @@ class AdminSectionSplitServiceTest {
                 "CONFLICT",
                 "DRAFT",
                 "Admin split class section due to capacity conflict."
+        );
+    }
+
+    @Test
+    void splitAssignsSuggestedRoomsWhenProvided() {
+        mockValidLookups();
+        when(repository.findRoom(40)).thenReturn(Optional.of(new RoomRef(40, "A-101", 60, "LECTURE", true, false)));
+        when(repository.findRoom(41)).thenReturn(Optional.of(new RoomRef(41, "A-102", 60, "LECTURE", true, false)));
+        when(repository.roomHasOverlap(anyInt(), anyInt(), anyString(), anyInt(), anyInt(), any(), any(), anyInt()))
+                .thenReturn(false);
+        when(repository.updateOriginalSection(101, "01-1", 48, 6)).thenReturn(1);
+        when(repository.updateOriginalSchedule(
+                101, 123, "MON", 1, 4, 40, 1, "[SPLIT_PART] Tách từ BUS102.L01"
+        )).thenReturn(1);
+        when(repository.insertSection(any(), anyString(), anyInt(), anyInt())).thenReturn(150);
+        when(repository.insertSchedule(150, context(), "TUE", 1, 4, 41, 1, "[SPLIT_PART] Tách từ BUS102.L01"))
+                .thenReturn(180);
+        when(repository.markSemesterDraft(2)).thenReturn(1);
+
+        var response = service.split(101, assignedRequest(), 1);
+
+        assertEquals(List.of(123, 180), response.updatedScheduleIds());
+        verify(repository).updateOriginalSchedule(
+                101, 123, "MON", 1, 4, 40, 1, "[SPLIT_PART] Tách từ BUS102.L01"
         );
     }
 
@@ -109,7 +135,7 @@ class AdminSectionSplitServiceTest {
     void splitRejectsApprovedWorkflow() {
         SplitContext approved = new SplitContext(
                 2, "APPROVED", 10, "BUS102", "01", "D22QT01",
-                95, 1, 16, "THEORY", 0
+                95, "MON", 1, 4, 1, 4, 1, 16, "THEORY", 0, "LECTURE"
         );
         when(repository.findContextForUpdate(101, 123)).thenReturn(Optional.of(approved));
 
@@ -130,6 +156,8 @@ class AdminSectionSplitServiceTest {
         when(repository.lecturerHasOverlap(
                 anyInt(), anyInt(), anyString(), anyInt(), anyInt(), any(), any(), anyInt()
         )).thenReturn(false);
+        when(repository.countCalendarBlockConflicts(anyInt(), anyString(), any(), any())).thenReturn(0);
+        when(repository.findWeekBounds(anyInt())).thenReturn(new WeekBoundsRef(1, 16));
     }
 
     private AdminSplitSectionRequest validRequest() {
@@ -143,14 +171,29 @@ class AdminSectionSplitServiceTest {
         );
     }
 
+    private AdminSplitSectionRequest assignedRequest() {
+        return new AdminSplitSectionRequest(
+                123,
+                List.of(
+                        part("BUS102.L01-1", 48, 6, "MON", 40),
+                        part("BUS102.L01-2", 47, 7, "TUE", 41)
+                ),
+                true
+        );
+    }
+
     private SplitPart part(String code, int students, int lecturerId, String day) {
-        return new SplitPart(code, students, lecturerId, day, 1, null, 4, null);
+        return part(code, students, lecturerId, day, null);
+    }
+
+    private SplitPart part(String code, int students, int lecturerId, String day, Integer classroomId) {
+        return new SplitPart(code, students, lecturerId, day, 1, null, 4, null, classroomId);
     }
 
     private SplitContext context() {
         return new SplitContext(
                 2, "CONFLICT", 10, "BUS102", "01", "D22QT01",
-                95, 1, 16, "THEORY", 0
+                95, "MON", 1, 4, 1, 4, 1, 16, "THEORY", 0, "LECTURE"
         );
     }
 }

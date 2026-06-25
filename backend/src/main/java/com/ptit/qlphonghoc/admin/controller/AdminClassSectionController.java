@@ -3,6 +3,8 @@ package com.ptit.qlphonghoc.admin.controller;
 import com.ptit.qlphonghoc.admin.dto.AdminScheduleUpdateRequest;
 import com.ptit.qlphonghoc.admin.dto.AdminSplitSectionRequest;
 import com.ptit.qlphonghoc.admin.dto.AdminSplitSectionResponse;
+import com.ptit.qlphonghoc.admin.dto.AdminSplitSuggestionRequest;
+import com.ptit.qlphonghoc.admin.dto.AdminSplitSuggestionResponse;
 import com.ptit.qlphonghoc.admin.service.AdminSectionSplitService;
 import com.ptit.qlphonghoc.admin.service.AdminScheduleEditService;
 import com.ptit.qlphonghoc.auth.security.CustomUserDetails;
@@ -98,6 +100,14 @@ public class AdminClassSectionController {
         return ResponseEntity.ok(
                 sectionSplitService.split(sectionId, request, userDetails.getUserId())
         );
+    }
+
+    @PostMapping("/{sectionId}/split/suggestions")
+    public ResponseEntity<AdminSplitSuggestionResponse> suggestSplitSection(
+            @PathVariable Integer sectionId,
+            @Valid @RequestBody AdminSplitSuggestionRequest request
+    ) {
+        return ResponseEntity.ok(sectionSplitService.suggest(sectionId, request));
     }
 
     @DeleteMapping("/{id}")

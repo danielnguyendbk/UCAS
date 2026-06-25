@@ -6,6 +6,7 @@ import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,15 +21,30 @@ public class JdbcAdminSectionSplitRepository implements AdminSectionSplitReposit
 
     @Override
     public Optional<SplitContext> findContextForUpdate(Integer sectionId, Integer scheduleId) {
+        return findContext(sectionId, scheduleId, true);
+    }
+
+    @Override
+    public Optional<SplitContext> findContext(Integer sectionId, Integer scheduleId) {
+        return findContext(sectionId, scheduleId, false);
+    }
+
+    private Optional<SplitContext> findContext(Integer sectionId, Integer scheduleId, boolean forUpdate) {
         List<SplitContext> rows = jdbc.query(
-                """
+                ("""
                 SELECT cs.semester_id,
                        sem.timetable_status,
                        cs.course_id,
                        c.course_code,
+                       c.required_room_type,
                        cs.section_code,
                        cs.class_name,
                        cs.enrolled_count,
+                       sch.day_of_week,
+                       sch.slot_start_id,
+                       sch.slot_end_id,
+                       ts_start.slot_no AS slot_start_no,
+                       ts_end.slot_no AS slot_end_no,
                        sch.from_week_no,
                        sch.to_week_no,
                        sch.session_type,
@@ -37,12 +53,13 @@ public class JdbcAdminSectionSplitRepository implements AdminSectionSplitReposit
                 JOIN semesters sem ON sem.semester_id = cs.semester_id
                 JOIN courses c ON c.course_id = cs.course_id
                 JOIN schedules sch ON sch.section_id = cs.section_id
+                JOIN time_slots ts_start ON ts_start.slot_id = sch.slot_start_id
+                JOIN time_slots ts_end ON ts_end.slot_id = sch.slot_end_id
                 WHERE cs.section_id = :sectionId
                   AND sch.schedule_id = :scheduleId
                   AND cs.status = 'ACTIVE'
                   AND sch.status NOT IN ('CANCELLED', 'INACTIVE')
-                FOR UPDATE
-                """,
+                """ + (forUpdate ? " FOR UPDATE" : "")),
                 new MapSqlParameterSource()
                         .addValue("sectionId", sectionId)
                         .addValue("scheduleId", scheduleId),
@@ -54,10 +71,16 @@ public class JdbcAdminSectionSplitRepository implements AdminSectionSplitReposit
                         rs.getString("section_code"),
                         rs.getString("class_name"),
                         rs.getInt("enrolled_count"),
+                        rs.getString("day_of_week"),
+                        rs.getObject("slot_start_id", Integer.class),
+                        rs.getObject("slot_end_id", Integer.class),
+                        rs.getObject("slot_start_no", Integer.class),
+                        rs.getObject("slot_end_no", Integer.class),
                         rs.getObject("from_week_no", Integer.class),
                         rs.getObject("to_week_no", Integer.class),
                         rs.getString("session_type"),
-                        rs.getInt("practice_group_no")
+                        rs.getInt("practice_group_no"),
+                        rs.getString("required_room_type")
                 )
         );
         return rows.stream().findFirst();
@@ -159,6 +182,233 @@ public class JdbcAdminSectionSplitRepository implements AdminSectionSplitReposit
     }
 
     @Override
+    public boolean roomHasOverlap(
+            Integer semesterId,
+            Integer classroomId,
+            String dayOfWeek,
+            Integer slotStartId,
+            Integer slotEndId,
+            Integer fromWeekNo,
+            Integer toWeekNo,
+            Integer excludedScheduleId
+    ) {
+        Integer count = jdbc.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM schedules sch
+                JOIN class_sections cs ON cs.section_id = sch.section_id
+                WHERE cs.semester_id = :semesterId
+                  AND cs.status = 'ACTIVE'
+                  AND sch.status = 'ASSIGNED'
+                  AND sch.classroom_id = :classroomId
+                  AND sch.schedule_id <> :excludedScheduleId
+                  AND sch.day_of_week = :dayOfWeek
+                  AND sch.slot_start_id <= :slotEndId
+                  AND sch.slot_end_id >= :slotStartId
+                  AND COALESCE(sch.from_week_no, 1) <= COALESCE(:toWeekNo, 999)
+                  AND COALESCE(:fromWeekNo, 1) <= COALESCE(sch.to_week_no, 999)
+                """,
+                new MapSqlParameterSource()
+                        .addValue("semesterId", semesterId)
+                        .addValue("classroomId", classroomId)
+                        .addValue("dayOfWeek", dayOfWeek)
+                        .addValue("slotStartId", slotStartId)
+                        .addValue("slotEndId", slotEndId)
+                        .addValue("fromWeekNo", fromWeekNo)
+                        .addValue("toWeekNo", toWeekNo)
+                        .addValue("excludedScheduleId", excludedScheduleId),
+                Integer.class
+        );
+        return count != null && count > 0;
+    }
+
+    @Override
+    public Optional<RoomRef> findRoom(Integer classroomId) {
+        return jdbc.query(
+                """
+                SELECT cr.classroom_id,
+                       CONCAT(b.building_code, '-', cr.room_number) AS room_code,
+                       cr.capacity,
+                       cr.room_type,
+                       cr.is_active,
+                       cr.is_deleted
+                FROM classrooms cr
+                JOIN buildings b ON b.building_id = cr.building_id
+                WHERE cr.classroom_id = :classroomId
+                """,
+                new MapSqlParameterSource("classroomId", classroomId),
+                (rs, rowNum) -> new RoomRef(
+                        rs.getInt("classroom_id"),
+                        rs.getString("room_code"),
+                        rs.getObject("capacity", Integer.class),
+                        rs.getString("room_type"),
+                        rs.getBoolean("is_active"),
+                        rs.getBoolean("is_deleted")
+                )
+        ).stream().findFirst();
+    }
+
+    @Override
+    public List<RoomRef> findAvailableRooms(
+            Integer semesterId,
+            String dayOfWeek,
+            Integer slotStartId,
+            Integer slotEndId,
+            Integer fromWeekNo,
+            Integer toWeekNo,
+            Integer excludedScheduleId,
+            String roomType,
+            Integer requiredCapacity,
+            Collection<Integer> excludedRoomIds,
+            Integer limit
+    ) {
+        Collection<Integer> excludedIds = excludedRoomIds == null || excludedRoomIds.isEmpty()
+                ? List.of(-1)
+                : excludedRoomIds;
+        return jdbc.query(
+                """
+                SELECT cr.classroom_id,
+                       CONCAT(b.building_code, '-', cr.room_number) AS room_code,
+                       cr.capacity,
+                       cr.room_type,
+                       cr.is_active,
+                       cr.is_deleted
+                FROM classrooms cr
+                JOIN buildings b ON b.building_id = cr.building_id
+                WHERE cr.is_active = TRUE
+                  AND cr.is_deleted = FALSE
+                  AND cr.room_type = :roomType
+                  AND cr.capacity >= :requiredCapacity
+                  AND cr.classroom_id NOT IN (:excludedRoomIds)
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM schedules sch
+                      JOIN class_sections cs ON cs.section_id = sch.section_id
+                      WHERE sch.classroom_id = cr.classroom_id
+                        AND sch.status = 'ASSIGNED'
+                        AND cs.status = 'ACTIVE'
+                        AND cs.semester_id = :semesterId
+                        AND sch.day_of_week = :dayOfWeek
+                        AND sch.slot_start_id <= :slotEndId
+                        AND sch.slot_end_id >= :slotStartId
+                        AND COALESCE(sch.from_week_no, 1) <= COALESCE(:toWeekNo, 999)
+                        AND COALESCE(:fromWeekNo, 1) <= COALESCE(sch.to_week_no, 999)
+                        AND sch.schedule_id <> :excludedScheduleId
+                  )
+                ORDER BY cr.capacity ASC, b.building_code ASC, cr.room_number ASC
+                LIMIT :limit
+                """,
+                new MapSqlParameterSource()
+                        .addValue("semesterId", semesterId)
+                        .addValue("dayOfWeek", dayOfWeek)
+                        .addValue("slotStartId", slotStartId)
+                        .addValue("slotEndId", slotEndId)
+                        .addValue("fromWeekNo", fromWeekNo)
+                        .addValue("toWeekNo", toWeekNo)
+                        .addValue("excludedScheduleId", excludedScheduleId)
+                        .addValue("roomType", roomType)
+                        .addValue("requiredCapacity", requiredCapacity)
+                        .addValue("excludedRoomIds", excludedIds)
+                        .addValue("limit", limit == null ? 5 : limit),
+                (rs, rowNum) -> new RoomRef(
+                        rs.getInt("classroom_id"),
+                        rs.getString("room_code"),
+                        rs.getObject("capacity", Integer.class),
+                        rs.getString("room_type"),
+                        rs.getBoolean("is_active"),
+                        rs.getBoolean("is_deleted")
+                )
+        );
+    }
+
+    @Override
+    public List<SlotRangeRef> findSlotRanges(Integer slotSpan) {
+        return jdbc.query(
+                """
+                SELECT start_slot.slot_id AS start_id,
+                       end_slot.slot_id AS end_id,
+                       start_slot.slot_no AS start_no,
+                       end_slot.slot_no AS end_no
+                FROM time_slots start_slot
+                JOIN time_slots end_slot ON end_slot.slot_no = start_slot.slot_no + :slotSpan - 1
+                WHERE :slotSpan > 0
+                  AND end_slot.end_time > start_slot.start_time
+                ORDER BY start_slot.slot_no ASC
+                """,
+                new MapSqlParameterSource("slotSpan", slotSpan),
+                (rs, rowNum) -> new SlotRangeRef(
+                        rs.getInt("start_id"),
+                        rs.getInt("end_id"),
+                        rs.getInt("start_no"),
+                        rs.getInt("end_no")
+                )
+        );
+    }
+
+    @Override
+    public WeekBoundsRef findWeekBounds(Integer semesterId) {
+        return jdbc.queryForObject(
+                """
+                SELECT MIN(week_no) AS min_week_no, MAX(week_no) AS max_week_no
+                FROM semester_weeks
+                WHERE semester_id = :semesterId
+                """,
+                new MapSqlParameterSource("semesterId", semesterId),
+                (rs, rowNum) -> new WeekBoundsRef(
+                        rs.getObject("min_week_no", Integer.class),
+                        rs.getObject("max_week_no", Integer.class)
+                )
+        );
+    }
+
+    @Override
+    public int countCalendarBlockConflicts(
+            Integer semesterId,
+            String dayOfWeek,
+            Integer fromWeekNo,
+            Integer toWeekNo
+    ) {
+        Integer count = jdbc.queryForObject(
+                """
+                SELECT COUNT(DISTINCT acb.calendar_block_id)
+                FROM semester_weeks sw
+                JOIN academic_calendar_blocks acb
+                  ON acb.semester_id = sw.semester_id
+                 AND acb.is_teaching_allowed = FALSE
+                WHERE sw.semester_id = :semesterId
+                  AND sw.week_no BETWEEN COALESCE(:fromWeekNo, 1) AND COALESCE(:toWeekNo, 999)
+                  AND DATE_ADD(
+                        sw.start_date,
+                        INTERVAL MOD(
+                            (CASE :dayOfWeek
+                                WHEN 'MON' THEN 0 WHEN 'TUE' THEN 1 WHEN 'WED' THEN 2
+                                WHEN 'THU' THEN 3 WHEN 'FRI' THEN 4 WHEN 'SAT' THEN 5
+                                WHEN 'SUN' THEN 6 END) - WEEKDAY(sw.start_date) + 7,
+                            7
+                        ) DAY
+                      ) <= sw.end_date
+                  AND DATE_ADD(
+                        sw.start_date,
+                        INTERVAL MOD(
+                            (CASE :dayOfWeek
+                                WHEN 'MON' THEN 0 WHEN 'TUE' THEN 1 WHEN 'WED' THEN 2
+                                WHEN 'THU' THEN 3 WHEN 'FRI' THEN 4 WHEN 'SAT' THEN 5
+                                WHEN 'SUN' THEN 6 END) - WEEKDAY(sw.start_date) + 7,
+                            7
+                        ) DAY
+                      ) BETWEEN acb.start_date AND acb.end_date
+                """,
+                new MapSqlParameterSource()
+                        .addValue("semesterId", semesterId)
+                        .addValue("dayOfWeek", dayOfWeek)
+                        .addValue("fromWeekNo", fromWeekNo)
+                        .addValue("toWeekNo", toWeekNo),
+                Integer.class
+        );
+        return count == null ? 0 : count;
+    }
+
+    @Override
     public int updateOriginalSection(
             Integer sectionId,
             String sectionCode,
@@ -190,20 +440,22 @@ public class JdbcAdminSectionSplitRepository implements AdminSectionSplitReposit
             String dayOfWeek,
             Integer slotStartId,
             Integer slotEndId,
+            Integer classroomId,
+            Integer assignedBy,
             String note
     ) {
         return jdbc.update(
                 """
                 UPDATE schedules
-                SET classroom_id = NULL,
+                SET classroom_id = :classroomId,
                     day_of_week = :dayOfWeek,
                     slot_start_id = :slotStartId,
                     slot_end_id = :slotEndId,
                     start_time = (SELECT start_time FROM time_slots WHERE slot_id = :slotStartId),
                     end_time = (SELECT end_time FROM time_slots WHERE slot_id = :slotEndId),
-                    assigned_by = NULL,
-                    assigned_at = NULL,
-                    status = 'UNASSIGNED',
+                    assigned_by = CASE WHEN :classroomId IS NULL THEN NULL ELSE :assignedBy END,
+                    assigned_at = CASE WHEN :classroomId IS NULL THEN NULL ELSE CURRENT_TIMESTAMP END,
+                    status = CASE WHEN :classroomId IS NULL THEN 'UNASSIGNED' ELSE 'ASSIGNED' END,
                     validation_status = 'NOT_CHECKED',
                     conflict_reason = NULL,
                     note = :note
@@ -217,6 +469,8 @@ public class JdbcAdminSectionSplitRepository implements AdminSectionSplitReposit
                         .addValue("dayOfWeek", dayOfWeek)
                         .addValue("slotStartId", slotStartId)
                         .addValue("slotEndId", slotEndId)
+                        .addValue("classroomId", classroomId)
+                        .addValue("assignedBy", assignedBy)
                         .addValue("note", note)
         );
     }
@@ -260,6 +514,8 @@ public class JdbcAdminSectionSplitRepository implements AdminSectionSplitReposit
             String dayOfWeek,
             Integer slotStartId,
             Integer slotEndId,
+            Integer classroomId,
+            Integer assignedBy,
             String note
     ) {
         KeyHolder keys = new GeneratedKeyHolder();
@@ -271,9 +527,15 @@ public class JdbcAdminSectionSplitRepository implements AdminSectionSplitReposit
                     practice_group_no, assigned_by, assigned_at, validation_status,
                     conflict_reason, status, note
                 ) SELECT
-                    :sectionId, NULL, :dayOfWeek, start_slot.slot_id, end_slot.slot_id,
+                    :sectionId, :classroomId, :dayOfWeek, start_slot.slot_id, end_slot.slot_id,
                     start_slot.start_time, end_slot.end_time, :fromWeekNo, :toWeekNo, :sessionType,
-                    :practiceGroupNo, NULL, NULL, 'NOT_CHECKED', NULL, 'UNASSIGNED', :note
+                    :practiceGroupNo,
+                    CASE WHEN :classroomId IS NULL THEN NULL ELSE :assignedBy END,
+                    CASE WHEN :classroomId IS NULL THEN NULL ELSE CURRENT_TIMESTAMP END,
+                    'NOT_CHECKED',
+                    NULL,
+                    CASE WHEN :classroomId IS NULL THEN 'UNASSIGNED' ELSE 'ASSIGNED' END,
+                    :note
                 FROM time_slots start_slot
                 JOIN time_slots end_slot ON end_slot.slot_id = :slotEndId
                 WHERE start_slot.slot_id = :slotStartId
@@ -283,6 +545,8 @@ public class JdbcAdminSectionSplitRepository implements AdminSectionSplitReposit
                         .addValue("dayOfWeek", dayOfWeek)
                         .addValue("slotStartId", slotStartId)
                         .addValue("slotEndId", slotEndId)
+                        .addValue("classroomId", classroomId)
+                        .addValue("assignedBy", assignedBy)
                         .addValue("fromWeekNo", context.fromWeekNo())
                         .addValue("toWeekNo", context.toWeekNo())
                         .addValue("sessionType", context.sessionType())

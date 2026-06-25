@@ -167,11 +167,20 @@ const SplitSectionDialog = ({
   const [partCount, setPartCount] = useState("2");
   const [parts, setParts] = useState([]);
   const [roomCheck, setRoomCheck] = useState({ loading: false, rooms: [] });
+  const [suggestionState, setSuggestionState] = useState({
+    loading: false,
+    suggestions: [],
+    failureReasons: [],
+    error: "",
+  });
+  const [selectedSuggestionId, setSelectedSuggestionId] = useState("");
 
   useEffect(() => {
     if (!open || !section) return;
     setPartCount("2");
     setParts(createSplitParts(section, 2));
+    setSelectedSuggestionId("");
+    setSuggestionState({ loading: false, suggestions: [], failureReasons: [], error: "" });
     let mounted = true;
     const checkLargerRooms = async () => {
       setRoomCheck({ loading: true, rooms: [] });
@@ -200,12 +209,95 @@ const SplitSectionDialog = ({
   const totalMatches = totalStudents === expectedStudents;
   const updatePart = (index, field, value) => {
     setParts((current) => current.map((part, partIndex) => (
-      partIndex === index ? { ...part, [field]: value } : part
+      partIndex === index
+        ? {
+            ...part,
+            [field]: value,
+            ...(field === "dayOfWeek" || field === "slotStartId" || field === "slotEndId"
+              ? { classroomId: "", roomCode: "", roomCapacity: "", roomType: "" }
+              : {}),
+          }
+        : part
     )));
+    setSelectedSuggestionId("");
   };
   const changePartCount = (value) => {
     setPartCount(value);
     setParts(createSplitParts(section, Number(value)));
+    setSelectedSuggestionId("");
+  };
+  const resetEqualSplit = () => {
+    setParts(createSplitParts(section, Number(partCount)));
+    setSelectedSuggestionId("");
+  };
+
+  useEffect(() => {
+    if (!open || !section?.id || !section?.scheduleId || !totalMatches) {
+      setSuggestionState((current) => ({ ...current, loading: false, suggestions: [], failureReasons: [] }));
+      return;
+    }
+    if (parts.some((part) => !part.sectionCode.trim() || !part.lecturerId || Number(part.studentCount || 0) <= 0)) {
+      setSuggestionState((current) => ({ ...current, loading: false, suggestions: [], failureReasons: [] }));
+      return;
+    }
+
+    let mounted = true;
+    const timer = window.setTimeout(async () => {
+      setSuggestionState({ loading: true, suggestions: [], failureReasons: [], error: "" });
+      try {
+        const response = await httpClient.post(
+          `/api/admin/class-sections/${section.id}/split/suggestions`,
+          {
+            scheduleId: section.scheduleId,
+            partCount: Number(partCount),
+            parts: parts.map((part) => ({
+              sectionCode: part.sectionCode.trim(),
+              studentCount: Number(part.studentCount),
+              lecturerId: Number(part.lecturerId),
+            })),
+          },
+        );
+        const payload = response.data?.data ?? response.data ?? {};
+        if (!mounted) return;
+        setSuggestionState({
+          loading: false,
+          suggestions: payload.suggestions || [],
+          failureReasons: payload.failureReasons || [],
+          error: "",
+        });
+      } catch (requestError) {
+        if (!mounted) return;
+        setSuggestionState({
+          loading: false,
+          suggestions: [],
+          failureReasons: [],
+          error: getApiError(requestError, "Khong the lay phuong an de xuat.").message,
+        });
+      }
+    }, 350);
+
+    return () => {
+      mounted = false;
+      window.clearTimeout(timer);
+    };
+  }, [open, section, partCount, parts, totalMatches]);
+
+  const applySuggestion = (suggestion) => {
+    setSelectedSuggestionId(suggestion.suggestionId);
+    setParts((current) => current.map((part, index) => {
+      const proposed = suggestion.parts.find((item) => Number(item.partIndex) === index);
+      if (!proposed) return part;
+      return {
+        ...part,
+        dayOfWeek: proposed.dayOfWeek,
+        slotStartId: String(proposed.slotStartId),
+        slotEndId: String(proposed.slotEndId),
+        classroomId: String(proposed.classroomId),
+        roomCode: proposed.roomCode,
+        roomCapacity: proposed.roomCapacity,
+        roomType: proposed.roomType,
+      };
+    }));
   };
 
   return (
@@ -245,9 +337,92 @@ const SplitSectionDialog = ({
                   <SelectContent><SelectItem value="2">2 nhóm</SelectItem><SelectItem value="3">3 nhóm</SelectItem></SelectContent>
                 </Select>
               </div>
-              <Button type="button" variant="outline" onClick={() => setParts(createSplitParts(section, Number(partCount)))}>
+              <Button type="button" variant="outline" onClick={resetEqualSplit}>
                 Chia đều sĩ số
               </Button>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 bg-white p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Phương án hệ thống đề xuất</p>
+                  <p className="text-xs text-gray-500">
+                    Hệ thống tự lọc trùng phòng, trùng giảng viên, sai loại phòng, thiếu sức chứa và calendar block.
+                  </p>
+                </div>
+                {suggestionState.loading && (
+                  <span className="inline-flex items-center gap-2 text-xs text-blue-700">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Đang tìm phương án...
+                  </span>
+                )}
+              </div>
+
+              {suggestionState.error && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                  {suggestionState.error}
+                </div>
+              )}
+
+              {!suggestionState.loading && suggestionState.suggestions.length > 0 && (
+                <div className="space-y-3">
+                  {suggestionState.suggestions.map((suggestion) => (
+                    <div
+                      key={suggestion.suggestionId}
+                      className={`rounded-lg border p-3 ${selectedSuggestionId === suggestion.suggestionId ? "border-blue-300 bg-blue-50" : "border-gray-200 bg-gray-50"}`}
+                    >
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-gray-900">{suggestion.label}</p>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={selectedSuggestionId === suggestion.suggestionId ? "default" : "outline"}
+                          onClick={() => applySuggestion(suggestion)}
+                        >
+                          {selectedSuggestionId === suggestion.suggestionId ? "Đang chọn" : "Chọn phương án"}
+                        </Button>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="text-xs">Nhóm</TableHead>
+                              <TableHead className="text-xs">Thời gian</TableHead>
+                              <TableHead className="text-xs">Phòng</TableHead>
+                              <TableHead className="text-xs">Sức chứa</TableHead>
+                              <TableHead className="text-xs">Loại</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {suggestion.parts.map((item) => (
+                              <TableRow key={`${suggestion.suggestionId}-${item.partIndex}`}>
+                                <TableCell className="text-xs font-medium">{item.sectionCode}</TableCell>
+                                <TableCell className="text-xs">
+                                  {item.dayLabel || item.dayOfWeek}, tiết {item.slotStartNo}-{item.slotEndNo}
+                                </TableCell>
+                                <TableCell className="text-xs font-semibold text-blue-700">{item.roomCode}</TableCell>
+                                <TableCell className="text-xs">{item.roomCapacity} / {item.studentCount} SV</TableCell>
+                                <TableCell className="text-xs">{item.roomType}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {!suggestionState.loading && suggestionState.suggestions.length === 0 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  <p className="font-semibold">Chưa có phương án hoàn toàn hợp lệ.</p>
+                  {(suggestionState.failureReasons.length > 0
+                    ? suggestionState.failureReasons
+                    : ["Có thể tạo các nhóm mới ở trạng thái chưa phân phòng."]).map((reason) => (
+                    <p key={reason} className="mt-1">- {reason}</p>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="space-y-3">
@@ -261,6 +436,14 @@ const SplitSectionDialog = ({
                     <div className="space-y-1.5"><Label>Thứ</Label><Select value={part.dayOfWeek} onValueChange={(value) => updatePart(index, "dayOfWeek", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{DAY_OPTIONS.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
                     <div className="space-y-1.5 lg:col-span-2"><Label>Tiết bắt đầu</Label><Select value={part.slotStartId} onValueChange={(value) => updatePart(index, "slotStartId", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{timeSlots.map((item) => <SelectItem key={item.slotId} value={String(item.slotId)}>Tiết {item.slotNo} ({String(item.startTime).slice(0, 5)})</SelectItem>)}</SelectContent></Select></div>
                     <div className="space-y-1.5 lg:col-span-2"><Label>Tiết kết thúc</Label><Select value={part.slotEndId} onValueChange={(value) => updatePart(index, "slotEndId", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{timeSlots.map((item) => <SelectItem key={item.slotId} value={String(item.slotId)}>Tiết {item.slotNo} ({String(item.endTime).slice(0, 5)})</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-1.5 lg:col-span-5">
+                      <Label>Phòng đề xuất</Label>
+                      <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                        {part.roomCode
+                          ? `${part.roomCode} · ${part.roomCapacity ?? "?"} chỗ · ${part.roomType || ""}`
+                          : "Chưa chọn phương án; nhóm này sẽ tạo ở trạng thái chưa phân phòng."}
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -528,6 +711,7 @@ const AdminTimetableApprovalPage = () => {
             dayOfWeek: part.dayOfWeek,
             slotStartId: Number(part.slotStartId),
             slotEndId: Number(part.slotEndId),
+            classroomId: part.classroomId ? Number(part.classroomId) : null,
           })),
         },
       );
