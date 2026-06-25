@@ -1,5 +1,6 @@
 package com.ptit.qlphonghoc.staff.dto.class_section;
 
+import java.time.LocalTime;
 import java.util.List;
 
 public class StaffSectionTableResponse {
@@ -43,6 +44,11 @@ public class StaffSectionTableResponse {
     private String classCodes;
     private String classNames;
 
+    // --- Hai trường thời gian ---
+    private LocalTime startTime;
+    private LocalTime endTime;
+
+    // --- GETTER & SETTER ---
     public Integer getId() { return id; }
     public void setId(Integer id) { this.id = id; }
 
@@ -159,4 +165,10 @@ public class StaffSectionTableResponse {
 
     public String getClassNames() { return classNames; }
     public void setClassNames(String classNames) { this.classNames = classNames; }
+
+    public LocalTime getStartTime() { return startTime; }
+    public void setStartTime(LocalTime startTime) { this.startTime = startTime; }
+
+    public LocalTime getEndTime() { return endTime; }
+    public void setEndTime(LocalTime endTime) { this.endTime = endTime; }
 }

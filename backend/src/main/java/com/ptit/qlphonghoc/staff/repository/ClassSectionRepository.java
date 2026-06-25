@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import java.time.LocalTime;
 
 import java.util.List;
 import java.util.Optional;
@@ -101,7 +102,11 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
             cs.status AS sectionStatus,
             NULL AS classIds,
             cs.class_name AS classCodes,
-            cs.class_name AS classNames
+            cs.class_name AS classNames,
+
+            -- --- THÊM 2 DÒNG NÀY VÀO ĐÂY ĐỂ SELECT DỮ LIỆU THỜI GIAN ---
+            ts_start.start_time AS startTime,
+            ts_end.end_time AS endTime
         """;
 
     String TABLE_FROM = """
@@ -307,5 +312,8 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
         String getClassIds();
         String getClassCodes();
         String getClassNames();
+        // --- THÊM 2 DÒNG NÀY VÀO INTERFACE PROJECTION ---
+        LocalTime getStartTime();
+        LocalTime getEndTime();
     }
 }

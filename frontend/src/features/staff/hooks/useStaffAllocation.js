@@ -97,37 +97,33 @@ export const useStaffAllocation = () => {
   }, [semesterId]);
 
   const runAutoAssign = async () => {
-    if (rejectReadOnlyMutation()) return;
-    if (
-      !window.confirm(
-        "Hệ thống sẽ tự động phân phòng cho các lớp chưa có chỗ. Tiếp tục?",
-      )
-    )
-      return;
-    setIsRunning(true);
-    setRunDoneMessage(null);
-    setDataError(null);
-    setActionMessage(null);
-    try {
-      const res = await httpClient.post(
-        `/api/staff/allocations/auto-assign?semesterId=${semesterId}`,
-      );
-      await fetchData();
-      setRunDoneMessage(res.data?.message || "Phân công tự động hoàn tất!");
-    } catch (error) {
-      const apiError = getApiError(
-        error,
-        "Không thể chạy phân phòng tự động.",
-      );
-      setActionMessage({
-        tone: "error",
-        errorCode: apiError.errorCode,
-        text: apiError.message,
-      });
-    } finally {
-      setIsRunning(false);
-    }
-  };
+  if (rejectReadOnlyMutation()) return;
+
+  setIsRunning(true);
+  setRunDoneMessage(null);
+  setDataError(null);
+  setActionMessage(null);
+
+  try {
+    const res = await httpClient.post(
+      `/api/staff/allocations/auto-assign?semesterId=${semesterId}`,
+    );
+    await fetchData();
+    setRunDoneMessage(res.data?.message || "Phân công tự động hoàn tất!");
+  } catch (error) {
+    const apiError = getApiError(
+      error,
+      "Không thể chạy phân phòng tự động.",
+    );
+    setActionMessage({
+      tone: "error",
+      errorCode: apiError.errorCode,
+      text: apiError.message,
+    });
+  } finally {
+    setIsRunning(false);
+  }
+};
 
   const validateAllocations = async () => {
     if (!semesterId) return;

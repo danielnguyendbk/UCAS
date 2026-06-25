@@ -18,7 +18,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 @Configuration
 public class SeedDataConfig {
 
-    // @Bean
+    @Bean
     // @ConditionalOnProperty(name = "app.seed.enabled", havingValue = "true")
     CommandLineRunner seedData(UserRepository userRepository,
                                LecturerRepository lecturerRepository,

@@ -23,6 +23,14 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/app/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/app/components/ui/dialog";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Card, CardContent } from "@/app/components/ui/card";
@@ -81,7 +89,6 @@ const ListPagination = ({ page, totalItems, onPageChange }) => {
 };
 
 const WORKFLOW_TABS = [
-  { value: "import", label: "Import thử nghiệm" },
   { value: "pending", label: "Chờ phân phòng" },
   { value: "assigned", label: "Đã phân phòng" },
   { value: "conflicts", label: "Xung đột" },
@@ -110,6 +117,7 @@ const StaffAutoAssignmentPage = () => {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [conflictTypeFilter, setConflictTypeFilter] = useState("ALL");
   const [pages, setPages] = useState({ pending: 1, assigned: 1, conflicts: 1 });
+  const [isAutoAssignConfirmOpen, setIsAutoAssignConfirmOpen] = useState(false);
 
   const {
     semestersList,
@@ -383,7 +391,7 @@ const StaffAutoAssignmentPage = () => {
         <div className="flex flex-wrap items-center gap-2">
           {activeTab === "pending" && (
             <Button
-              onClick={runAutoAssign}
+              onClick={() => setIsAutoAssignConfirmOpen(true)}
               disabled={isRunning || !semesterId || isTimetableReadOnly}
               className="bg-blue-600 hover:bg-blue-700"
             >
@@ -655,6 +663,60 @@ const StaffAutoAssignmentPage = () => {
           </Tabs>
         </CardContent>
       </Card>
+
+      <Dialog
+        open={isAutoAssignConfirmOpen}
+        onOpenChange={setIsAutoAssignConfirmOpen}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xác nhận chạy phân phòng tự động</DialogTitle>
+            <DialogDescription>
+              Hệ thống sẽ tự động gán phòng cho các lịch đang chờ phân phòng trong học kỳ đã chọn.
+              Thao tác này có thể thay đổi trạng thái phân phòng và tạo/xử lý các xung đột liên quan.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0" />
+              <div>
+                <p className="font-semibold">Vui lòng kiểm tra trước khi tiếp tục</p>
+                <p className="mt-1 text-xs">
+                  Học kỳ: {workflow?.semesterName || "Học kỳ đang chọn"} · Chờ phân phòng:{" "}
+                  {summary.unassigned} lịch · Đang có xung đột: {summary.conflicts}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={isRunning}
+              onClick={() => setIsAutoAssignConfirmOpen(false)}
+            >
+              Hủy
+            </Button>
+
+            <Button
+              className="bg-blue-600 hover:bg-blue-700"
+              disabled={isRunning || !semesterId || isTimetableReadOnly}
+              onClick={async () => {
+                setIsAutoAssignConfirmOpen(false);
+                await runAutoAssign();
+              }}
+            >
+              {isRunning ? (
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Wand2 className="mr-2 h-4 w-4" />
+              )}
+              {isRunning ? "Đang xử lý..." : "Xác nhận chạy"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <RoomSearchModal
         open={isRoomSearchOpen}

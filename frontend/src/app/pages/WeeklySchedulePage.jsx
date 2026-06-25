@@ -4,8 +4,11 @@ import {
   CalendarDays,
   DoorOpen,
   Layers3,
-  MapPin,
   Users,
+  ChevronLeft,
+  ChevronRight,
+  ArrowLeft,
+  ArrowRight
 } from "lucide-react";
 import {
   Select,
@@ -206,6 +209,8 @@ const mapScheduleItem = (item) => {
     status: getDisplayStatus(item),
     fromWeekNo: item.fromWeekNo ?? item.from_week_no ?? null,
     toWeekNo: item.toWeekNo ?? item.to_week_no ?? null,
+    startTime: item.startTime || item.start_time || null,
+    endTime: item.endTime || item.end_time || null,
   };
 };
 
@@ -223,52 +228,18 @@ const isInSelectedWeek = (item, selectedWeek) => {
   return weekNo >= fromWeek && weekNo <= toWeek;
 };
 
-const Toggle = ({ checked, onChange, label }) => (
-  <button
-    type="button"
-    onClick={() => onChange(!checked)}
-    className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50"
-    aria-pressed={checked}
-  >
-    <span
-      className={`relative h-5 w-9 rounded-full transition ${
-        checked ? "bg-blue-600" : "bg-slate-300"
-      }`}
-    >
-      <span
-        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${
-          checked ? "left-4" : "left-0.5"
-        }`}
-      />
-    </span>
-    <span className="whitespace-nowrap">{label}</span>
-  </button>
-);
-
 const LoadingSkeleton = () => (
   <div className="space-y-4">
     {[0, 1].map((index) => (
       <div key={index} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-4 h-5 w-40 animate-pulse rounded bg-slate-200" />
-        <div className="grid grid-cols-8 gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200">
-          {Array.from({ length: 56 }, (_, cell) => (
+        <div className="grid grid-cols-9 gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200">
+          {Array.from({ length: 64 }, (_, cell) => (
             <div key={cell} className="h-10 animate-pulse bg-slate-50" />
           ))}
         </div>
       </div>
     ))}
-  </div>
-);
-
-const EmptyState = () => (
-  <div className="rounded-lg border border-dashed border-slate-300 bg-white px-6 py-14 text-center shadow-sm">
-    <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-      <CalendarDays className="h-6 w-6" />
-    </div>
-    <h3 className="text-base font-bold text-slate-900">Không có lịch phù hợp với bộ lọc hiện tại</h3>
-    <p className="mt-2 text-sm text-slate-500">
-      Hãy đổi tuần học, tòa nhà hoặc phòng học để xem lịch khác.
-    </p>
   </div>
 );
 
@@ -279,7 +250,7 @@ const LessonBlock = ({ item }) => {
   return (
     <div
       className={`m-1 overflow-hidden rounded-md border border-l-4 p-2 text-[11px] leading-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${status.block} ${status.accent}`}
-      style={{ minHeight: `${rowSpan * 38}px` }}
+      style={{ minHeight: `${rowSpan * 36}px` }}
       title={`${item.courseName} - ${item.lecturer}`}
     >
       <div className="line-clamp-2 font-bold">{item.courseName}</div>
@@ -288,23 +259,31 @@ const LessonBlock = ({ item }) => {
       <div className="truncate">GV: {item.lecturer}</div>
       <div>Phòng: {item.roomLabel}</div>
       {item.classCodes && <div className="truncate">Mã lớp: {item.classCodes}</div>}
+      {item.startTime && item.endTime && (
+        <div className="text-slate-500 font-medium mt-0.5">
+          {item.startTime.slice(0, 5)} - {item.endTime.slice(0, 5)}
+        </div>
+      )}
     </div>
   );
 };
 
+/* ĐÃ ĐƯA CÁC THÀNH PHẦN CỦA THỨ VÀ NGÀY THÁNG LÊN CÙNG MỘT DÒNG */
 const DayHeader = ({ code, selectedWeek }) => {
   const index = DAY_CODES.indexOf(code);
   const date = selectedWeek?.start ? addDays(selectedWeek.start, index) : null;
 
   return (
-    <div className="sticky top-0 z-20 border-b border-slate-200 bg-slate-50 px-3 py-3 text-center">
-      <div className="text-sm font-bold text-slate-800">{DAY_LABELS[code]}</div>
-      <div className="text-xs text-slate-500">{date ? formatDate(date) : "--/--"}</div>
+    <div className="sticky top-0 z-30 border-b border-r border-slate-200 bg-slate-50 px-2 py-2 flex flex-row items-center justify-center gap-1.5 min-w-0 h-[42px]">
+      <div className="text-sm font-bold text-slate-800 shrink-0">{DAY_LABELS[code]}</div>
+      <div className="text-[11px] font-medium text-slate-400 shrink-0">
+        {date ? `(${formatDate(date)})` : "(--/--)"}
+      </div>
     </div>
   );
 };
 
-const TimetableGrid = ({ title, subtitle, items, selectedWeek, compact }) => {
+const TimetableGrid = ({ title, subtitle, items = [], selectedWeek, compact, onPrevWeek, onNextWeek, hasPrev, hasNext }) => {
   const itemsByDay = useMemo(() => {
     return items.reduce((accumulator, item) => {
       const dayKey = normalize(item.dayCode);
@@ -314,8 +293,7 @@ const TimetableGrid = ({ title, subtitle, items, selectedWeek, compact }) => {
     }, {});
   }, [items]);
 
-  const minDayWidth = compact ? "minmax(142px,1fr)" : "minmax(172px,1fr)";
-  const rowHeight = compact ? 40 : 46;
+  const rowHeight = compact ? 34 : 40;
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -330,32 +308,59 @@ const TimetableGrid = ({ title, subtitle, items, selectedWeek, compact }) => {
         </div>
       </div>
 
-      <div className="overflow-auto">
+      {/* ĐÃ BỎ max-h-[680px], GRID CHẠY THEO CUỘN DỌC CHÍNH CỦA TRANG WEB */}
+      <div className="overflow-x-auto w-full">
         <div
-          className="grid min-w-[1120px]"
+          className="grid min-w-[1000px] w-full"
           style={{
-            gridTemplateColumns: `72px repeat(7, ${minDayWidth})`,
-            gridTemplateRows: `44px repeat(16, ${rowHeight}px)`,
+            gridTemplateColumns: `50px repeat(7, minmax(0, 1fr)) 50px`,
+            gridTemplateRows: `42px repeat(16, ${rowHeight}px)`,
           }}
         >
-          <div className="sticky left-0 top-0 z-30 border-b border-r border-slate-200 bg-blue-600 px-3 py-3 text-center text-sm font-bold text-white">
-            Tiết
+          {/* CỘT NÚT BÊN TRÁI STICKY CẢ DỌC LẪN NGANG */}
+          {/* CỘT NÚT BÊN TRÁI STICKY CẢ DỌC LẪN NGANG */}
+          <div className="sticky left-0 top-0 z-40 border-b border-r border-slate-200 bg-slate-50 flex items-center justify-center h-[42px]">
+            <button
+              type="button"
+              onClick={onPrevWeek}
+              disabled={!hasPrev}
+              className="flex h-full w-full items-center justify-center text-slate-600 hover:text-slate-800 hover:bg-slate-100 transition disabled:opacity-30 disabled:pointer-events-none"
+              title="Tuần trước"
+            >
+              <ArrowLeft className="h-5 w-5 stroke-[3]" />
+            </button>
           </div>
 
+          {/* DÒNG TIÊU ĐỀ THỨ 2 -> CHỦ NHẬT (CÙNG MỘT DÒNG) */}
           {DAY_CODES.map((code) => (
             <DayHeader key={code} code={code} selectedWeek={selectedWeek} />
           ))}
 
+          {/* CỘT NÚT BÊN PHẢI STICKY CẢ DỌC LẪN NGANG */}
+          <div className="sticky right-0 top-0 z-40 border-b border-l border-slate-200 bg-slate-50 flex items-center justify-center h-[42px]">
+            <button
+              type="button"
+              onClick={onNextWeek}
+              disabled={!hasNext}
+              className="flex h-full w-full items-center justify-center text-slate-600 hover:text-slate-800 hover:bg-slate-100 transition disabled:opacity-30 disabled:pointer-events-none"
+              title="Tuần sau"
+            >
+              <ArrowRight className="h-5 w-5 stroke-[3]" />
+            </button>
+          </div>
+
+          {/* CỘT TIẾT BÊN TRÁI STICKY */}
           {PERIODS.map((period) => (
             <div
-              key={`period-${period}`}
-              className="sticky left-0 z-10 border-b border-r border-slate-200 bg-blue-600 px-2 py-2 text-center text-sm font-bold text-white"
+              key={`period-left-${period}`}
+              className="sticky left-0 z-20 border-b border-r border-slate-200 bg-blue-600 px-1 py-1 flex items-center justify-center text-xs font-bold text-white shadow-[1px_0_0_0_rgba(226,232,240,1)]"
               style={{ gridColumn: 1, gridRow: period + 1 }}
             >
               Tiết {period}
             </div>
           ))}
 
+          {/* Ô LƯỚI TRỐNG GIỮA CÁC THỨ */}
           {DAY_CODES.map((dayCode, dayIndex) =>
             PERIODS.map((period) => (
               <div
@@ -363,14 +368,26 @@ const TimetableGrid = ({ title, subtitle, items, selectedWeek, compact }) => {
                 className="border-b border-r border-slate-200 bg-white"
                 style={{ gridColumn: dayIndex + 2, gridRow: period + 1 }}
               />
-            )),
+            ))
           )}
 
+          {/* CỘT TIẾT BÊN PHẢI STICKY */}
+          {PERIODS.map((period) => (
+            <div
+              key={`period-right-${period}`}
+              className="sticky right-0 z-20 border-b border-l border-slate-200 bg-blue-600 px-1 py-1 flex items-center justify-center text-xs font-bold text-white shadow-[-1px_0_0_0_rgba(226,232,240,1)]"
+              style={{ gridColumn: 9, gridRow: period + 1 }}
+            >
+              Tiết {period}
+            </div>
+          ))}
+
+          {/* THẺ LỊCH HỌC */}
           {DAY_CODES.flatMap((dayCode, dayIndex) =>
             (itemsByDay[dayCode] || []).map((item) => (
               <div
                 key={`${item.id}-${dayCode}-${item.slotStart}`}
-                className="z-10"
+                className="z-10 min-w-0"
                 style={{
                   gridColumn: dayIndex + 2,
                   gridRow: `${Math.max(1, item.slotStart) + 1} / span ${Math.max(
@@ -381,7 +398,7 @@ const TimetableGrid = ({ title, subtitle, items, selectedWeek, compact }) => {
               >
                 <LessonBlock item={item} />
               </div>
-            )),
+            ))
           )}
         </div>
       </div>
@@ -399,7 +416,7 @@ const WeeklySchedulePage = () => {
   const [selectedSemester, setSelectedSemester] = useState("");
   const [selectedWeek, setSelectedWeek] = useState("1");
   const [selectedBuilding, setSelectedBuilding] = useState("A");
-  const [selectedRoom, setSelectedRoom] = useState("all");
+  const [selectedRoom, setSelectedRoom] = useState("");
   const [viewMode, setViewMode] = useState("room");
   const [assignedOnly, setAssignedOnly] = useState(false);
   const [showConflicts, setShowConflicts] = useState(true);
@@ -494,10 +511,6 @@ const WeeklySchedulePage = () => {
     };
   }, [backendRole, selectedSemester]);
 
-  useEffect(() => {
-    setSelectedRoom("all");
-  }, [selectedBuilding]);
-
   const buildingOptions = useMemo(() => {
     const mapped = buildings
       .map((building) => ({
@@ -524,12 +537,20 @@ const WeeklySchedulePage = () => {
       .map((row) => ({ code: row.room, label: cleanRoomName(row.room), building: row.building }));
 
     const unique = new Map();
-    [...roomsFromCategory, ...roomsFromRows].forEach((room) => {
+    [roomsFromCategory, ...roomsFromRows].forEach((room) => {
       if (normalize(room.building) === normalize(selectedBuilding)) unique.set(room.code, room);
     });
 
     return Array.from(unique.values()).sort((a, b) => a.label.localeCompare(b.label, "vi"));
   }, [classrooms, rows, selectedBuilding]);
+
+  useEffect(() => {
+    if (roomOptions && roomOptions.length > 0) {
+      setSelectedRoom(roomOptions[0].code);
+    } else {
+      setSelectedRoom("all");
+    }
+  }, [roomOptions]);
 
   const selectedWeekData = useMemo(
     () => weekOptions.find((week) => week.value === selectedWeek) || weekOptions[0],
@@ -550,7 +571,7 @@ const WeeklySchedulePage = () => {
   }, [assignedOnly, rows, selectedBuilding, selectedRoom, selectedSemester, selectedWeek, showConflicts]);
 
   const groups = useMemo(() => {
-    if (selectedRoom !== "all") {
+    if (selectedRoom !== "all" && selectedRoom !== "") {
       return [
         {
           key: selectedRoom,
@@ -605,13 +626,29 @@ const WeeklySchedulePage = () => {
     }));
   }, [filteredRows, roomOptions, selectedBuilding, selectedRoom, selectedWeekData, viewMode]);
 
+  const currentWeekIdx = useMemo(() => weekOptions.findIndex((w) => w.value === selectedWeek), [weekOptions, selectedWeek]);
+  const hasPrevWeek = currentWeekIdx > 0;
+  const hasNextWeek = currentWeekIdx >= 0 && currentWeekIdx < weekOptions.length - 1;
+
+  const handlePrevWeek = () => {
+    if (hasPrevWeek) {
+      setSelectedWeek(weekOptions[currentWeekIdx - 1].value);
+    }
+  };
+
+  const handleNextWeek = () => {
+    if (hasNextWeek) {
+      setSelectedWeek(weekOptions[currentWeekIdx + 1].value);
+    }
+  };
+
   const selectedBuildingLabel =
     buildingOptions.find((building) => normalize(building.code) === normalize(selectedBuilding))?.name ||
     `Tòa ${selectedBuilding}`;
   const isLoading = loadingMeta || loadingRows;
 
   return (
-    <div className="space-y-5 p-5 md:p-6">
+    <div className="space-y-5 p-5 md:p-6 w-full max-w-full overflow-x-hidden">
       <header className="flex flex-col gap-3 border-b border-slate-200 pb-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-bold uppercase text-blue-700">
@@ -640,7 +677,7 @@ const WeeklySchedulePage = () => {
       </header>
 
       <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.1fr_1fr_0.8fr_0.9fr_0.9fr_auto]">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_1.4fr_0.8fr_0.9fr_0.9fr]">
           <Select value={selectedSemester} onValueChange={setSelectedSemester}>
             <SelectTrigger className="h-10 rounded-lg border-slate-200 bg-slate-50 text-sm">
               <SelectValue placeholder={DEFAULT_SEMESTER_LABEL} />
@@ -654,18 +691,38 @@ const WeeklySchedulePage = () => {
             </SelectContent>
           </Select>
 
-          <Select value={selectedWeek} onValueChange={setSelectedWeek}>
-            <SelectTrigger className="h-10 rounded-lg border-slate-200 bg-slate-50 text-sm">
-              <SelectValue placeholder="Tuần học hiện tại" />
-            </SelectTrigger>
-            <SelectContent>
-              {weekOptions.map((week) => (
-                <SelectItem key={week.value} value={week.value}>
-                  {week.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={handlePrevWeek}
+              disabled={!hasPrevWeek}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+
+            <Select value={selectedWeek} onValueChange={setSelectedWeek}>
+              <SelectTrigger className="h-10 w-full rounded-lg border-slate-200 bg-slate-50 text-sm">
+                <SelectValue placeholder="Tuần học hiện tại" />
+              </SelectTrigger>
+              <SelectContent>
+                {weekOptions.map((week) => (
+                  <SelectItem key={week.value} value={week.value}>
+                    {week.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <button
+              type="button"
+              onClick={handleNextWeek}
+              disabled={!hasNextWeek}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
 
           <Select value={selectedBuilding} onValueChange={setSelectedBuilding}>
             <SelectTrigger className="h-10 rounded-lg border-slate-200 bg-slate-50 text-sm">
@@ -682,7 +739,7 @@ const WeeklySchedulePage = () => {
 
           <Select value={selectedRoom} onValueChange={setSelectedRoom}>
             <SelectTrigger className="h-10 rounded-lg border-slate-200 bg-slate-50 text-sm">
-              <SelectValue placeholder="Tất cả phòng" />
+              <SelectValue placeholder="Chọn phòng" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tất cả phòng</SelectItem>
@@ -706,15 +763,6 @@ const WeeklySchedulePage = () => {
               ))}
             </SelectContent>
           </Select>
-
-          <div className="flex flex-wrap items-center justify-start gap-2 xl:justify-end">
-            <Toggle
-              checked={assignedOnly}
-              onChange={setAssignedOnly}
-              label="Chỉ hiển thị lịch đã phân phòng"
-            />
-            <Toggle checked={showConflicts} onChange={setShowConflicts} label="Hiển thị xung đột" />
-          </div>
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
@@ -748,19 +796,8 @@ const WeeklySchedulePage = () => {
             Thời khóa biểu chưa được công bố, chưa thể dùng để vận hành mở phòng.
           </p>
         </div>
-      ) : groups.length === 0 ||
-        groups.every((group) => group.items.length === 0 && selectedRoom !== "all") ? (
-        <EmptyState />
       ) : (
         <div className="space-y-4">
-          {selectedRoom === "all" && viewMode === "room" && (
-            <div className="flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800">
-              <MapPin className="h-4 w-4" />
-              Đang hiển thị nhiều phòng thuộc {selectedBuildingLabel}; cuộn dọc để xem toàn bộ
-              phòng trong tòa.
-            </div>
-          )}
-
           {groups.map((group) => (
             <TimetableGrid
               key={group.key}
@@ -769,11 +806,14 @@ const WeeklySchedulePage = () => {
               items={group.items}
               selectedWeek={selectedWeekData}
               compact={selectedRoom === "all"}
+              onPrevWeek={handlePrevWeek}
+              onNextWeek={handleNextWeek}
+              hasPrev={hasPrevWeek}
+              hasNext={hasNextWeek}
             />
           ))}
         </div>
       )}
-
     </div>
   );
 };

@@ -311,6 +311,9 @@ public class StaffClassSectionService implements ClassSectionTableReader {
         response.setAllocationStatus(projection.getAllocationStatus());
         response.setStatusText(projection.getStatusText());
         response.setSectionStatus(projection.getSectionStatus());
+        // --- THÊM 2 DÒNG NÀY ĐỂ ĐẨY GIỜ SANG DTO ---
+        response.setStartTime(projection.getStartTime());
+        response.setEndTime(projection.getEndTime());
 
         return response;
     }

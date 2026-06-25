@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { Bell, ChevronDown, ChevronRight, Menu, School, LogOut, User, Key, CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
+import { Bell, ChevronDown, ChevronRight, ChevronLeft, Menu, School, LogOut, User, Key, CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import { NAVIGATION_BY_ROLE, ROLE_BADGE_CLASSES, ROLE_LABELS } from "@/constants/navigation";
 import { APP_ROUTES, ROLE_DEFAULT_PATHS } from "@/constants/routes";
@@ -288,11 +288,11 @@ const getNavItemKey = (item, { role = "unknown", groupLabel = "" } = {}) => {
 };
 
 const ROLE_PATH_GUARDS = {
-  ADMIN:     [/^\/$/, /^\/admin(\/|$)/],
-  STAFF:     [/^\/$/, /^\/staff(\/|$)/],
-  LECTURER:  [/^\/$/, /^\/lecturer(\/|$)/],
-  STUDENT:   [/^\/$/, /^\/student(\/|$)/],
-  FACILITY:  [/^\/$/, /^\/facility(\/|$)/],
+  ADMIN: [/^\/$/, /^\/admin(\/|$)/],
+  STAFF: [/^\/$/, /^\/staff(\/|$)/],
+  LECTURER: [/^\/$/, /^\/lecturer(\/|$)/],
+  STUDENT: [/^\/$/, /^\/student(\/|$)/],
+  FACILITY: [/^\/$/, /^\/facility(\/|$)/],
   EMPLOYEES: [/^\/$/, /^\/facility(\/|$)/]
 };
 
@@ -769,6 +769,7 @@ const AppLayout = () => {
     }
   };
 
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const unreadCount = notifications.filter((notification) => notification.unread).length;
 
   return (
@@ -785,39 +786,58 @@ const AppLayout = () => {
       {/* Sidebar */}
       <aside
         className={`
-          fixed lg:static inset-y-0 left-0 z-40 w-64 bg-white border-r border-gray-200 flex flex-col
-          transform transition-transform duration-300 ease-in-out lg:transform-none shadow-xl lg:shadow-none
+          fixed lg:static inset-y-0 left-0 z-40 bg-white border-r border-gray-200 flex flex-col relative
+          transform transition-all duration-300 ease-in-out lg:transform-none shadow-xl lg:shadow-none
+          ${isSidebarCollapsed ? "w-20" : "w-64"}
           ${isSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
         `}
       >
+        {/* Nút Chevron thu gọn Sidebar */}
+        <button
+          type="button"
+          onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          className="absolute top-8 -right-3 z-50 hidden lg:flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 shadow-md hover:bg-gray-50 hover:text-gray-700 transition"
+        >
+          {isSidebarCollapsed ? (
+            <ChevronRight className="h-4 w-4" />
+          ) : (
+            <ChevronLeft className="h-4 w-4" />
+          )}
+        </button>
+
         {/* Logo Section */}
-        <div className="h-16 flex items-center px-6 border-b border-gray-100 flex-shrink-0 bg-white">
+        <div className="h-16 flex items-center px-6 border-b border-gray-100 flex-shrink-0 bg-white overflow-hidden">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center shadow-lg shadow-blue-200">
+            <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center shadow-lg shadow-blue-200 flex-shrink-0">
               <School className="w-5 h-5 text-white" />
             </div>
-            <div>
-              <span className="font-extrabold text-gray-900 text-base tracking-tight">UCAS</span>
-              <p className="text-[10px] text-blue-500 font-bold uppercase tracking-wider leading-none mt-0.5">Management</p>
-            </div>
+            {!isSidebarCollapsed && (
+              <div className="transition-opacity duration-300">
+                <span className="font-extrabold text-gray-900 text-base tracking-tight">UCAS</span>
+                <p className="text-[10px] text-blue-500 font-bold uppercase tracking-wider leading-none mt-0.5">Management</p>
+              </div>
+            )}
           </div>
         </div>
 
         {/* User Quick Info */}
-        <div className="px-6 py-5 border-b border-gray-50 bg-gray-50/30">
-          <Badge className={`${ROLE_BADGE_CLASSES[user.role]} shadow-none border-0 px-3 py-1 text-[11px] font-bold`}>
-            {displayUser.roleLabel || ROLE_LABELS[user.role]}
-          </Badge>
-          <p className="text-xs text-gray-500 mt-2 font-medium truncate opacity-70">
-            {user.department}
-          </p>
-        </div>
+        {!isSidebarCollapsed && (
+          <div className="px-6 py-5 border-b border-gray-50 bg-gray-50/30 transition-opacity duration-300">
+            <Badge className={`${ROLE_BADGE_CLASSES[user.role]} shadow-none border-0 px-3 py-1 text-[11px] font-bold`}>
+              {displayUser.roleLabel || ROLE_LABELS[user.role]}
+            </Badge>
+            <p className="text-xs text-gray-500 mt-2 font-medium truncate opacity-70">
+              {user.department}
+            </p>
+          </div>
+        )}
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-4 px-3 custom-scrollbar">
           <ul className="space-y-1">
             {menuItems.map((item, idx) => {
               if (item.type === "divider") {
+                if (isSidebarCollapsed) return null;
                 return (
                   <li
                     key={getNavItemKey(item, { role: user.role, groupLabel: `divider-${idx}` })}
@@ -845,10 +865,12 @@ const AppLayout = () => {
                           ${active
                             ? "bg-blue-600 text-white shadow-md shadow-blue-200 font-semibold"
                             : "text-gray-600 hover:bg-blue-50 hover:text-blue-700"}
+                          ${isSidebarCollapsed ? "justify-center px-0" : ""}
                         `}
+                        title={isSidebarCollapsed ? child.label : undefined}
                       >
-                        <span className="text-sm flex-1">{child.label}</span>
-                        {active && <ChevronRight className="w-3.5 h-3.5 text-blue-200" />}
+                        {!isSidebarCollapsed && <span className="text-sm flex-1">{child.label}</span>}
+                        {active && !isSidebarCollapsed && <ChevronRight className="w-3.5 h-3.5 text-blue-200" />}
                       </Link>
                     </li>
                   );
@@ -865,23 +887,27 @@ const AppLayout = () => {
                   <li key={groupKey} className="space-y-1">
                     <button
                       type="button"
-                      onClick={() => toggleGroup(groupKey)}
+                      onClick={() => !isSidebarCollapsed && toggleGroup(groupKey)}
                       className={`
                         w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 text-left font-medium
                         ${hasActiveChild
                           ? "bg-blue-50/70 text-blue-700 font-semibold shadow-sm"
                           : "text-gray-600 hover:bg-blue-50/40 hover:text-blue-700"}
+                        ${isSidebarCollapsed ? "justify-center px-0" : ""}
                       `}
+                      title={isSidebarCollapsed ? item.label : undefined}
                     >
                       <Icon className={`w-[18px] h-[18px] flex-shrink-0 ${hasActiveChild ? "text-blue-600" : "text-gray-400"}`} />
-                      <span className="text-sm flex-1">{item.label}</span>
-                      {isExpanded ? (
-                        <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${hasActiveChild ? "text-blue-600" : "text-gray-400"}`} />
-                      ) : (
-                        <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${hasActiveChild ? "text-blue-600" : "text-gray-400"}`} />
+                      {!isSidebarCollapsed && <span className="text-sm flex-1">{item.label}</span>}
+                      {!isSidebarCollapsed && (
+                        isExpanded ? (
+                          <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${hasActiveChild ? "text-blue-600" : "text-gray-400"}`} />
+                        ) : (
+                          <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${hasActiveChild ? "text-blue-600" : "text-gray-400"}`} />
+                        )
                       )}
                     </button>
-                    {isExpanded && item.children && (
+                    {isExpanded && item.children && !isSidebarCollapsed && (
                       <ul className="mt-1 ml-6 pl-3 border-l border-gray-200 space-y-1">
                         {item.children.map((child) => {
                           const active = isItemActive(child.path);
@@ -923,19 +949,21 @@ const AppLayout = () => {
                     onClick={() => setIsSidebarOpen(false)}
                     className={`
                       flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group relative
-                      ${active 
-                        ? "bg-blue-600 text-white shadow-md shadow-blue-200 font-semibold" 
+                      ${active
+                        ? "bg-blue-600 text-white shadow-md shadow-blue-200 font-semibold"
                         : "text-gray-600 hover:bg-blue-50 hover:text-blue-700"}
+                      ${isSidebarCollapsed ? "justify-center px-0" : ""}
                     `}
+                    title={isSidebarCollapsed ? item.label : undefined}
                   >
                     <Icon className={`w-[18px] h-[18px] flex-shrink-0 ${active ? "text-white" : "text-gray-400 group-hover:text-blue-600"}`} />
-                    <span className="text-sm flex-1">{item.label}</span>
-                    {item.badge && (
+                    {!isSidebarCollapsed && <span className="text-sm flex-1">{item.label}</span>}
+                    {item.badge && !isSidebarCollapsed && (
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${item.badge === 'Gấp' ? 'bg-red-500' : 'bg-orange-500'} text-white`}>
                         {item.badge}
                       </span>
                     )}
-                    {active && <ChevronRight className="w-3.5 h-3.5 text-blue-200" />}
+                    {active && !isSidebarCollapsed && <ChevronRight className="w-3.5 h-3.5 text-blue-200" />}
                   </Link>
                 </li>
               );
@@ -945,14 +973,16 @@ const AppLayout = () => {
 
         {/* Bottom Profile Mini */}
         <div className="p-4 border-t border-gray-100 flex-shrink-0">
-          <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 transition-colors">
+          <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 transition-colors justify-center">
             <div className="w-9 h-9 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center flex-shrink-0 font-bold border border-blue-200">
               {(displayUser.name || displayUser.username || "U").charAt(0)}
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-gray-900 truncate">{displayUser.name || displayUser.username}</p>
-              <p className="text-[10px] text-gray-500 font-medium">{displayUser.code || displayUser.username}</p>
-            </div>
+            {!isSidebarCollapsed && (
+              <div className="flex-1 min-w-0 transition-opacity duration-300">
+                <p className="text-xs font-bold text-gray-900 truncate">{displayUser.name || displayUser.username}</p>
+                <p className="text-[10px] text-gray-500 font-medium">{displayUser.code || displayUser.username}</p>
+              </div>
+            )}
           </div>
         </div>
       </aside>
@@ -1105,7 +1135,7 @@ const AppLayout = () => {
 
         {/* Dynamic Content */}
         <main className="flex-1 overflow-auto bg-gray-50/30 custom-scrollbar relative">
-           <Outlet />
+          <Outlet />
         </main>
       </div>
 
