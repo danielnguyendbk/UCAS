@@ -11,6 +11,6 @@ public record FacilityIssueReportCreateRequest(
         @NotBlank @Size(max = 40) String issueCategory,
         @NotBlank @Size(max = 40) String severityLevel,
         @NotBlank String description,
-        Integer semesterId
+        Long semesterId
 ) {
 }

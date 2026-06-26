@@ -677,7 +677,7 @@ public class FacilityWorkflowService {
     private SourceItem findOpeningSource(
             FacilityOpeningSourceType sourceType,
             Long sourceId,
-            Integer semesterId,
+            Long semesterId,
             Long buildingId,
             Long classroomId
     ) {
@@ -688,7 +688,7 @@ public class FacilityWorkflowService {
         };
     }
 
-    private SourceItem findClassSessionSource(Long sourceId, Integer semesterId, Long buildingId, Long classroomId) {
+    private SourceItem findClassSessionSource(Long sourceId, Long semesterId, Long buildingId, Long classroomId) {
         List<SourceItem> items = namedJdbc.query("""
             SELECT
                 'CLASS_SESSION' AS sourceType,
@@ -724,7 +724,7 @@ public class FacilityWorkflowService {
         return items.isEmpty() ? null : items.get(0);
     }
 
-    private SourceItem findBorrowRequestSource(Long sourceId, Integer semesterId, Long buildingId, Long classroomId) {
+    private SourceItem findBorrowRequestSource(Long sourceId, Long semesterId, Long buildingId, Long classroomId) {
         List<SourceItem> items = namedJdbc.query("""
             SELECT
                 'BORROW_REQUEST' AS sourceType,
@@ -759,7 +759,7 @@ public class FacilityWorkflowService {
         return items.isEmpty() ? null : items.get(0);
     }
 
-    private SourceItem findExamSource(Long sourceId, Integer semesterId, Long buildingId, Long classroomId) {
+    private SourceItem findExamSource(Long sourceId, Long semesterId, Long buildingId, Long classroomId) {
         List<SourceItem> items = namedJdbc.query("""
             SELECT
                 'EXAM' AS sourceType,
@@ -795,7 +795,7 @@ public class FacilityWorkflowService {
         return items.isEmpty() ? null : items.get(0);
     }
 
-    private List<SourceItem> findClassSessionSources(Integer semesterId, Long buildingId, LocalDate date) {
+    private List<SourceItem> findClassSessionSources(Long semesterId, Long buildingId, LocalDate date) {
         return namedJdbc.query("""
             SELECT
                 'CLASS_SESSION' AS sourceType,
@@ -828,7 +828,7 @@ public class FacilityWorkflowService {
         );
     }
 
-    private List<SourceItem> findBorrowRequestSources(Integer semesterId, Long buildingId, LocalDate date) {
+    private List<SourceItem> findBorrowRequestSources(Long semesterId, Long buildingId, LocalDate date) {
         return namedJdbc.query("""
             SELECT
                 'BORROW_REQUEST' AS sourceType,
@@ -860,7 +860,7 @@ public class FacilityWorkflowService {
         );
     }
 
-    private List<SourceItem> findExamSources(Integer semesterId, Long buildingId, LocalDate date) {
+    private List<SourceItem> findExamSources(Long semesterId, Long buildingId, LocalDate date) {
         return namedJdbc.query("""
             SELECT
                 'EXAM' AS sourceType,
@@ -957,7 +957,7 @@ public class FacilityWorkflowService {
         return rows.get(0);
     }
 
-    private SemesterRef findSemester(Integer semesterId) {
+    private SemesterRef findSemester(Long semesterId) {
         List<SemesterRef> rows = namedJdbc.query("""
             SELECT semester_id, semester_code, semester_name
             FROM semesters
@@ -980,7 +980,24 @@ public class FacilityWorkflowService {
         return rows.get(0);
     }
 
+    private SemesterRef findSemester(Integer semesterId) {
+        if (semesterId == null) {
+            throw new ResourceNotFoundException(
+                    "SEMESTER_NOT_FOUND",
+                    "Không tìm thấy học kỳ."
+            );
+        }
+        return findSemester(semesterId.longValue());
+    }
+
     private SemesterRef findSemesterOrActive(Integer semesterId) {
+        if (semesterId != null) {
+            return findSemesterOrActive(semesterId.longValue());
+        }
+        return findSemesterOrActive((Long) null);
+    }
+
+    private SemesterRef findSemesterOrActive(Long semesterId) {
         if (semesterId != null) {
             return findSemester(semesterId);
         }
@@ -1073,7 +1090,7 @@ public class FacilityWorkflowService {
         return rows.get(0);
     }
 
-    private BuildingRef findBuilding(Integer buildingId) {
+    private BuildingRef findBuilding(Long buildingId) {
         List<BuildingRef> rows = namedJdbc.query("""
             SELECT building_id, building_code, building_name
             FROM buildings

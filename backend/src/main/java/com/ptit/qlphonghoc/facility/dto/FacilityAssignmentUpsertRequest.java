@@ -5,9 +5,9 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 public record FacilityAssignmentUpsertRequest(
-        @NotNull @Positive Integer semesterId,
-        @NotNull @Positive Integer facilityStaffId,
-        @NotNull @Positive Integer buildingId,
+        @NotNull @Positive Long semesterId,
+        @NotNull @Positive Long facilityStaffId,
+        @NotNull @Positive Long buildingId,
         @Size(max = 255) String note,
         FacilityAssignmentStatus status
 ) {
