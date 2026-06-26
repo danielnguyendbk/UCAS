@@ -12,6 +12,7 @@ import {
   UserCheck,
   UserX,
 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Badge } from "@/app/components/ui/badge";
@@ -32,6 +33,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/app/components/ui/table";
+import { FacilityAssignmentsPage } from "@/features/facility/pages/FacilityAssignmentsPage";
 import { httpClient } from "@/services/httpClient";
 
 const EMPTY_FORM = {
@@ -115,6 +117,7 @@ export const FacilityStaffPage = () => {
 
   const [viewStaff, setViewStaff] = useState(null);
   const [deleteStaff, setDeleteStaff] = useState(null);
+  const [activeTab, setActiveTab] = useState("staff");
 
   const loadData = async () => {
     setLoading(true);
@@ -353,6 +356,17 @@ export const FacilityStaffPage = () => {
         </Button>
       </div>
 
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="h-auto w-fit rounded-xl bg-gray-100 p-1">
+          <TabsTrigger value="staff" className="px-4 py-2">
+            NhÃ¢n viÃªn CSVC
+          </TabsTrigger>
+          <TabsTrigger value="assignment" className="px-4 py-2">
+            PhÃ¢n cÃ´ng tÃ²a
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="staff" className="space-y-6">
       {errorMessage && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
           {errorMessage}
@@ -542,6 +556,13 @@ export const FacilityStaffPage = () => {
           Hiển thị {filteredStaff.length} / {enrichedStaff.length} nhân viên CSVC
         </div>
       </div>
+
+        </TabsContent>
+
+        <TabsContent value="assignment" className="space-y-6">
+          <FacilityAssignmentsPage />
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
         <DialogContent>
