@@ -50,6 +50,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/maintenance-files/**").permitAll()
                         .requestMatchers(HttpMethod.HEAD, "/api/maintenance-files/**").permitAll()
                         .requestMatchers("/api/auth/me", "/api/auth/change-password").authenticated()
+                        .requestMatchers("/api/admin/facility-assignments", "/api/admin/facility-assignments/**").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/staff/class-sections", "/api/staff/class-sections/**").hasAnyRole("STAFF", "ADMIN", "FACILITY")
                         .requestMatchers("/api/staff/**").hasAnyRole("STAFF", "ADMIN")

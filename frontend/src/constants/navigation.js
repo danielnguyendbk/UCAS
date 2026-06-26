@@ -14,7 +14,6 @@ import {
   Settings,
   Upload,
   Wrench,
-  ShieldAlert,
 } from "lucide-react";
 import { APP_ROUTES } from "./routes";
 
@@ -106,6 +105,11 @@ const NAVIGATION_BY_ROLE = {
           label: "Nhân viên cơ sở vật chất",
           path: APP_ROUTES.adminFacilityStaff,
         },
+        {
+          id: "admin-facility-assignments",
+          label: "Phân công tòa",
+          path: APP_ROUTES.adminFacilityAssignments,
+        },
       ],
     },
     {
@@ -133,12 +137,6 @@ const NAVIGATION_BY_ROLE = {
           id: "admin-settings",
           label: "Cài đặt hệ thống",
           path: APP_ROUTES.adminSettings,
-        },
-        {
-          id: "admin-audit-logs",
-          label: "Nhật ký hệ thống",
-          path: APP_ROUTES.adminAuditLogs,
-          icon: ShieldAlert,
         },
       ],
     },
@@ -189,6 +187,12 @@ const NAVIGATION_BY_ROLE = {
       path: APP_ROUTES.staffBookingList,
     },
     {
+      id: "staff-facility-assignments",
+      icon: Building2,
+      label: "Phân công tòa",
+      path: APP_ROUTES.staffFacilityAssignments,
+    },
+    {
       id: "staff-room-change-list",
       icon: ArrowLeftRight,
       label: "Danh sách đổi phòng",
@@ -218,7 +222,7 @@ const NAVIGATION_BY_ROLE = {
     {
       id: "facility-open-close",
       icon: Key,
-      label: "Mở khóa phòng",
+      label: "Mở/đóng cửa phòng",
       path: APP_ROUTES.facilityOpenClose,
     },
     {

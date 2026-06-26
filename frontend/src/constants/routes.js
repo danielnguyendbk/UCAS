@@ -13,13 +13,12 @@ const APP_ROUTES = {
   adminAutoAssignment: "/admin/auto-assignment",
   adminTimetableApproval: "/admin/timetable-approval",
   adminCalendarBlocks: "/admin/calendar-blocks",
-  adminTimetableVersions: "/admin/timetable-versions",
   adminExams: "/admin/exams",
   adminReports: "/admin/reports",
   adminUsers: "/admin/users",
   adminFacilityStaff: "/admin/facility-staff",
+  adminFacilityAssignments: "/admin/facility-assignments",
   adminSettings: "/admin/settings",
-  adminAuditLogs: "/admin/audit-logs",
 
   // STAFF
   staffDashboard: "/staff/dashboard",
@@ -34,10 +33,12 @@ const APP_ROUTES = {
   staffBookingList: "/staff/booking-list",
   staffMaintenanceRequests: "/staff/maintenance-requests",
   staffLookup: "/staff/lookup",
+  staffFacilityAssignments: "/staff/facility-assignments",
 
   // FACILITY
   facilityTimetable: "/facility/timetable",
-  facilityOpenClose: "/facility/open-close",
+  facilityOpenClose: "/facility/opening-schedule",
+  facilityOpeningSchedule: "/facility/opening-schedule",
   facilityIssues: "/facility/issues",
   facilityRooms: "/facility/rooms",
   facilityMaintenanceRequest: "/facility/maintenance-request",
@@ -90,7 +91,7 @@ const APP_ROUTES = {
   employeeUsage: "/facility/rooms",
   employeeMaintenanceRequest: "/facility/maintenance-request",
   employeeMaintenanceHistory: "/facility/issues",
-  employeeRoomUnlock: "/facility/open-close",
+  employeeRoomUnlock: "/facility/opening-schedule",
   employee: "/facility/timetable",
 
   studentSchedule: "/student/timetable",
