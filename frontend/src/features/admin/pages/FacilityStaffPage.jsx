@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import ExcelImportActions from "@/features/admin/components/ExcelImportActions";
 import {
   Search,
   Plus,
@@ -136,7 +137,9 @@ export const FacilityStaffPage = () => {
       setBuildings(getResponseData(buildingsResponse).map(normalizeBuilding));
     } catch (error) {
       console.error("Không tải được dữ liệu nhân viên CSVC:", error);
-      setErrorMessage("Không tải được dữ liệu nhân viên CSVC. Vui lòng kiểm tra backend.");
+      setErrorMessage(
+        "Không tải được dữ liệu nhân viên CSVC. Vui lòng kiểm tra backend.",
+      );
     } finally {
       setLoading(false);
     }
@@ -365,13 +368,17 @@ export const FacilityStaffPage = () => {
           </p>
         </div>
 
-        <Button
-          className="bg-blue-600 hover:bg-blue-700"
-          onClick={openCreateDialog}
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Thêm nhân viên CSVC
-        </Button>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <ExcelImportActions type="facilityStaff" onImported={loadData} />
+
+          <Button
+            className="bg-blue-600 hover:bg-blue-700"
+            onClick={openCreateDialog}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Thêm nhân viên CSVC
+          </Button>
+        </div>
       </div>
 
       <div className="space-y-6">
