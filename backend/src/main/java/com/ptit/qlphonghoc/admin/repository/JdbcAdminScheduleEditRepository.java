@@ -18,24 +18,35 @@ public class JdbcAdminScheduleEditRepository implements AdminScheduleEditReposit
 
     @Override
     public Optional<ScheduleEditContext> findContextForUpdate(Integer sectionId, Integer scheduleId) {
+        return findContext(sectionId, scheduleId, true);
+    }
+
+    @Override
+    public Optional<ScheduleEditContext> findContext(Integer sectionId, Integer scheduleId) {
+        return findContext(sectionId, scheduleId, false);
+    }
+
+    private Optional<ScheduleEditContext> findContext(Integer sectionId, Integer scheduleId, boolean forUpdate) {
         List<ScheduleEditContext> rows = jdbcTemplate.query(
-                """
+                ("""
                 SELECT cs.semester_id,
                        sem.timetable_status,
-                       cs.enrolled_count
+                       cs.enrolled_count,
+                       c.required_room_type
                 FROM schedules sch
                 JOIN class_sections cs ON cs.section_id = sch.section_id
+                JOIN courses c ON c.course_id = cs.course_id
                 JOIN semesters sem ON sem.semester_id = cs.semester_id
                 WHERE cs.section_id = ?
                   AND sch.schedule_id = ?
                   AND cs.status <> 'CANCELLED'
                   AND sch.status <> 'CANCELLED'
-                FOR UPDATE
-                """,
+                """ + (forUpdate ? " FOR UPDATE" : "")),
                 (rs, rowNum) -> new ScheduleEditContext(
                         rs.getInt("semester_id"),
                         rs.getString("timetable_status"),
-                        rs.getInt("enrolled_count")
+                        rs.getInt("enrolled_count"),
+                        rs.getString("required_room_type")
                 ),
                 sectionId,
                 scheduleId
@@ -85,6 +96,161 @@ public class JdbcAdminScheduleEditRepository implements AdminScheduleEditReposit
                 slotStartId
         );
         return count != null && count > 0;
+    }
+
+    @Override
+    public Optional<RoomEditRef> findRoom(Integer classroomId) {
+        List<RoomEditRef> rows = jdbcTemplate.query(
+                """
+                SELECT cr.classroom_id,
+                       CONCAT(b.building_code, '-', cr.room_number) AS room_code,
+                       cr.capacity,
+                       cr.room_type,
+                       cr.is_active,
+                       cr.is_deleted
+                FROM classrooms cr
+                JOIN buildings b ON b.building_id = cr.building_id
+                WHERE cr.classroom_id = ?
+                """,
+                (rs, rowNum) -> new RoomEditRef(
+                        rs.getInt("classroom_id"),
+                        rs.getString("room_code"),
+                        rs.getInt("capacity"),
+                        rs.getString("room_type"),
+                        rs.getBoolean("is_active"),
+                        rs.getBoolean("is_deleted")
+                ),
+                classroomId
+        );
+        return rows.stream().findFirst();
+    }
+
+    @Override
+    public int countRoomTimeConflicts(
+            Integer scheduleId,
+            Integer classroomId,
+            Integer semesterId,
+            String dayOfWeek,
+            Integer slotStartId,
+            Integer slotEndId,
+            Integer fromWeekNo,
+            Integer toWeekNo
+    ) {
+        Integer count = jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM schedules sch2
+                JOIN class_sections cs2 ON cs2.section_id = sch2.section_id
+                WHERE sch2.classroom_id = ?
+                  AND sch2.schedule_id <> ?
+                  AND sch2.status = 'ASSIGNED'
+                  AND cs2.status = 'ACTIVE'
+                  AND cs2.semester_id = ?
+                  AND sch2.day_of_week = ?
+                  AND sch2.slot_start_id <= ?
+                  AND sch2.slot_end_id >= ?
+                  AND COALESCE(sch2.from_week_no, 1) <= COALESCE(?, 999)
+                  AND COALESCE(?, 1) <= COALESCE(sch2.to_week_no, 999)
+                """,
+                Integer.class,
+                classroomId,
+                scheduleId,
+                semesterId,
+                dayOfWeek,
+                slotEndId,
+                slotStartId,
+                toWeekNo,
+                fromWeekNo
+        );
+        return count == null ? 0 : count;
+    }
+
+    @Override
+    public List<AvailableRoomRef> findAvailableRooms(
+            Integer semesterId,
+            String dayOfWeek,
+            Integer slotStartId,
+            Integer slotEndId,
+            Integer fromWeekNo,
+            Integer toWeekNo,
+            Integer excludedScheduleId,
+            Integer expectedAttendees,
+            String roomType,
+            Integer buildingId
+    ) {
+        return jdbcTemplate.query(
+                """
+                SELECT cr.classroom_id AS classroom_id,
+                       cr.building_id AS building_id,
+                       b.building_code AS building_code,
+                       b.building_name AS building_name,
+                       CONCAT(b.building_code, '-', cr.room_number) AS room_code,
+                       cr.capacity AS capacity,
+                       cr.room_type AS room_type,
+                       CASE cr.room_type
+                           WHEN 'LECTURE' THEN 'Phong hoc'
+                           WHEN 'LAB' THEN 'Phong may'
+                           WHEN 'SEMINAR' THEN 'Phong seminar'
+                           WHEN 'AUDITORIUM' THEN 'Hoi truong nho'
+                           ELSE cr.room_type
+                       END AS room_type_text,
+                       CASE cr.room_type
+                           WHEN 'LAB' THEN 'May tinh, May lanh'
+                           WHEN 'SEMINAR' THEN 'Micro, Tivi, May lanh'
+                           WHEN 'LECTURE' THEN 'Micro, Tivi, May lanh'
+                           WHEN 'AUDITORIUM' THEN 'Micro, May chieu, May lanh'
+                           ELSE 'Khong co'
+                       END AS main_equipment
+                FROM classrooms cr
+                JOIN buildings b ON b.building_id = cr.building_id
+                WHERE cr.is_active = TRUE
+                  AND cr.is_deleted = FALSE
+                  AND cr.capacity >= ?
+                  AND (? IS NULL OR ? = '' OR cr.room_type = ?)
+                  AND (? IS NULL OR cr.building_id = ?)
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM schedules sch
+                      JOIN class_sections cs ON cs.section_id = sch.section_id
+                      WHERE sch.classroom_id = cr.classroom_id
+                        AND sch.status = 'ASSIGNED'
+                        AND cs.status = 'ACTIVE'
+                        AND cs.semester_id = ?
+                        AND sch.day_of_week = ?
+                        AND sch.slot_start_id <= ?
+                        AND sch.slot_end_id >= ?
+                        AND COALESCE(sch.from_week_no, 1) <= COALESCE(?, 999)
+                        AND COALESCE(?, 1) <= COALESCE(sch.to_week_no, 999)
+                        AND (? IS NULL OR sch.schedule_id <> ?)
+                  )
+                ORDER BY cr.capacity ASC
+                """,
+                (rs, rowNum) -> new AvailableRoomRef(
+                        rs.getInt("classroom_id"),
+                        rs.getInt("building_id"),
+                        rs.getString("building_code"),
+                        rs.getString("building_name"),
+                        rs.getString("room_code"),
+                        rs.getInt("capacity"),
+                        rs.getString("room_type"),
+                        rs.getString("room_type_text"),
+                        rs.getString("main_equipment")
+                ),
+                expectedAttendees,
+                roomType,
+                roomType,
+                roomType,
+                buildingId,
+                buildingId,
+                semesterId,
+                dayOfWeek,
+                slotEndId,
+                slotStartId,
+                toWeekNo,
+                fromWeekNo,
+                excludedScheduleId,
+                excludedScheduleId
+        );
     }
 
     @Override

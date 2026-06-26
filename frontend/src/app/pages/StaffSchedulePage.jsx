@@ -175,7 +175,7 @@ const StaffSchedulePage = () => {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-gray-50">
-                    <TableHead className="text-xs font-semibold text-gray-600">Mã lớp HP</TableHead>
+                    <TableHead className="text-xs font-semibold text-gray-600">Mã lớp học phần HP</TableHead>
                     <TableHead className="text-xs font-semibold text-gray-600">Tên môn học</TableHead>
                     <TableHead className="text-xs font-semibold text-gray-600">Giảng viên</TableHead>
                     <TableHead className="text-xs font-semibold text-gray-600">Lịch học</TableHead>

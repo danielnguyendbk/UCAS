@@ -4,6 +4,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -82,6 +83,44 @@ public class TimetableImportReadRepository implements TimetableImportDataSource 
                 """, params, rs -> rs.next() && rs.getObject("min_week") != null
                 ? new WeekRange(rs.getInt("min_week"), rs.getInt("max_week")) : null);
 
+        Map<Integer, SemesterWeekRef> semesterWeeks = new LinkedHashMap<>();
+        jdbc.query("""
+                SELECT semester_week_id, week_no, start_date, end_date
+                FROM semester_weeks
+                WHERE semester_id = :semesterId
+                ORDER BY week_no
+                """, params, rs -> {
+            semesterWeeks.put(rs.getInt("week_no"), new SemesterWeekRef(
+                    rs.getLong("semester_week_id"),
+                    rs.getInt("week_no"),
+                    rs.getDate("start_date").toLocalDate(),
+                    rs.getDate("end_date").toLocalDate()
+            ));
+        });
+
+        Map<String, ClassRef> classes = index(jdbc.query("""
+                SELECT class_name, COUNT(*) AS student_count
+                FROM students
+                WHERE is_deleted = FALSE
+                GROUP BY class_name
+                """, params, (rs, n) -> new ClassRef(
+                rs.getString("class_name"), rs.getInt("student_count")
+        )), ClassRef::name);
+
+        List<CalendarBlockRef> calendarBlocks = jdbc.query("""
+                SELECT calendar_block_id, title, block_type, start_date, end_date, is_teaching_allowed
+                FROM academic_calendar_blocks
+                WHERE semester_id = :semesterId
+                  AND is_teaching_allowed = FALSE
+                """, params, (rs, n) -> new CalendarBlockRef(
+                rs.getLong("calendar_block_id"),
+                rs.getString("title"),
+                rs.getString("block_type"),
+                rs.getDate("start_date").toLocalDate(),
+                rs.getDate("end_date").toLocalDate(),
+                rs.getBoolean("is_teaching_allowed")
+        ));
+
         List<SectionRef> sections = jdbc.query("""
                 SELECT cs.section_id, cs.course_id, cs.lecturer_id, cs.section_code, cs.class_name,
                        cs.enrolled_count, cs.max_capacity, cs.status
@@ -108,7 +147,8 @@ public class TimetableImportReadRepository implements TimetableImportDataSource 
                 rs.getString("session_type"), rs.getInt("practice_group_no"), rs.getString("status")
         ));
 
-        return new ReferenceData(courses, lecturers, slots, buildings, classrooms, weekRange, sections, schedules);
+        return new ReferenceData(courses, lecturers, slots, buildings, classrooms, weekRange,
+                semesterWeeks, classes, calendarBlocks, sections, schedules);
     }
 
     private <T> Map<String, T> index(List<T> values, java.util.function.Function<T, String> key) {
@@ -141,6 +181,10 @@ public class TimetableImportReadRepository implements TimetableImportDataSource 
     public record ClassroomRef(long id, String code, long buildingId, String buildingCode, String roomType,
                                int capacity, boolean active, boolean deleted, boolean buildingDeleted) {}
     public record WeekRange(int minimum, int maximum) {}
+    public record SemesterWeekRef(long id, int weekNo, LocalDate startDate, LocalDate endDate) {}
+    public record ClassRef(String name, int studentCount) {}
+    public record CalendarBlockRef(long id, String title, String blockType, LocalDate startDate, LocalDate endDate,
+                                   boolean teachingAllowed) {}
     public record SectionRef(long id, long courseId, long lecturerId, String sectionCode, String className,
                              int enrolledCount, int maxCapacity, String status) {}
     public record ScheduleRef(long id, long sectionId, Long classroomId, String dayOfWeek, int slotStart,
@@ -153,6 +197,9 @@ public class TimetableImportReadRepository implements TimetableImportDataSource 
             Map<String, BuildingRef> buildings,
             Map<String, ClassroomRef> classrooms,
             WeekRange weekRange,
+            Map<Integer, SemesterWeekRef> semesterWeeks,
+            Map<String, ClassRef> classes,
+            List<CalendarBlockRef> calendarBlocks,
             List<SectionRef> sections,
             List<ScheduleRef> schedules
     ) {}

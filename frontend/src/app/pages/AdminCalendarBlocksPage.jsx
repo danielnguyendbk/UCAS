@@ -19,6 +19,13 @@ import {
   TableHeader,
   TableRow,
 } from "../components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "../components/ui/dialog";
 import { httpClient } from "@/services/httpClient";
 
 const getResponseData = (response) => {
@@ -42,6 +49,16 @@ const BLOCK_TYPE_BADGE = {
 
 const isTeachingAllowed = (block) => block.teachingAllowed === true || block.teachingAllowed === 1;
 
+const EMPTY_FORM = {
+  semesterId: "",
+  title: "",
+  type: "HOLIDAY",
+  startDate: "",
+  endDate: "",
+  teachingAllowed: "false",
+  note: "",
+};
+
 const AdminCalendarBlocksPage = () => {
   const [blocks, setBlocks] = useState([]);
   const [semesters, setSemesters] = useState([]);
@@ -52,6 +69,12 @@ const AdminCalendarBlocksPage = () => {
   const [filterEndDate, setFilterEndDate] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingBlock, setEditingBlock] = useState(null);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState("");
 
   useEffect(() => {
     let isMounted = true;
@@ -67,10 +90,26 @@ const AdminCalendarBlocksPage = () => {
     };
   }, []);
 
+  const loadBlocks = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const params = {};
+      if (selectedSemester !== "all") params.semesterId = selectedSemester;
+      if (selectedType !== "all") params.type = selectedType;
+      const response = await httpClient.get("/api/admin/calendar-blocks", { params });
+      setBlocks(getResponseData(response));
+    } catch (err) {
+      setBlocks([]);
+      setError(err?.response?.data?.message || "Không thể tải lịch học vụ.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
-
-    const loadBlocks = async () => {
+    const run = async () => {
       setLoading(true);
       setError("");
       try {
@@ -88,8 +127,7 @@ const AdminCalendarBlocksPage = () => {
         if (isMounted) setLoading(false);
       }
     };
-
-    loadBlocks();
+    run();
     return () => {
       isMounted = false;
     };
@@ -121,6 +159,83 @@ const AdminCalendarBlocksPage = () => {
     setFilterEndDate("");
   };
 
+  const openCreate = () => {
+    setEditingBlock(null);
+    setForm(EMPTY_FORM);
+    setFormError("");
+    setDialogOpen(true);
+  };
+
+  const openEdit = (block) => {
+    setEditingBlock(block);
+    setForm({
+      semesterId: String(block.semesterId ?? ""),
+      title: block.title ?? "",
+      type: block.type ?? "HOLIDAY",
+      startDate: block.startDate ? String(block.startDate) : "",
+      endDate: block.endDate ? String(block.endDate) : "",
+      teachingAllowed: isTeachingAllowed(block) ? "true" : "false",
+      note: block.notes ?? "",
+    });
+    setFormError("");
+    setDialogOpen(true);
+  };
+
+  const handleFormChange = (field, value) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSave = async () => {
+    if (!form.title.trim() || !form.type || !form.startDate || !form.endDate) {
+      setFormError("Vui lòng điền đầy đủ thông tin bắt buộc.");
+      return;
+    }
+    if (!editingBlock && !form.semesterId) {
+      setFormError("Vui lòng chọn học kỳ.");
+      return;
+    }
+    if (form.endDate < form.startDate) {
+      setFormError("Ngày kết thúc phải sau ngày bắt đầu.");
+      return;
+    }
+    setSaving(true);
+    setFormError("");
+    const payload = {
+      title: form.title.trim(),
+      type: form.type,
+      startDate: form.startDate,
+      endDate: form.endDate,
+      teachingAllowed: form.teachingAllowed === "true",
+      note: form.note.trim() || null,
+    };
+    try {
+      if (editingBlock) {
+        await httpClient.put(`/api/admin/calendar-blocks/${editingBlock.id}`, payload);
+      } else {
+        await httpClient.post("/api/admin/calendar-blocks", {
+          ...payload,
+          semesterId: Number(form.semesterId),
+        });
+      }
+      setDialogOpen(false);
+      await loadBlocks();
+    } catch (err) {
+      setFormError(err?.response?.data?.message || (editingBlock ? "Cập nhật thất bại." : "Tạo thất bại."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (block) => {
+    if (!window.confirm(`Xóa "${block.title}"?`)) return;
+    try {
+      await httpClient.delete(`/api/admin/calendar-blocks/${block.id}`);
+      await loadBlocks();
+    } catch (err) {
+      alert(err?.response?.data?.message || "Xóa thất bại.");
+    }
+  };
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
@@ -131,7 +246,7 @@ const AdminCalendarBlocksPage = () => {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button disabled className="bg-blue-600 hover:bg-blue-700">
+          <Button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700">
             <Plus className="mr-2 h-4 w-4" />
             Tạo ngày nghỉ
           </Button>
@@ -256,10 +371,20 @@ const AdminCalendarBlocksPage = () => {
                     <TableCell className="max-w-xs truncate text-xs text-gray-500">{block.notes || "-"}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1.5">
-                        <Button variant="ghost" size="xs" disabled title="Chưa có API cập nhật lịch học vụ">
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          onClick={() => openEdit(block)}
+                          className="text-blue-500 hover:bg-blue-50 hover:text-blue-700"
+                        >
                           <Edit className="h-3.5 w-3.5" />
                         </Button>
-                        <Button variant="ghost" size="xs" disabled title="Chưa có API xóa lịch học vụ">
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          onClick={() => handleDelete(block)}
+                          className="text-rose-500 hover:bg-rose-50 hover:text-rose-700"
+                        >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
@@ -277,6 +402,124 @@ const AdminCalendarBlocksPage = () => {
           </div>
         </div>
       )}
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{editingBlock ? "Cập nhật sự kiện học vụ" : "Tạo ngày nghỉ / sự kiện học vụ"}</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {formError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+                {formError}
+              </div>
+            )}
+
+            {!editingBlock && (
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-gray-700">
+                  Học kỳ <span className="text-rose-500">*</span>
+                </Label>
+                <Select value={form.semesterId} onValueChange={(value) => handleFormChange("semesterId", value)}>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="Chọn học kỳ" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {semesters.map((semester) => (
+                      <SelectItem key={semester.id} value={String(semester.id)}>{semester.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-gray-700">
+                Tiêu đề <span className="text-rose-500">*</span>
+              </Label>
+              <Input
+                value={form.title}
+                onChange={(event) => handleFormChange("title", event.target.value)}
+                placeholder="VD: Nghỉ Tết Nguyên Đán"
+                className="h-9 text-xs"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-gray-700">
+                  Loại <span className="text-rose-500">*</span>
+                </Label>
+                <Select value={form.type} onValueChange={(value) => handleFormChange("type", value)}>
+                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(BLOCK_TYPE_LABEL).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>{label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-gray-700">Tổ chức học</Label>
+                <Select value={form.teachingAllowed} onValueChange={(value) => handleFormChange("teachingAllowed", value)}>
+                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="false">Không cho phép học</SelectItem>
+                    <SelectItem value="true">Cho phép học</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-gray-700">
+                  Từ ngày <span className="text-rose-500">*</span>
+                </Label>
+                <Input
+                  type="date"
+                  value={form.startDate}
+                  onChange={(event) => handleFormChange("startDate", event.target.value)}
+                  className="h-9 text-xs"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-gray-700">
+                  Đến ngày <span className="text-rose-500">*</span>
+                </Label>
+                <Input
+                  type="date"
+                  value={form.endDate}
+                  onChange={(event) => handleFormChange("endDate", event.target.value)}
+                  className="h-9 text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-gray-700">Ghi chú</Label>
+              <Input
+                value={form.note}
+                onChange={(event) => handleFormChange("note", event.target.value)}
+                placeholder="Ghi chú thêm (không bắt buộc)"
+                className="h-9 text-xs"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)} disabled={saving}>
+              Hủy
+            </Button>
+            <Button size="sm" onClick={handleSave} disabled={saving} className="bg-blue-600 hover:bg-blue-700">
+              {saving && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+              {editingBlock ? "Lưu" : "Tạo"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

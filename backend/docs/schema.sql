@@ -817,18 +817,34 @@ ON class_sections(semester_id, status);
 CREATE INDEX idx_class_sections_lecturer
 ON class_sections(lecturer_id);
 
--- -----------------------------
--- 13) PHIÊN BẢN THỜI KHÓA BIỂU
--- -----------------------------
-CREATE TABLE timetable_versions (
-    version_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    semester_id BIGINT UNSIGNED NOT NULL,
-    version_no INT NOT NULL,
-    created_by BIGINT UNSIGNED NOT NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    summary TEXT NOT NULL,
-    CONSTRAINT fk_timetable_versions_semester FOREIGN KEY (semester_id) REFERENCES semesters(semester_id),
-    CONSTRAINT fk_timetable_versions_creator FOREIGN KEY (created_by) REFERENCES users(user_id),
-    UNIQUE KEY uq_semester_version (semester_id, version_no)
-) ENGINE=InnoDB;
 
+CREATE TABLE facility_building_assignments (
+    assignment_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    semester_id BIGINT UNSIGNED NOT NULL,
+    facility_staff_id BIGINT UNSIGNED NOT NULL,
+    building_id BIGINT UNSIGNED NOT NULL,
+
+    assigned_by BIGINT UNSIGNED NOT NULL,
+    assigned_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    status ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE',
+    note VARCHAR(255),
+
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_fba_semester
+        FOREIGN KEY (semester_id) REFERENCES semesters(semester_id),
+
+    CONSTRAINT fk_fba_facility_staff
+        FOREIGN KEY (facility_staff_id) REFERENCES facility_staff(facility_staff_id),
+
+    CONSTRAINT fk_fba_building
+        FOREIGN KEY (building_id) REFERENCES buildings(building_id),
+
+    CONSTRAINT fk_fba_assigned_by
+        FOREIGN KEY (assigned_by) REFERENCES users(user_id),
+
+    UNIQUE (semester_id, facility_staff_id)
+);

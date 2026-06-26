@@ -84,6 +84,61 @@ public class CategoryController {
         return ApiResponse.success("OK", findTimeSlots());
     }
 
+    @GetMapping("/calendar-blocks")
+    public ApiResponse<List<Map<String, Object>>> getCalendarBlocks(
+            @org.springframework.web.bind.annotation.RequestParam(required = false) Integer semesterId
+    ) {
+        String sql = """
+            SELECT
+                cb.calendar_block_id AS id,
+                cb.semester_id AS semesterId,
+                s.semester_code AS semesterCode,
+                s.semester_name AS semesterName,
+                s.start_date AS semesterStartDate,
+                s.end_date AS semesterEndDate,
+                cb.title,
+                cb.block_type AS type,
+                cb.start_date AS startDate,
+                cb.end_date AS endDate,
+                cb.is_teaching_allowed AS teachingAllowed,
+                cb.note AS notes,
+                'ACTIVE' AS status
+            FROM academic_calendar_blocks cb
+            JOIN semesters s ON s.semester_id = cb.semester_id
+            WHERE s.is_deleted = FALSE
+            """;
+        if (semesterId == null) {
+            return ApiResponse.success("OK", jdbcTemplate.queryForList(sql + "ORDER BY cb.start_date ASC, cb.calendar_block_id ASC"));
+        }
+        return ApiResponse.success(
+                "OK",
+                jdbcTemplate.queryForList(
+                        sql + "AND cb.semester_id = ? ORDER BY cb.start_date ASC, cb.calendar_block_id ASC",
+                        semesterId
+                )
+        );
+    }
+
+    @GetMapping("/semester-weeks")
+    public ApiResponse<List<Map<String, Object>>> getSemesterWeeks(
+            @org.springframework.web.bind.annotation.RequestParam Integer semesterId
+    ) {
+        String sql = """
+            SELECT
+                semester_week_id AS id,
+                semester_id AS semesterId,
+                week_no AS weekNo,
+                start_date AS startDate,
+                end_date AS endDate,
+                is_break AS isBreak,
+                note
+            FROM semester_weeks
+            WHERE semester_id = ?
+            ORDER BY week_no ASC
+            """;
+        return ApiResponse.success("OK", jdbcTemplate.queryForList(sql, semesterId));
+    }
+
     @GetMapping("/classes")
     public ApiResponse<List<Map<String, Object>>> getClasses() {
         return ApiResponse.success("OK", findClasses());

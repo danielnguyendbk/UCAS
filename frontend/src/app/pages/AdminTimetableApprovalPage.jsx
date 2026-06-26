@@ -12,6 +12,7 @@ import {
   Search,
   Scissors,
   ShieldCheck,
+  Trash2,
   UnlockKeyhole,
 } from "lucide-react";
 import { Badge } from "../components/ui/badge";
@@ -114,7 +115,7 @@ const isCapacityConflict = (section) =>
   String(section?.conflictReason || "").toUpperCase() === "CAPACITY_EXCEEDED";
 
 const isSplitCandidate = (section) =>
-  Boolean(section?.scheduleId && (isCapacityConflict(section) || hasSplitSuggestion(section)));
+  Boolean(section?.scheduleId && (isCapacityConflict(section) || hasSplitSuggestion(section) || getStatus(section) === "UNASSIGNED"));
 
 const getRawSectionCode = (section) => {
   if (section?.sectionCode) return section.sectionCode;
@@ -139,14 +140,19 @@ const detailRows = (section) => [
   ["Ghi chú xử lý", section.note || "—"],
 ];
 
+const normalizeSplitPartCount = (value) => {
+  const parsed = Number.parseInt(value, 10);
+  if (Number.isNaN(parsed)) return 2;
+  return Math.min(5, Math.max(2, parsed));
+};
+
 const createSplitParts = (section, count) => {
   const total = Number(section?.studentCount || 0);
   const base = Math.floor(total / count);
   const remainder = total % count;
-  const courseCode = getCourseCode(section);
   const rawCode = getRawSectionCode(section);
   return Array.from({ length: count }, (_, index) => ({
-    sectionCode: `${courseCode}.L${rawCode}-${index + 1}`,
+    sectionCode: `${rawCode}-${index + 1}`,
     studentCount: String(base + (index < remainder ? 1 : 0)),
     lecturerId: section?.lecturerId ? String(section.lecturerId) : "",
     dayOfWeek: section?.dayCode || "MON",
@@ -222,12 +228,13 @@ const SplitSectionDialog = ({
     setSelectedSuggestionId("");
   };
   const changePartCount = (value) => {
-    setPartCount(value);
-    setParts(createSplitParts(section, Number(value)));
+    const nextCount = normalizeSplitPartCount(value);
+    setPartCount(String(nextCount));
+    setParts(createSplitParts(section, nextCount));
     setSelectedSuggestionId("");
   };
   const resetEqualSplit = () => {
-    setParts(createSplitParts(section, Number(partCount)));
+    setParts(createSplitParts(section, normalizeSplitPartCount(partCount)));
     setSelectedSuggestionId("");
   };
 
@@ -332,10 +339,13 @@ const SplitSectionDialog = ({
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div className="w-52 space-y-1.5">
                 <Label>Số nhóm sau tách</Label>
-                <Select value={partCount} onValueChange={changePartCount}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="2">2 nhóm</SelectItem><SelectItem value="3">3 nhóm</SelectItem></SelectContent>
-                </Select>
+                <Input
+                  type="number"
+                  min="2"
+                  max="5"
+                  value={partCount}
+                  onChange={(event) => changePartCount(event.target.value)}
+                />
               </div>
               <Button type="button" variant="outline" onClick={resetEqualSplit}>
                 Chia đều sĩ số
@@ -430,12 +440,12 @@ const SplitSectionDialog = ({
                 <div key={index} className="rounded-xl border border-gray-200 p-4">
                   <div className="mb-3 flex items-center justify-between"><p className="font-semibold text-gray-900">Nhóm {index + 1}</p><Badge className="border-0 bg-slate-100 text-slate-700">{part.studentCount || 0} SV</Badge></div>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                    <div className="space-y-1.5 lg:col-span-2"><Label>Mã nhóm</Label><Input value={part.sectionCode} maxLength={40} onChange={(event) => updatePart(index, "sectionCode", event.target.value)} /></div>
+                    <div className="space-y-1.5 lg:col-span-2"><Label>Mã nhóm</Label><Input value={part.sectionCode} maxLength={20} placeholder={`${getRawSectionCode(section)}-${index + 1}`} onChange={(event) => updatePart(index, "sectionCode", event.target.value)} /></div>
                     <div className="space-y-1.5"><Label>Sĩ số</Label><Input type="number" min="1" value={part.studentCount} onChange={(event) => updatePart(index, "studentCount", event.target.value)} /></div>
                     <div className="space-y-1.5 lg:col-span-2"><Label>Giảng viên</Label><Select value={part.lecturerId} onValueChange={(value) => updatePart(index, "lecturerId", value)}><SelectTrigger><SelectValue placeholder="Chọn giảng viên" /></SelectTrigger><SelectContent>{lecturers.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.name || item.staffCode}</SelectItem>)}</SelectContent></Select></div>
-                    <div className="space-y-1.5"><Label>Thứ</Label><Select value={part.dayOfWeek} onValueChange={(value) => updatePart(index, "dayOfWeek", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{DAY_OPTIONS.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
-                    <div className="space-y-1.5 lg:col-span-2"><Label>Tiết bắt đầu</Label><Select value={part.slotStartId} onValueChange={(value) => updatePart(index, "slotStartId", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{timeSlots.map((item) => <SelectItem key={item.slotId} value={String(item.slotId)}>Tiết {item.slotNo} ({String(item.startTime).slice(0, 5)})</SelectItem>)}</SelectContent></Select></div>
-                    <div className="space-y-1.5 lg:col-span-2"><Label>Tiết kết thúc</Label><Select value={part.slotEndId} onValueChange={(value) => updatePart(index, "slotEndId", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{timeSlots.map((item) => <SelectItem key={item.slotId} value={String(item.slotId)}>Tiết {item.slotNo} ({String(item.endTime).slice(0, 5)})</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-1.5"><Label>Thu</Label><Select value={part.dayOfWeek} onValueChange={(value) => updatePart(index, "dayOfWeek", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{DAY_OPTIONS.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-1.5 lg:col-span-2"><Label>Tiet bat dau</Label><Select value={part.slotStartId} onValueChange={(value) => updatePart(index, "slotStartId", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{timeSlots.map((item) => <SelectItem key={item.slotId} value={String(item.slotId)}>Tiet {item.slotNo} ({String(item.startTime).slice(0, 5)})</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-1.5 lg:col-span-2"><Label>Tiet ket thuc</Label><Select value={part.slotEndId} onValueChange={(value) => updatePart(index, "slotEndId", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{timeSlots.map((item) => <SelectItem key={item.slotId} value={String(item.slotId)}>Tiet {item.slotNo} ({String(item.endTime).slice(0, 5)})</SelectItem>)}</SelectContent></Select></div>
                     <div className="space-y-1.5 lg:col-span-5">
                       <Label>Phòng đề xuất</Label>
                       <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
@@ -455,6 +465,8 @@ const SplitSectionDialog = ({
             </div>
           </>
         )}
+
+
 
         <DialogFooter>
           <Button variant="outline" disabled={isSubmitting} onClick={() => onOpenChange(false)}>Hủy</Button>
@@ -495,6 +507,8 @@ const AdminTimetableApprovalPage = () => {
   const [detailSection, setDetailSection] = useState(null);
   const [editSection, setEditSection] = useState(null);
   const [editForm, setEditForm] = useState(null);
+  const [availableRooms, setAvailableRooms] = useState({ loading: false, rooms: [], error: "" });
+  const [deleteSection, setDeleteSection] = useState(null);
   const [splitSection, setSplitSection] = useState(null);
   const [isReopenConfirmOpen, setIsReopenConfirmOpen] = useState(false);
 
@@ -658,6 +672,70 @@ const AdminTimetableApprovalPage = () => {
 
   const updateEditField = (field, value) => setEditForm((form) => ({ ...form, [field]: value }));
 
+  useEffect(() => {
+    if (!editSection?.scheduleId || !editForm) {
+      setAvailableRooms({ loading: false, rooms: [], error: "" });
+      return;
+    }
+    if (!selectedSemester || !editForm.dayOfWeek || !editForm.slotStartId || !editForm.slotEndId || !editForm.fromWeekNo || !editForm.toWeekNo) {
+      setAvailableRooms({ loading: false, rooms: [], error: "" });
+      return;
+    }
+
+    let mounted = true;
+    const timer = window.setTimeout(async () => {
+      setAvailableRooms((current) => ({ ...current, loading: true, error: "" }));
+      try {
+        const response = await httpClient.get(
+          `/api/admin/class-sections/${editSection.id}/schedules/${editSection.scheduleId}/available-rooms`,
+          {
+            params: {
+              semesterId: selectedSemester,
+              dayOfWeek: editForm.dayOfWeek,
+              slotStartId: Number(editForm.slotStartId),
+              slotEndId: Number(editForm.slotEndId),
+              fromWeekNo: Number(editForm.fromWeekNo),
+              toWeekNo: Number(editForm.toWeekNo),
+              expectedAttendees: Number(editForm.maxCapacity || editSection.studentCount || 0),
+              roomType: editSection.requiredRoomType || "",
+            },
+          },
+        );
+        if (!mounted) return;
+        const rooms = unwrapList(response);
+        setAvailableRooms({ loading: false, rooms, error: "" });
+        if (
+          editForm.classroomId
+          && editForm.classroomId !== "unassigned"
+          && !rooms.some((room) => String(room.classroomId) === String(editForm.classroomId))
+        ) {
+          setEditForm((form) => form ? { ...form, classroomId: "unassigned" } : form);
+        }
+      } catch (requestError) {
+        if (!mounted) return;
+        setAvailableRooms({
+          loading: false,
+          rooms: [],
+          error: getApiError(requestError, "Khong the tai danh sach phong kha dung.").message,
+        });
+      }
+    }, 250);
+
+    return () => {
+      mounted = false;
+      window.clearTimeout(timer);
+    };
+  }, [
+    editSection,
+    editForm?.dayOfWeek,
+    editForm?.slotStartId,
+    editForm?.slotEndId,
+    editForm?.fromWeekNo,
+    editForm?.toWeekNo,
+    editForm?.maxCapacity,
+    selectedSemester,
+  ]);
+
   const saveSchedule = async () => {
     if (!editSection?.scheduleId || !editForm) return;
     setIsActionRunning(true);
@@ -725,6 +803,28 @@ const AdminTimetableApprovalPage = () => {
       setActionMessage({
         tone: "error",
         text: getApiError(requestError, "Không thể tách lớp học phần.").message,
+      });
+    } finally {
+      setIsActionRunning(false);
+    }
+  };
+
+  const confirmDeleteSection = async () => {
+    if (!deleteSection?.id) return;
+    setIsActionRunning(true);
+    setActionMessage(null);
+    try {
+      await httpClient.delete(`/api/admin/class-sections/${deleteSection.id}`);
+      setDeleteSection(null);
+      setActionMessage({
+        tone: "success",
+        text: "Da xoa hoc phan va huy cac lich lien quan.",
+      });
+      refreshData();
+    } catch (requestError) {
+      setActionMessage({
+        tone: "error",
+        text: getApiError(requestError, "Khong the xoa hoc phan.").message,
       });
     } finally {
       setIsActionRunning(false);
@@ -806,6 +906,7 @@ const AdminTimetableApprovalPage = () => {
           <div className="space-y-1">
             <Label>Trạng thái lịch</Label>
             <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+              
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Tất cả</SelectItem>
@@ -816,6 +917,7 @@ const AdminTimetableApprovalPage = () => {
           <div className="space-y-1">
             <Label>Khoa</Label>
             <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+              
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Tất cả</SelectItem>
@@ -826,6 +928,7 @@ const AdminTimetableApprovalPage = () => {
           <div className="space-y-1">
             <Label>Lớp hành chính</Label>
             <Select value={selectedClass} onValueChange={setSelectedClass}>
+              
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Tất cả</SelectItem>
@@ -867,6 +970,7 @@ const AdminTimetableApprovalPage = () => {
                       <Button variant="ghost" size="xs" onClick={() => setDetailSection(section)} title="Xem chi tiết"><Eye className="h-3.5 w-3.5" /></Button>
                       <Button variant="ghost" size="xs" disabled={!canEdit || !section.scheduleId} onClick={() => openEdit(section)} title={canEdit ? "Sửa lịch" : "Chỉ sửa khi workflow là DRAFT hoặc CONFLICT"}><Pencil className="h-3.5 w-3.5" /></Button>
                       {splitCandidate && <Button variant="ghost" size="xs" disabled={!canEdit} onClick={() => setSplitSection(section)} title={canEdit ? "Tách lớp do vượt sức chứa" : "Mở lại chỉnh sửa trước khi tách lớp"} className="text-amber-700 hover:bg-amber-50 hover:text-amber-800"><Scissors className="mr-1 h-3.5 w-3.5" />Tách lớp</Button>}
+                      <Button variant="ghost" size="xs" disabled={!canEdit} onClick={() => setDeleteSection(section)} title={canEdit ? "Xoa hoc phan" : "Chi xoa khi workflow la DRAFT hoac CONFLICT"} className="text-red-600 hover:bg-red-50 hover:text-red-700"><Trash2 className="h-3.5 w-3.5" /></Button>
                     </div></TableCell>
                   </TableRow>;
                 })}
@@ -902,16 +1006,40 @@ const AdminTimetableApprovalPage = () => {
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl"><DialogHeader><DialogTitle>Sửa lịch học</DialogTitle><DialogDescription>Sau khi lưu, kết quả kiểm tra được reset về NOT_CHECKED.</DialogDescription></DialogHeader>
           {editForm && <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5"><Label>Giảng viên</Label><Select value={editForm.lecturerId} onValueChange={(value) => updateEditField("lecturerId", value)}><SelectTrigger><SelectValue placeholder="Chọn giảng viên" /></SelectTrigger><SelectContent>{lecturers.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.name || item.staffCode}</SelectItem>)}</SelectContent></Select></div>
-            <div className="space-y-1.5"><Label>Thứ</Label><Select value={editForm.dayOfWeek} onValueChange={(value) => updateEditField("dayOfWeek", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{DAY_OPTIONS.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
-            <div className="space-y-1.5"><Label>Tiết bắt đầu</Label><Select value={editForm.slotStartId} onValueChange={(value) => updateEditField("slotStartId", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{timeSlots.map((item) => <SelectItem key={item.slotId} value={String(item.slotId)}>Tiết {item.slotNo} ({String(item.startTime).slice(0, 5)})</SelectItem>)}</SelectContent></Select></div>
-            <div className="space-y-1.5"><Label>Tiết kết thúc</Label><Select value={editForm.slotEndId} onValueChange={(value) => updateEditField("slotEndId", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{timeSlots.map((item) => <SelectItem key={item.slotId} value={String(item.slotId)}>Tiết {item.slotNo} ({String(item.endTime).slice(0, 5)})</SelectItem>)}</SelectContent></Select></div>
-            <div className="space-y-1.5 sm:col-span-2"><Label>Phòng</Label><Select value={editForm.classroomId} onValueChange={(value) => updateEditField("classroomId", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="unassigned">Chưa phân phòng</SelectItem>{classrooms.map((item) => <SelectItem key={item.id} value={String(item.id)}>{roomLabel(item)} · {item.capacity ?? "—"} chỗ</SelectItem>)}</SelectContent></Select></div>
+            <div className="space-y-1.5"><Label>Thu</Label><Select value={editForm.dayOfWeek} onValueChange={(value) => updateEditField("dayOfWeek", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{DAY_OPTIONS.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
+            <div className="space-y-1.5"><Label>Tiet bat dau</Label><Select value={editForm.slotStartId} onValueChange={(value) => updateEditField("slotStartId", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{timeSlots.map((item) => <SelectItem key={item.slotId} value={String(item.slotId)}>Tiet {item.slotNo} ({String(item.startTime).slice(0, 5)})</SelectItem>)}</SelectContent></Select></div>
+            <div className="space-y-1.5"><Label>Tiet ket thuc</Label><Select value={editForm.slotEndId} onValueChange={(value) => updateEditField("slotEndId", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{timeSlots.map((item) => <SelectItem key={item.slotId} value={String(item.slotId)}>Tiet {item.slotNo} ({String(item.endTime).slice(0, 5)})</SelectItem>)}</SelectContent></Select></div>
+            <div className="space-y-1.5 sm:col-span-2"><Label>Phong kha dung</Label><Select value={editForm.classroomId} onValueChange={(value) => updateEditField("classroomId", value)} disabled={availableRooms.loading}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="unassigned">Chua phan phong</SelectItem>{availableRooms.rooms.map((item) => <SelectItem key={item.classroomId} value={String(item.classroomId)}>{item.roomCode} - {item.capacity ?? "-"} cho - {item.roomTypeText || item.roomType}</SelectItem>)}</SelectContent></Select>{availableRooms.loading && <p className="text-xs text-blue-600">Dang kiem tra phong trong...</p>}{availableRooms.error && <p className="text-xs text-red-600">{availableRooms.error}</p>}{!availableRooms.loading && !availableRooms.error && availableRooms.rooms.length === 0 && <p className="text-xs text-amber-700">Khong co phong phu hop; co the luu chua phan phong hoac tach lop.</p>}</div>
             <div className="space-y-1.5"><Label>Tuần bắt đầu</Label><Input type="number" min="1" max="53" value={editForm.fromWeekNo} onChange={(event) => updateEditField("fromWeekNo", event.target.value)} /></div>
             <div className="space-y-1.5"><Label>Tuần kết thúc</Label><Input type="number" min="1" max="53" value={editForm.toWeekNo} onChange={(event) => updateEditField("toWeekNo", event.target.value)} /></div>
             <div className="space-y-1.5 sm:col-span-2"><Label>Sức chứa tối đa của lớp học phần</Label><Input type="number" min={editSection?.studentCount || 1} value={editForm.maxCapacity} onChange={(event) => updateEditField("maxCapacity", event.target.value)} /></div>
             <div className="space-y-1.5 sm:col-span-2"><Label>Ghi chú xử lý</Label><Textarea maxLength={255} value={editForm.note} onChange={(event) => updateEditField("note", event.target.value)} placeholder="Ví dụ: [SPLIT_SUGGESTION] Đề xuất tách lớp..." /></div>
           </div>}
           <DialogFooter><Button variant="outline" disabled={isActionRunning} onClick={() => { setEditSection(null); setEditForm(null); }}>Hủy</Button><Button disabled={isActionRunning || !editForm?.lecturerId || !editForm?.slotStartId || !editForm?.slotEndId} onClick={saveSchedule}>{isActionRunning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Lưu thay đổi</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(deleteSection)} onOpenChange={(open) => { if (!open && !isActionRunning) setDeleteSection(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xoa hoc phan?</DialogTitle>
+            <DialogDescription>
+              He thong se huy cac lich cua hoc phan nay. Neu hoc phan da co sinh vien tham gia, backend se tu choi xoa.
+            </DialogDescription>
+          </DialogHeader>
+          {deleteSection && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              <p className="font-semibold">{deleteSection.classCode || getCourseCode(deleteSection)}</p>
+              <p className="mt-1">{deleteSection.courseName || "Khong co ten mon"} - {deleteSection.classCodes || deleteSection.classNames || "Khong co lop"}</p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" disabled={isActionRunning} onClick={() => setDeleteSection(null)}>Huy</Button>
+            <Button disabled={isActionRunning} onClick={confirmDeleteSection} className="bg-red-600 hover:bg-red-700">
+              {isActionRunning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Xoa hoc phan
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -927,3 +1055,8 @@ const AdminTimetableApprovalPage = () => {
 
 export default AdminTimetableApprovalPage;
 export { AdminTimetableApprovalPage };
+
+
+
+
+

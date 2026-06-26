@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Button } from "../components/ui/button";
 import { ScheduleGridView } from "../components/ScheduleGridView";
 import ScheduleToolbar from "../components/ScheduleToolbar";
+import { decorateItemsWithCalendarBlocks, normalizeSemester } from "../utils/calendarBlockMatcher";
 import { useNavigate } from "react-router";
 import { httpClient } from "../../services/httpClient";
 
@@ -118,10 +119,10 @@ const LecturerSchedulePage = () => {
   const [scheduleItems, setScheduleItems] = useState([]);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [scheduleError, setScheduleError] = useState("");
+  const [semesters, setSemesters] = useState([]);
+  const [calendarBlocks, setCalendarBlocks] = useState([]);
   const [timeSlots, setTimeSlots] = useState([]);
   const [filters, setFilters] = useState({
-    building: "all",
-    room: "all",
     week: "15",
     date: "",
   });
@@ -140,6 +141,26 @@ const LecturerSchedulePage = () => {
     };
 
     fetchTimeSlots();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchSemesters = async () => {
+      try {
+        const response = await httpClient.get("/api/categories/semesters");
+        const slots = getResponseData(response);
+        if (isMounted) setSemesters(slots);
+      } catch (error) {
+        console.error("Loi tai danh sach hoc ky:", error);
+      }
+    };
+
+    fetchSemesters();
 
     return () => {
       isMounted = false;
@@ -170,30 +191,93 @@ const LecturerSchedulePage = () => {
     fetchTimetable();
   }, [fetchTimetable]);
 
-  const buildingOptions = useMemo(
-    () => [...new Set(scheduleItems.map((item) => item.building).filter(Boolean))],
+  const currentSemesterId = useMemo(
+    () => scheduleItems.find((item) => item.semesterId != null)?.semesterId ?? null,
     [scheduleItems],
   );
 
-  const roomOptions = useMemo(
-    () => [...new Set(scheduleItems.map((item) => item.room).filter(Boolean))],
-    [scheduleItems],
-  );
+  const currentSemester = useMemo(() => {
+    const semester = semesters.find((item) => String(item.id) === String(currentSemesterId));
+    return normalizeSemester(semester);
+  }, [currentSemesterId, semesters]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!currentSemester?.id) {
+      setCalendarBlocks([]);
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    const fetchCalendarBlocks = async () => {
+      try {
+        const response = await httpClient.get("/api/categories/calendar-blocks", {
+          params: { semesterId: currentSemester.id },
+        });
+        if (!isMounted) return;
+        const payload = response?.data?.data ?? response?.data ?? [];
+        setCalendarBlocks(Array.isArray(payload) ? payload : []);
+      } catch (error) {
+        if (isMounted) {
+          setCalendarBlocks([]);
+          console.warn("Khong tai duoc calendar blocks:", error);
+        }
+      }
+    };
+
+    fetchCalendarBlocks();
+    return () => {
+      isMounted = false;
+    };
+  }, [currentSemester?.id]);
 
   const filteredSchedule = useMemo(() => {
     return scheduleItems.filter((item) => {
       const selectedWeek = Number(filters.week);
-      const matchBuilding = filters.building === "all" || item.building === filters.building;
-      const matchRoom = filters.room === "all" || item.room === filters.room;
       const matchWeek = !Number.isFinite(selectedWeek)
         || (
           (item.fromWeekNo == null || Number(item.fromWeekNo) <= selectedWeek)
           && (item.toWeekNo == null || Number(item.toWeekNo) >= selectedWeek)
         );
 
-      return matchBuilding && matchRoom && matchWeek;
+      return matchWeek;
     });
-  }, [filters.building, filters.room, filters.week, scheduleItems]);
+  }, [filters.week, scheduleItems]);
+
+  const decoratedSchedule = useMemo(
+    () =>
+      decorateItemsWithCalendarBlocks(
+        filteredSchedule.map((item) => {
+          const currentStatus = statusConfigSchedule[item.status] ?? statusConfigSchedule.DEFAULT;
+
+          return {
+            id: item.id,
+            name: item.name,
+            subLabel: item.section,
+            detail1: `${item.className || "Lop hoc phan"} - ${item.students} SV`,
+            detail2: item.building ? `${item.room} (${item.building})` : item.room,
+            day: item.day,
+            dayCode: item.dayCode,
+            slot: item.slot,
+            slotStartId: item.slotStartId,
+            slotEndId: item.slotEndId,
+            slotStart: item.slotStart,
+            slotEnd: item.slotEnd,
+            startTime: item.startTime,
+            endTime: item.endTime,
+            time: item.time,
+            color: currentStatus.color,
+            badge: currentStatus.label,
+            semesterId: item.semesterId,
+          };
+        }),
+        calendarBlocks,
+        { semester: currentSemester, weekNo: Number(filters.week) },
+      ),
+    [calendarBlocks, currentSemester, filteredSchedule, filters.week],
+  );
 
   const summary = useMemo(() => {
     const uniqueSections = new Map();
@@ -252,29 +336,7 @@ const LecturerSchedulePage = () => {
 
     return (
       <ScheduleGridView
-        items={filteredSchedule.map((item) => {
-          const currentStatus = statusConfigSchedule[item.status] ?? statusConfigSchedule.DEFAULT;
-
-          return {
-            id: item.id,
-            name: item.name,
-            subLabel: item.section,
-            detail1: `${item.className || "Lop hoc phan"} - ${item.students} SV`,
-            detail2: item.building ? `${item.room} (${item.building})` : item.room,
-            day: item.day,
-            dayCode: item.dayCode,
-            slot: item.slot,
-            slotStartId: item.slotStartId,
-            slotEndId: item.slotEndId,
-            slotStart: item.slotStart,
-            slotEnd: item.slotEnd,
-            startTime: item.startTime,
-            endTime: item.endTime,
-            time: item.time,
-            color: currentStatus.color,
-            badge: currentStatus.label,
-          };
-        })}
+        items={decoratedSchedule}
         timeSlots={timeSlots}
         onItemClick={(item) => {
           const session = scheduleItems.find((sessionItem) => sessionItem.id === item.id);
@@ -328,10 +390,7 @@ const LecturerSchedulePage = () => {
         <div className="xl:col-span-2">
           <ScheduleToolbar
             filters={filters}
-            buildings={buildingOptions}
-            rooms={roomOptions}
-            onBuildingChange={(value) => setFilters((current) => ({ ...current, building: value }))}
-            onRoomChange={(value) => setFilters((current) => ({ ...current, room: value }))}
+            showBuildingRoom={false}
             onWeekChange={(value) => setFilters((current) => ({ ...current, week: value }))}
             onDateChange={(value) => setFilters((current) => ({ ...current, date: value }))}
             onSearch={fetchTimetable}

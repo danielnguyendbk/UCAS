@@ -1,2 +1,2 @@
-import { StudentSchedulePage } from "@/app/pages/StudentSchedulePage";
-export default StudentSchedulePage;
+import WeeklySchedulePage from "@/app/pages/WeeklySchedulePage";
+export default WeeklySchedulePage;

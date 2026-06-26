@@ -10,6 +10,7 @@ const ScheduleToolbar = ({
   onRoomChange,
   onWeekChange,
   onDateChange,
+  showBuildingRoom = true,
   filters = {
     building: "all",
     room: "all",
@@ -29,35 +30,39 @@ const ScheduleToolbar = ({
 
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 shadow-sm animate-in fade-in slide-in-from-top-1 duration-300">
-      <Select value={filters.building} onValueChange={onBuildingChange}>
-        <SelectTrigger className="h-9 w-[140px] bg-gray-50 text-xs font-semibold focus:ring-1 focus:ring-blue-500">
-          <div className="flex items-center gap-2">
-            <Building2 className="h-3.5 w-3.5 text-gray-400" />
-            <SelectValue placeholder="Tòa nhà" />
-          </div>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Tất cả tòa</SelectItem>
-          {buildings.map((building) => (
-            <SelectItem key={building} value={building}>{building}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {showBuildingRoom && (
+        <Select value={filters.building} onValueChange={onBuildingChange}>
+          <SelectTrigger className="h-9 w-[140px] bg-gray-50 text-xs font-semibold focus:ring-1 focus:ring-blue-500">
+            <div className="flex items-center gap-2">
+              <Building2 className="h-3.5 w-3.5 text-gray-400" />
+              <SelectValue placeholder="Tòa nhà" />
+            </div>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tất cả tòa</SelectItem>
+            {buildings.map((building) => (
+              <SelectItem key={building} value={building}>{building}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
 
-      <Select value={filters.room} onValueChange={onRoomChange}>
-        <SelectTrigger className="h-9 w-[140px] bg-gray-50 text-xs font-semibold focus:ring-1 focus:ring-blue-500">
-          <div className="flex items-center gap-2">
-            <MapPin className="h-3.5 w-3.5 text-gray-400" />
-            <SelectValue placeholder="Phòng" />
-          </div>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Tất cả phòng</SelectItem>
-          {rooms.map((room) => (
-            <SelectItem key={room} value={room}>{room}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {showBuildingRoom && (
+        <Select value={filters.room} onValueChange={onRoomChange}>
+          <SelectTrigger className="h-9 w-[140px] bg-gray-50 text-xs font-semibold focus:ring-1 focus:ring-blue-500">
+            <div className="flex items-center gap-2">
+              <MapPin className="h-3.5 w-3.5 text-gray-400" />
+              <SelectValue placeholder="Phòng" />
+            </div>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tất cả phòng</SelectItem>
+            {rooms.map((room) => (
+              <SelectItem key={room} value={room}>{room}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
 
       <div className="flex items-center gap-1">
         <Button

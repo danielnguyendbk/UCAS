@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { BadgeInfo, Building2, Loader2, Pencil, Plus, RefreshCw, Search, ShieldCheck } from "lucide-react";
+import { BadgeInfo, Building2, Loader2, Pencil, Plus, RefreshCw, Search, ShieldCheck, Badge } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/app/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";

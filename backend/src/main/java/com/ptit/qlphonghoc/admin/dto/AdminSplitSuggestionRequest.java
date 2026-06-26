@@ -10,7 +10,7 @@ import java.util.List;
 public record AdminSplitSuggestionRequest(
         @NotNull Integer scheduleId,
         @NotNull @Positive Integer partCount,
-        @NotNull @Size(min = 2, max = 3) List<@Valid SuggestionPart> parts
+        @NotNull @Size(min = 2, max = 5) List<@Valid SuggestionPart> parts
 ) {
 
     public record SuggestionPart(

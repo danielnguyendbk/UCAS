@@ -18,6 +18,11 @@ const ROW_HEIGHT_PX = 36;
 const TIME_AXIS_WIDTH = 62;
 const DAY_HEADER_HEIGHT = 40;
 const ROOM_HEADER_HEIGHT = 42;
+const HOLIDAY_THEME = {
+  wrap: "bg-red-50/95 border-red-200 border-l-red-500",
+  title: "text-red-900",
+  sub: "text-red-700",
+};
 
 const PREP_READY_STATUSES = new Set([
   "PUBLISHED",
@@ -195,13 +200,17 @@ const TimeAxisColumn = ({ ticks, side = "left" }) => (
 );
 
 const CalendarBlock = ({ item, onCellClick }) => {
-  const theme = getBlockTheme(item);
-  const badge = getPrepBadge(item);
+  const holidayTheme = item?.calendarBlock ? HOLIDAY_THEME : null;
+  const theme = holidayTheme || getBlockTheme(item);
+  const badge = item?.calendarBlock
+    ? { label: "Lịch nghỉ", wrap: "bg-red-50 text-red-700", dot: "bg-red-500" }
+    : getPrepBadge(item);
   const timeLabel = `${formatMinutes(item.startMinutes)} - ${formatMinutes(item.endMinutes)}`;
   const title = item.courseName !== "---" ? item.courseName : item.courseCode;
   const sectionRoom = [item.sectionGroup, item.room]
     .filter((value) => value && value !== "---")
     .join(" / ");
+  const blockLabel = item.calendarBlock?.title || item.calendarBlock?.notes || "";
 
   return (
     <button
@@ -215,7 +224,7 @@ const CalendarBlock = ({ item, onCellClick }) => {
         right: 3,
         minHeight: 30,
       }}
-      title={`${title} - ${timeLabel}`}
+      title={item.calendarBlock ? `${title} - ${timeLabel} - ${blockLabel || "Lịch nghỉ"}` : `${title} - ${timeLabel}`}
     >
       <p className={`truncate text-[11px] font-bold leading-tight ${theme.title}`}>
         {title}

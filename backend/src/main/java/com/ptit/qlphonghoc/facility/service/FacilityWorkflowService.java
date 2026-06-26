@@ -13,6 +13,7 @@ import com.ptit.qlphonghoc.facility.dto.FacilityAssignmentUpsertRequest;
 import com.ptit.qlphonghoc.facility.dto.FacilityIssueReportCreateRequest;
 import com.ptit.qlphonghoc.facility.dto.FacilityIssueReportResponse;
 import com.ptit.qlphonghoc.facility.dto.FacilityMyAssignmentResponse;
+import com.ptit.qlphonghoc.facility.dto.FacilityRoomAccessHistoryItemResponse;
 import com.ptit.qlphonghoc.facility.dto.FacilityOpeningActionRequest;
 import com.ptit.qlphonghoc.facility.dto.FacilityOpeningScheduleItemResponse;
 import com.ptit.qlphonghoc.facility.dto.FacilityOpeningSourceType;
@@ -406,6 +407,85 @@ public class FacilityWorkflowService {
             FacilityOpeningActionRequest request
     ) {
         return handleRoomAction(userId, request, AuditAction.CLOSE_ROOM);
+    }
+
+    public PageResponse<FacilityRoomAccessHistoryItemResponse> getRoomAccessHistory(
+            Integer userId,
+            String actionFilter,
+            LocalDate startDate,
+            LocalDate endDate,
+            String search,
+            Integer page,
+            Integer size
+    ) {
+        int resolvedPage = page == null ? 0 : Math.max(0, page);
+        int resolvedSize = size == null ? 20 : Math.min(100, Math.max(1, size));
+
+        String normalizedAction = normalizeBlank(actionFilter);
+        if (normalizedAction != null && !normalizedAction.equalsIgnoreCase("ALL")) {
+            if (!normalizedAction.equals("OPEN_ROOM") && !normalizedAction.equals("CLOSE_ROOM")) {
+                throw new BadRequestException("INVALID_ACTION", "Loại thao tác không hợp lệ.");
+            }
+        } else {
+            normalizedAction = null;
+        }
+
+        List<Object> params = new ArrayList<>();
+        StringBuilder where = new StringBuilder("WHERE user_id = ? AND action IN ('OPEN_ROOM', 'CLOSE_ROOM')");
+        params.add(userId);
+
+        if (normalizedAction != null) {
+            where.append(" AND action = ?");
+            params.add(normalizedAction);
+        }
+        if (startDate != null) {
+            where.append(" AND created_at >= ?");
+            params.add(startDate.atStartOfDay());
+        }
+        if (endDate != null) {
+            where.append(" AND created_at < ?");
+            params.add(endDate.plusDays(1).atStartOfDay());
+        }
+        String normalizedSearch = normalizeBlank(search);
+        if (normalizedSearch != null) {
+            where.append(" AND (description LIKE ? OR new_values LIKE ?)");
+            String like = "%" + normalizedSearch + "%";
+            params.add(like);
+            params.add(like);
+        }
+
+        Object[] paramArray = params.toArray();
+        Long total = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM audit_logs " + where,
+                Long.class,
+                paramArray
+        );
+        int totalItems = total == null ? 0 : total.intValue();
+        int totalPages = totalItems == 0 ? 0 : (int) Math.ceil((double) totalItems / resolvedSize);
+
+        List<Object> pageParams = new ArrayList<>(params);
+        pageParams.add(resolvedSize);
+        pageParams.add((long) resolvedPage * resolvedSize);
+
+        List<FacilityRoomAccessHistoryItemResponse> items = jdbcTemplate.query(
+                "SELECT audit_log_id, action, new_values, description, created_at FROM audit_logs "
+                        + where + " ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (rs, rowNum) -> {
+                    Map<String, Object> values = parseAuditPayloadMap(rs.getString("new_values"));
+                    return new FacilityRoomAccessHistoryItemResponse(
+                            rs.getLong("audit_log_id"),
+                            rs.getString("action"),
+                            stringValue(values.get("classroomCode")),
+                            stringValue(values.get("sourceType")),
+                            longValue(values.get("sourceId")),
+                            rs.getString("description"),
+                            rs.getObject("created_at", LocalDateTime.class)
+                    );
+                },
+                pageParams.toArray()
+        );
+
+        return new PageResponse<>(items, resolvedPage, resolvedSize, totalItems, totalPages);
     }
 
     @Transactional

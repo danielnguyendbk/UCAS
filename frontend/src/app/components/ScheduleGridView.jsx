@@ -17,6 +17,12 @@ const STEP_MINUTES = 30;
 const ROW_HEIGHT_PX = 36;
 const TIME_AXIS_WIDTH = 62;
 const DAY_HEADER_HEIGHT = 40;
+const HOLIDAY_THEME = {
+  wrap: "bg-red-50/95 border-red-200 border-l-red-500",
+  title: "text-red-900",
+  sub: "text-red-700",
+  dot: "bg-red-500",
+};
 
 const colorMap = {
   blue: {
@@ -248,14 +254,16 @@ const TimeAxisColumn = ({ ticks, side = "left" }) => (
 );
 
 const CalendarBlock = ({ item, onItemClick }) => {
-  const c = colorMap[item.color ?? "blue"] ?? colorMap.blue;
+  const isHolidayBlocked = Boolean(item.calendarBlock);
+  const c = isHolidayBlocked ? HOLIDAY_THEME : colorMap[item.color ?? "blue"] ?? colorMap.blue;
   const timeLabel = `${formatMinutes(item.startMinutes)} - ${formatMinutes(item.endMinutes)}`;
+  const blockLabel = item.calendarBlock?.title || item.calendarBlock?.notes || "Lịch nghỉ";
 
   return (
     <button
       type="button"
       onClick={() => onItemClick?.(item)}
-      className={`absolute z-10 flex flex-col overflow-hidden rounded-md border border-l-[3px] px-1.5 py-1 text-left shadow-sm transition-shadow hover:z-20 hover:shadow-md ${c.wrap}`}
+      className={`group absolute z-10 flex flex-col overflow-hidden rounded-md border border-l-[3px] px-1.5 py-1 text-left shadow-sm transition-shadow hover:z-20 hover:shadow-md ${c.wrap}`}
       style={{
         top: item.top,
         height: item.height,
@@ -263,7 +271,7 @@ const CalendarBlock = ({ item, onItemClick }) => {
         right: 3,
         minHeight: 30,
       }}
-      title={`${item.name} - ${timeLabel}`}
+      title={isHolidayBlocked ? `${item.name} - ${timeLabel} - ${blockLabel}` : `${item.name} - ${timeLabel}`}
     >
       <p className={`truncate text-[11px] font-bold leading-tight ${c.title}`}>{item.name}</p>
       {item.subLabel && (
@@ -281,19 +289,26 @@ const CalendarBlock = ({ item, onItemClick }) => {
           {item.detail2}
         </p>
       )}
-      {item.badge && (
+      {(item.badge || isHolidayBlocked) && (
         <span className={`mt-auto inline-flex w-fit items-center gap-1 rounded-full bg-white/70 px-1.5 py-0.5 text-[8px] font-semibold leading-none ${c.sub}`}>
           <span className={`h-1.5 w-1.5 rounded-full ${c.dot}`} />
-          {item.badge}
+          {isHolidayBlocked ? "Lịch nghỉ" : item.badge}
         </span>
+      )}
+      {isHolidayBlocked && blockLabel && (
+        <p className={`truncate text-[9px] font-medium leading-tight opacity-0 transition-opacity group-hover:opacity-100 ${c.sub}`}>
+          {blockLabel}
+        </p>
       )}
     </button>
   );
 };
 
 function BlockDetailModal({ item, onClose }) {
-  const c = colorMap[item.color ?? "blue"] ?? colorMap.blue;
+  const isHolidayBlocked = Boolean(item.calendarBlock);
+  const c = isHolidayBlocked ? HOLIDAY_THEME : colorMap[item.color ?? "blue"] ?? colorMap.blue;
   const timeLabel = `${formatMinutes(item.startMinutes)} - ${formatMinutes(item.endMinutes)}`;
+  const blockLabel = item.calendarBlock?.title || item.calendarBlock?.notes || "";
 
   return (
     <div
@@ -340,10 +355,16 @@ function BlockDetailModal({ item, onClose }) {
             );
           })}
 
-          {item.badge && (
+          {(item.badge || isHolidayBlocked) && (
             <div className={`inline-flex items-center gap-1.5 rounded-full border border-current/20 px-2.5 py-1 text-[11px] font-semibold ${c.title}`}>
               <span className={`h-1.5 w-1.5 rounded-full ${c.dot}`} />
-              {item.badge}
+              {isHolidayBlocked ? "Lịch nghỉ" : item.badge}
+            </div>
+          )}
+
+          {isHolidayBlocked && blockLabel && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+              {blockLabel}
             </div>
           )}
 

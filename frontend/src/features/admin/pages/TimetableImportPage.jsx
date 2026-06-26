@@ -38,7 +38,7 @@ const IMPORT_MODES = {
   },
   SYNC_FILE_SCOPE: {
     label: "Sync file scope",
-    description: "Hủy mềm lịch cũ của các học phần có trong file nếu lịch đó không còn trong file.",
+    description: "Chỉ giữ các học phần và lịch có trong file; dữ liệu ngoài file sẽ bị hủy mềm.",
   },
 };
 const STATUS_META = {
@@ -54,6 +54,11 @@ const OPERATION_LABELS = {
   NO_CHANGE: "Không thay đổi",
   ERROR: "Không thể xử lý",
 };
+
+const hasBlockingErrors = (preview) =>
+  (preview?.rows ?? []).some((row) =>
+    (row.messages ?? []).some((message) => message.severity === "ERROR"),
+  );
 
 const SummaryItem = ({ label, value, tone = "text-slate-900" }) => (
   <div className="min-w-[120px] border-r border-slate-200 px-5 py-3 last:border-r-0">
@@ -123,7 +128,7 @@ export default function TimetableImportPage() {
     }
     try {
       setLoading(true);
-      const result = await previewTimetableImport({ file, semesterId });
+      const result = await previewTimetableImport({ file, semesterId, mode: importMode });
       setPreview(result);
       setApplyResult(null);
       toast.success("Đã kiểm tra file. Chưa có dữ liệu nào được ghi.");
@@ -136,7 +141,7 @@ export default function TimetableImportPage() {
   };
 
   const handleApply = async () => {
-    if (!file || !preview || preview.errorRows > 0) return;
+    if (!file || !preview || hasBlockingErrors(preview)) return;
     try {
       setApplying(true);
       const result = await applyTimetableImport({ file, semesterId, mode: importMode });
@@ -145,11 +150,15 @@ export default function TimetableImportPage() {
       toast.success(`Đã import vào ${result.semesterCode || semesterCodeOf(selectedSemester)} và đưa thời khóa biểu về DRAFT.`);
     } catch (error) {
       const apiError = getApiError(error, "Không thể áp dụng file import.");
+      console.error("Timetable import apply failed", error?.response?.data ?? error);
       if (apiError.errorCode === "IMPORT_HAS_ERRORS") {
         setPreview(null);
         setConfirmOpen(false);
       }
-      toast.error(apiError.message);
+      const detailReason = apiError.details?.reason
+        || apiError.details?.error
+        || (Array.isArray(apiError.details?.rows) ? apiError.details.rows[0]?.messages?.[0]?.message : null);
+      toast.error([apiError.errorCode, apiError.message, detailReason].filter(Boolean).join(" · "));
     } finally {
       setApplying(false);
     }
@@ -241,7 +250,7 @@ export default function TimetableImportPage() {
           {importMode === "SYNC_FILE_SCOPE" && (
             <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>Chế độ này có thể hủy mềm các lịch cũ của những học phần xuất hiện trong file nếu lịch đó không còn trong file.</span>
+              <span>Chế độ này chỉ giữ các học phần và lịch có trong file; dữ liệu ngoài file sẽ bị hủy mềm.</span>
             </div>
           )}
         </div>
@@ -262,28 +271,33 @@ export default function TimetableImportPage() {
             </div>
           </section>
 
-          <section className={`flex flex-col gap-4 rounded-xl border p-4 md:flex-row md:items-center md:justify-between ${preview.errorRows > 0 ? "border-red-200 bg-red-50/70" : "border-blue-200 bg-blue-50/60"}`}>
+          {(() => {
+            const hasErrors = hasBlockingErrors(preview);
+            return (
+          <section className={`flex flex-col gap-4 rounded-xl border p-4 md:flex-row md:items-center md:justify-between ${hasErrors ? "border-red-200 bg-red-50/70" : "border-blue-200 bg-blue-50/60"}`}>
             <div className="flex items-start gap-3">
-              {preview.errorRows > 0 ? <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" /> : <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-blue-700" />}
+              {hasErrors ? <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" /> : <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-blue-700" />}
               <div>
-                <p className={`text-sm font-semibold ${preview.errorRows > 0 ? "text-red-900" : "text-blue-950"}`}>
-                  {preview.errorRows > 0 ? "Chưa thể áp dụng import" : "File đã qua cổng kiểm tra"}
+                <p className={`text-sm font-semibold ${hasErrors ? "text-red-900" : "text-blue-950"}`}>
+                  {hasErrors ? "Chưa thể áp dụng import" : "File đã qua cổng kiểm tra"}
                 </p>
-                <p className={`mt-1 text-xs ${preview.errorRows > 0 ? "text-red-700" : "text-blue-700"}`}>
-                  {preview.errorRows > 0
+                <p className={`mt-1 text-xs ${hasErrors ? "text-red-700" : "text-blue-700"}`}>
+                  {hasErrors
                     ? `Còn ${preview.errorRows} dòng lỗi. Hãy sửa file và preview lại.`
                     : "Backend sẽ parse và validate lại chính file này trong transaction trước khi ghi."}
                 </p>
               </div>
             </div>
             <Button
-              disabled={preview.errorRows > 0 || applying || Boolean(applyResult)}
+              disabled={hasErrors || applying || Boolean(applyResult)}
               onClick={() => setConfirmOpen(true)}
               className="shrink-0 bg-blue-700 hover:bg-blue-800"
             >
               {applyResult ? "Đã áp dụng" : "Áp dụng import"}
             </Button>
           </section>
+            );
+          })()}
 
           {applyResult && (
             <section className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
@@ -423,7 +437,7 @@ export default function TimetableImportPage() {
             </p>
             <p className="mt-2 text-amber-700">
               {importMode === "SYNC_FILE_SCOPE"
-                ? "Sẽ hủy mềm lịch cũ của các học phần xuất hiện trong file nếu lịch đó không còn trong file. Không sinh class sessions."
+                ? "Sẽ chỉ giữ các học phần và lịch có trong file; dữ liệu ngoài file sẽ bị hủy mềm. Không sinh class sessions."
                 : "Không soft-cancel dữ liệu vắng mặt trong file. Không sinh class sessions."}
             </p>
           </div>

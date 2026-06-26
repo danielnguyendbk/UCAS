@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.dao.DuplicateKeyException;
 
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -95,6 +96,21 @@ class TimetableImportApplyServiceTest {
     }
 
     @Test
+    void clearsExistingClassroomWhenPreferredClassroomDoesNotResolve() {
+        ImportPreviewRow row = validRow("NO_CHANGE");
+        row.values().put("preferred_classroom_code", "MISSING");
+        FakeWriteStore store = new FakeWriteStore("DRAFT");
+        TimetableImportApplyService service = service(validation(row, referenceData(true)), store);
+
+        ImportApplyResponse response = service.apply(file, 1L, null, 99);
+
+        assertThat(response.clearedClassroomAssignments()).isEqualTo(1);
+        assertThat(response.unassignedSchedules()).isEqualTo(1);
+        assertThat(store.lastSchedule.classroomId()).isNull();
+        assertThat(store.lastSchedule.status()).isEqualTo("UNASSIGNED");
+    }
+
+    @Test
     void syncFileScopeCancelsExistingSchedulesOutsideImportedSectionKeys() {
         FakeWriteStore store = new FakeWriteStore("DRAFT");
         TimetableImportApplyService service = service(validation(validRow("NO_CHANGE"), referenceDataWithExtraSchedule()), store);
@@ -107,14 +123,43 @@ class TimetableImportApplyServiceTest {
     }
 
     @Test
-    void syncFileScopeDoesNotCancelSchedulesOfSectionsOutsideFile() {
+    void syncFileScopeCancelsSchedulesOfSectionsOutsideFile() {
         FakeWriteStore store = new FakeWriteStore("DRAFT");
         TimetableImportApplyService service = service(validation(validRow("NO_CHANGE"), referenceDataWithOtherSectionSchedule()), store);
 
         ImportApplyResponse response = service.apply(file, 1L, null, "SYNC_FILE_SCOPE", 99);
 
+        assertThat(response.cancelledSchedules()).isEqualTo(1);
+        assertThat(response.cancelledSections()).isEqualTo(1);
+        assertThat(store.cancelledScheduleIds).containsExactly(60L);
+        assertThat(store.cancelledSectionIds).containsExactly(41L);
+    }
+
+    @Test
+    void syncFileScopeCancelsSectionsOutsideFileEvenWhenTheyHaveNoSchedule() {
+        FakeWriteStore store = new FakeWriteStore("DRAFT");
+        TimetableImportApplyService service = service(validation(validRow("NO_CHANGE"), referenceDataWithOtherSectionNoSchedule()), store);
+
+        ImportApplyResponse response = service.apply(file, 1L, null, "SYNC_FILE_SCOPE", 99);
+
         assertThat(response.cancelledSchedules()).isZero();
+        assertThat(response.cancelledSections()).isEqualTo(1);
         assertThat(store.cancelledScheduleIds).isEmpty();
+        assertThat(store.cancelledSectionIds).containsExactly(41L);
+    }
+
+    @Test
+    void syncFileScopeKeepsExistingScheduleWhenFileContainsSameKey() {
+        FakeWriteStore store = new FakeWriteStore("DRAFT");
+        TimetableImportApplyService service = service(validation(validRow("NO_CHANGE"), referenceData(true)), store);
+
+        ImportApplyResponse response = service.apply(file, 1L, null, "SYNC_FILE_SCOPE", 99);
+
+        assertThat(response.updatedSchedules()).isEqualTo(1);
+        assertThat(response.cancelledSchedules()).isZero();
+        assertThat(response.cancelledSections()).isZero();
+        assertThat(store.cancelledScheduleIds).isEmpty();
+        assertThat(store.cancelledSectionIds).isEmpty();
     }
 
     @Test
@@ -220,6 +265,7 @@ class TimetableImportApplyServiceTest {
                         3, new SlotRef(3L, 3, LocalTime.of(8, 50), LocalTime.of(9, 40))
                 ),
                 Map.of(), Map.of(), new WeekRange(1, 15),
+                semesterWeeks(), classRefs(), List.of(),
                 existing ? List.of(section) : List.of(),
                 existing ? List.of(schedule) : List.of()
         );
@@ -239,6 +285,7 @@ class TimetableImportApplyServiceTest {
                         3, new SlotRef(3L, 3, LocalTime.of(8, 50), LocalTime.of(9, 40))
                 ),
                 Map.of(), Map.of(), new WeekRange(1, 15),
+                semesterWeeks(), classRefs(), List.of(),
                 List.of(section),
                 List.of(importedSchedule, staleSchedule)
         );
@@ -259,8 +306,46 @@ class TimetableImportApplyServiceTest {
                         3, new SlotRef(3L, 3, LocalTime.of(8, 50), LocalTime.of(9, 40))
                 ),
                 Map.of(), Map.of(), new WeekRange(1, 15),
+                semesterWeeks(), classRefs(), List.of(),
                 List.of(importedSection, otherSection),
                 List.of(importedSchedule, otherSchedule)
+        );
+    }
+
+    private ReferenceData referenceDataWithOtherSectionNoSchedule() {
+        CourseRef course = new CourseRef(10L, "INT1001", "LECTURE");
+        LecturerRef lecturer = new LecturerRef(20L, "GV01");
+        SectionRef importedSection = new SectionRef(40L, 10L, 20L, "01", "D23CQCN01", 40, 50, "ACTIVE");
+        SectionRef otherSection = new SectionRef(41L, 10L, 20L, "02", "D23CQCN02", 40, 50, "ACTIVE");
+        ScheduleRef importedSchedule = new ScheduleRef(50L, 40L, 30L, "MON", 1, 3, 1, 15, "THEORY", 0, "ASSIGNED");
+        return new ReferenceData(
+                Map.of("INT1001", course),
+                Map.of("GV01", lecturer),
+                Map.of(
+                        1, new SlotRef(1L, 1, LocalTime.of(7, 0), LocalTime.of(7, 50)),
+                        3, new SlotRef(3L, 3, LocalTime.of(8, 50), LocalTime.of(9, 40))
+                ),
+                Map.of(), Map.of(), new WeekRange(1, 15),
+                semesterWeeks(), classRefs(), List.of(),
+                List.of(importedSection, otherSection),
+                List.of(importedSchedule)
+        );
+    }
+
+    private Map<Integer, SemesterWeekRef> semesterWeeks() {
+        Map<Integer, SemesterWeekRef> weeks = new LinkedHashMap<>();
+        LocalDate start = LocalDate.of(2026, 1, 5);
+        for (int week = 1; week <= 15; week++) {
+            LocalDate weekStart = start.plusWeeks(week - 1L);
+            weeks.put(week, new SemesterWeekRef(week, week, weekStart, weekStart.plusDays(6)));
+        }
+        return weeks;
+    }
+
+    private Map<String, ClassRef> classRefs() {
+        return Map.of(
+                "D23CQCN01", new ClassRef("D23CQCN01", 40),
+                "D23CQCN02", new ClassRef("D23CQCN02", 40)
         );
     }
 
@@ -270,6 +355,7 @@ class TimetableImportApplyServiceTest {
         private boolean draftMarked;
         private ScheduleWrite lastSchedule;
         private final java.util.List<Long> cancelledScheduleIds = new java.util.ArrayList<>();
+        private final java.util.List<Long> cancelledSectionIds = new java.util.ArrayList<>();
 
         private FakeWriteStore(String semesterStatus) {
             this.semesterStatus = semesterStatus;
@@ -283,6 +369,7 @@ class TimetableImportApplyServiceTest {
 
         @Override public long insertSection(SectionWrite row) { return 40L; }
         @Override public void updateSection(long sectionId, SectionWrite row) { }
+        @Override public int softCancelSection(long sectionId, String importBatchCode) { cancelledSectionIds.add(sectionId); return 1; }
         @Override public long insertSchedule(ScheduleWrite row) { lastSchedule = row; return 50L; }
         @Override public void updateSchedule(long scheduleId, ScheduleWrite row) { lastSchedule = row; }
         @Override public int softCancelSchedule(long scheduleId, String note) { cancelledScheduleIds.add(scheduleId); return 1; }

@@ -33,7 +33,7 @@ export default function AdminTimetableVersionsPage() {
   const [versions, setVersions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedVersions, setSelectedVersions] = useState([]);
-  
+
   // Rollback state
   const [rollbackTarget, setRollbackTarget] = useState(null);
   const [rollingBack, setRollingBack] = useState(false);

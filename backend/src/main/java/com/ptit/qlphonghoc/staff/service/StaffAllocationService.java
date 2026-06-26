@@ -35,10 +35,9 @@ public class StaffAllocationService implements AllocationValidationService {
             "ROOM_INACTIVE_OR_DELETED", 3,
             "ROOM_TYPE_MISMATCH", 4,
             "CAPACITY_EXCEEDED", 5,
-            "CALENDAR_BLOCK_CONFLICT", 6,
-            "ROOM_TIME_CONFLICT", 7,
-            "LECTURER_TIME_CONFLICT", 8,
-            "UNASSIGNED", 9
+            "ROOM_TIME_CONFLICT", 6,
+            "LECTURER_TIME_CONFLICT", 7,
+            "UNASSIGNED", 8
     );
 
     private final StaffAllocationRepository repository;
@@ -190,12 +189,7 @@ public class StaffAllocationService implements AllocationValidationService {
             );
         }
 
-        if (repository.countCalendarBlockConflicts(scheduleId) > 0) {
-            throw new BadRequestException(
-                    "CALENDAR_BLOCK_CONFLICT",
-                    "Lịch học rơi vào khoảng thời gian không được phép giảng dạy."
-            );
-        }
+
 
         int updated = repository.upsertRoomAllocation(scheduleId, classroomId, staffUserId);
         if (updated != 1) {
@@ -244,7 +238,7 @@ public class StaffAllocationService implements AllocationValidationService {
             }
 
             StaffAllocationRepository.AssignmentScheduleProjection schedule = scheduleResult.get();
-            if (!isAutoAssignable(schedule) || repository.countCalendarBlockConflicts(scheduleId) > 0) {
+            if (!isAutoAssignable(schedule)) {
                 continue;
             }
 
@@ -442,14 +436,6 @@ public class StaffAllocationService implements AllocationValidationService {
             }
         }
 
-        if (calendarBlocks != null && !calendarBlocks.isEmpty()) {
-            String blockSummary = calendarBlocks.stream()
-                    .map(block -> block.getBlockTitle() + " (" + block.getTeachingDate() + ")")
-                    .distinct()
-                    .collect(Collectors.joining(", "));
-            conflicts.add(conflict(schedule, "CALENDAR_BLOCK_CONFLICT", "HIGH",
-                    "The schedule falls on non-teaching calendar blocks: " + blockSummary + ".", null));
-        }
     }
 
     private void addGroupedPairConflicts(

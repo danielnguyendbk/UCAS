@@ -572,7 +572,7 @@ export const StaffSectionsPage = () => {
         <div className="flex-1 md:min-w-[260px] relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
-            placeholder="Tìm theo mã lớp, tên môn, giảng viên..."
+            placeholder="Tìm theo Mã lớp học phần, tên môn, giảng viên..."
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -674,7 +674,7 @@ export const StaffSectionsPage = () => {
           <TableHeader>
             <TableRow className="bg-gray-50 border-b border-gray-200">
               <TableHead className="text-xs font-semibold text-gray-600">
-                Mã lớp
+                Mã lớp học phần
               </TableHead>
               <TableHead className="text-xs font-semibold text-gray-600">
                 Môn học
@@ -1060,7 +1060,7 @@ export const StaffSectionsPage = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-gray-700">
-                      Mã Lớp (VD: 01) <span className="text-red-500">*</span>
+                      Mã lớp học phần (VD: 01) <span className="text-red-500">*</span>
                     </label>
                     <Input
                       required

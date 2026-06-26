@@ -2,6 +2,7 @@ package com.ptit.qlphonghoc.admin.service;
 
 import com.ptit.qlphonghoc.admin.dto.AdminScheduleUpdateRequest;
 import com.ptit.qlphonghoc.admin.repository.AdminScheduleEditRepository;
+import com.ptit.qlphonghoc.admin.repository.AdminScheduleEditRepository.RoomEditRef;
 import com.ptit.qlphonghoc.admin.repository.AdminScheduleEditRepository.ScheduleEditContext;
 import com.ptit.qlphonghoc.audit.enumtype.AuditAction;
 import com.ptit.qlphonghoc.audit.service.WorkflowAuditLogger;
@@ -43,10 +44,12 @@ class AdminScheduleEditServiceTest {
         StaffSectionTableResponse response = new StaffSectionTableResponse();
         response.setId(7);
         when(repository.findContextForUpdate(7, 9))
-                .thenReturn(Optional.of(new ScheduleEditContext(2, "CONFLICT", 35)));
+                .thenReturn(Optional.of(new ScheduleEditContext(2, "CONFLICT", 35, "LECTURE")));
         when(repository.lecturerExists(12)).thenReturn(true);
         when(repository.classroomIsActive(40)).thenReturn(true);
+        when(repository.findRoom(40)).thenReturn(Optional.of(room(40, "A-101", 60, "LECTURE")));
         when(repository.slotRangeIsValid(1, 3)).thenReturn(true);
+        when(repository.countRoomTimeConflicts(9, 40, 2, "MON", 1, 3, 1, 16)).thenReturn(0);
         when(repository.updateSchedule(eq(7), eq(9), eq(request), eq("MON"), eq(1), eq("note")))
                 .thenReturn(1);
         when(classSectionReader.getById(7)).thenReturn(response);
@@ -63,7 +66,7 @@ class AdminScheduleEditServiceTest {
     @Test
     void updateRejectsApprovedTimetable() {
         when(repository.findContextForUpdate(7, 9))
-                .thenReturn(Optional.of(new ScheduleEditContext(2, "APPROVED", 35)));
+                .thenReturn(Optional.of(new ScheduleEditContext(2, "APPROVED", 35, "LECTURE")));
 
         BadRequestException exception = assertThrows(
                 BadRequestException.class,
@@ -78,7 +81,7 @@ class AdminScheduleEditServiceTest {
     void updateRejectsInvalidWeekRange() {
         AdminScheduleUpdateRequest request = request(12, 40, 16, 1);
         when(repository.findContextForUpdate(7, 9))
-                .thenReturn(Optional.of(new ScheduleEditContext(2, "DRAFT", 35)));
+                .thenReturn(Optional.of(new ScheduleEditContext(2, "DRAFT", 35, "LECTURE")));
         when(repository.lecturerExists(12)).thenReturn(true);
         when(repository.classroomIsActive(40)).thenReturn(true);
         when(repository.slotRangeIsValid(1, 3)).thenReturn(true);
@@ -89,6 +92,62 @@ class AdminScheduleEditServiceTest {
         );
 
         assertEquals("INVALID_WEEK_RANGE", exception.getErrorCode());
+    }
+
+    @Test
+    void updateRejectsBusyRoom() {
+        AdminScheduleUpdateRequest request = request(12, 40, 1, 16);
+        when(repository.findContextForUpdate(7, 9))
+                .thenReturn(Optional.of(new ScheduleEditContext(2, "DRAFT", 35, "LECTURE")));
+        when(repository.lecturerExists(12)).thenReturn(true);
+        when(repository.classroomIsActive(40)).thenReturn(true);
+        when(repository.slotRangeIsValid(1, 3)).thenReturn(true);
+        when(repository.findRoom(40)).thenReturn(Optional.of(room(40, "A-101", 60, "LECTURE")));
+        when(repository.countRoomTimeConflicts(9, 40, 2, "MON", 1, 3, 1, 16)).thenReturn(1);
+
+        BadRequestException exception = assertThrows(
+                BadRequestException.class,
+                () -> service.update(7, 9, request, 1)
+        );
+
+        assertEquals("ROOM_TIME_CONFLICT", exception.getErrorCode());
+        verify(repository, never()).updateSchedule(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void updateRejectsRoomTypeMismatch() {
+        AdminScheduleUpdateRequest request = request(12, 40, 1, 16);
+        when(repository.findContextForUpdate(7, 9))
+                .thenReturn(Optional.of(new ScheduleEditContext(2, "DRAFT", 35, "LAB")));
+        when(repository.lecturerExists(12)).thenReturn(true);
+        when(repository.classroomIsActive(40)).thenReturn(true);
+        when(repository.slotRangeIsValid(1, 3)).thenReturn(true);
+        when(repository.findRoom(40)).thenReturn(Optional.of(room(40, "A-101", 60, "LECTURE")));
+
+        BadRequestException exception = assertThrows(
+                BadRequestException.class,
+                () -> service.update(7, 9, request, 1)
+        );
+
+        assertEquals("ROOM_TYPE_MISMATCH", exception.getErrorCode());
+    }
+
+    @Test
+    void updateRejectsSmallRoom() {
+        AdminScheduleUpdateRequest request = request(12, 40, 1, 16);
+        when(repository.findContextForUpdate(7, 9))
+                .thenReturn(Optional.of(new ScheduleEditContext(2, "DRAFT", 35, "LECTURE")));
+        when(repository.lecturerExists(12)).thenReturn(true);
+        when(repository.classroomIsActive(40)).thenReturn(true);
+        when(repository.slotRangeIsValid(1, 3)).thenReturn(true);
+        when(repository.findRoom(40)).thenReturn(Optional.of(room(40, "A-101", 30, "LECTURE")));
+
+        BadRequestException exception = assertThrows(
+                BadRequestException.class,
+                () -> service.update(7, 9, request, 1)
+        );
+
+        assertEquals("CAPACITY_EXCEEDED", exception.getErrorCode());
     }
 
     private AdminScheduleUpdateRequest request(
@@ -108,5 +167,9 @@ class AdminScheduleEditServiceTest {
                 40,
                 "note"
         );
+    }
+
+    private RoomEditRef room(Integer id, String code, Integer capacity, String roomType) {
+        return new RoomEditRef(id, code, capacity, roomType, true, false);
     }
 }

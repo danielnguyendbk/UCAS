@@ -69,6 +69,21 @@ public class JdbcTimetableImportWriteStore implements TimetableImportWriteStore 
     }
 
     @Override
+    public int softCancelSection(long sectionId, String importBatchCode) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("sectionId", sectionId)
+                .addValue("importBatchCode", importBatchCode);
+        return jdbc.update("""
+                UPDATE class_sections
+                SET status = 'CANCELLED',
+                    import_batch_code = :importBatchCode,
+                    last_imported_at = CURRENT_TIMESTAMP
+                WHERE section_id = :sectionId
+                  AND status <> 'CANCELLED'
+                """, params);
+    }
+
+    @Override
     public long insertSchedule(ScheduleWrite row) {
         KeyHolder keys = new GeneratedKeyHolder();
         jdbc.update("""

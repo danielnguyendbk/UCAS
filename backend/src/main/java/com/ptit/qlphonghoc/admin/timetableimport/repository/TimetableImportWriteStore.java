@@ -10,6 +10,7 @@ public interface TimetableImportWriteStore {
     Optional<SemesterRef> lockSemester(long semesterId);
     long insertSection(SectionWrite row);
     void updateSection(long sectionId, SectionWrite row);
+    int softCancelSection(long sectionId, String importBatchCode);
     long insertSchedule(ScheduleWrite row);
     void updateSchedule(long scheduleId, ScheduleWrite row);
     int softCancelSchedule(long scheduleId, String note);

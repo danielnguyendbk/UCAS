@@ -263,7 +263,7 @@ const EmployeePage = () => {
                                         <span className="font-semibold text-white">{room}</span>
                                       </div>
                                       <div className="flex justify-between">
-                                        <span>Mã lớp:</span>
+                                        <span>Mã lớp học phần:</span>
                                         <span className="font-semibold text-white">{item.section}</span>
                                       </div>
                                       <div className="flex justify-between border-t border-gray-700 pt-1 mt-1">

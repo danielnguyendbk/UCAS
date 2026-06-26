@@ -62,10 +62,11 @@ public class AdminTimetableImportController {
     public ApiResponse<ImportPreviewResponse> preview(
             @RequestParam(required = false) MultipartFile file,
             @RequestParam(required = false) Long semesterId,
-            @RequestParam(required = false) String semesterCode
+            @RequestParam(required = false) String semesterCode,
+            @RequestParam(required = false) String mode
     ) {
         return ApiResponse.success("Đã kiểm tra file import. Chưa có dữ liệu nào được ghi.",
-                previewService.preview(file, semesterId, semesterCode));
+                previewService.preview(file, semesterId, semesterCode, mode));
     }
 
     @GetMapping("/template")

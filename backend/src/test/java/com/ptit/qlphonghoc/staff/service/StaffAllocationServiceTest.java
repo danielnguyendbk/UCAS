@@ -50,7 +50,6 @@ class StaffAllocationServiceTest {
         when(repository.lockClassroom(15)).thenReturn(Optional.of(15));
         when(repository.findRoomForAssignment(15)).thenReturn(Optional.of(room));
         when(repository.countRoomTimeConflicts(51, 15, 2, "MON", 1, 4, 1, 22)).thenReturn(0);
-        when(repository.countCalendarBlockConflicts(51)).thenReturn(0);
         when(repository.upsertRoomAllocation(51, 15, 2)).thenReturn(1);
         when(repository.findAllSchedulesBySemester(2)).thenReturn(List.of());
         when(repository.findCalendarBlockConflicts(2)).thenReturn(List.of());
@@ -86,7 +85,6 @@ class StaffAllocationServiceTest {
         when(repository.lockSchedule(99)).thenReturn(Optional.of(99));
         when(repository.findScheduleForAssignment(99)).thenReturn(Optional.of(schedule));
         when(repository.findWeekBounds(2)).thenReturn(weekBounds);
-        when(repository.countCalendarBlockConflicts(99)).thenReturn(0);
         when(repository.findAvailableRoomForAutoAssign(2, "MON", 1, 4, 3, 7, 99, "LAB", 60))
                 .thenReturn(Optional.of(9));
         when(repository.lockClassroom(9)).thenReturn(Optional.of(9));
@@ -150,6 +148,37 @@ class StaffAllocationServiceTest {
         verify(repository).markScheduleConflict(1, "ROOM_TIME_CONFLICT");
         verify(repository).markScheduleConflict(2, "ROOM_TIME_CONFLICT");
         verify(mutationPolicy).assertOriginalTimetableMutable(2);
+    }
+
+    @Test
+    void conflictReportDetectsRoomResourceIssues() {
+        var unassigned = allocationSchedule(1, 10, 15, 1, 5);
+        when(unassigned.getAllocationId()).thenReturn(null);
+        when(unassigned.getAssignedRoom()).thenReturn(null);
+        when(unassigned.getScheduleStatus()).thenReturn("UNASSIGNED");
+
+        var inactiveRoom = allocationSchedule(2, 11, 16, 1, 5);
+        when(inactiveRoom.getRoomActive()).thenReturn(false);
+
+        var wrongType = allocationSchedule(3, 12, 17, 1, 5);
+        when(wrongType.getRequiredRoomType()).thenReturn("LAB");
+        when(wrongType.getAssignedRoomType()).thenReturn("LECTURE");
+
+        var tooSmall = allocationSchedule(4, 13, 18, 1, 5);
+        when(tooSmall.getRoomCapacity()).thenReturn(45);
+        when(tooSmall.getEnrolledCount()).thenReturn(60);
+        when(tooSmall.getMaxCapacity()).thenReturn(60);
+
+        when(repository.findAllSchedulesBySemester(2)).thenReturn(List.of(unassigned, inactiveRoom, wrongType, tooSmall));
+        when(repository.findWeekBounds(2)).thenReturn(weekBounds);
+        when(repository.findCalendarBlockConflicts(2)).thenReturn(List.of());
+
+        var conflicts = service.getConflicts(2);
+
+        assertTrue(conflicts.stream().anyMatch(c -> c.getScheduleId() == 1 && "UNASSIGNED".equals(c.getConflictType())));
+        assertTrue(conflicts.stream().anyMatch(c -> c.getScheduleId() == 2 && "ROOM_INACTIVE_OR_DELETED".equals(c.getConflictType())));
+        assertTrue(conflicts.stream().anyMatch(c -> c.getScheduleId() == 3 && "ROOM_TYPE_MISMATCH".equals(c.getConflictType())));
+        assertTrue(conflicts.stream().anyMatch(c -> c.getScheduleId() == 4 && "CAPACITY_EXCEEDED".equals(c.getConflictType())));
     }
 
     private StaffAllocationRepository.AssignmentScheduleProjection assignmentSchedule(

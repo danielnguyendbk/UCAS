@@ -457,17 +457,7 @@ public class AdminSectionSplitService {
     ) {
         for (int index = 0; index < parts.size(); index++) {
             NormalizedPart part = parts.get(index);
-            if (repository.countCalendarBlockConflicts(
-                    context.semesterId(),
-                    part.dayOfWeek(),
-                    context.fromWeekNo(),
-                    context.toWeekNo()
-            ) > 0) {
-                throw new BadRequestException(
-                        "CALENDAR_BLOCK_CONFLICT",
-                        "Lich cua nhom " + part.sectionCode() + " roi vao khoang hoc vu bi chan."
-                );
-            }
+
             if (part.classroomId() == null) {
                 continue;
             }

@@ -4,6 +4,7 @@ import {
   CalendarDays,
   CheckCircle2,
   Clock3,
+  History,
   Loader2,
   LockKeyhole,
   RefreshCw,
@@ -19,6 +20,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Textarea } from "@/app/components/ui/textarea";
 import { httpClient } from "@/services/httpClient";
 
@@ -46,6 +48,16 @@ const STATUS_BADGES = {
   CLOSED: "bg-blue-100 text-blue-700",
   MISSED: "bg-red-100 text-red-700",
   CANCELLED: "bg-slate-100 text-slate-600",
+};
+
+const ACTION_LABELS = {
+  OPEN_ROOM: "Mở cửa",
+  CLOSE_ROOM: "Đóng cửa",
+};
+
+const ACTION_BADGES = {
+  OPEN_ROOM: "bg-green-100 text-green-700",
+  CLOSE_ROOM: "bg-blue-100 text-blue-700",
 };
 
 const EMPTY_ISSUE_FORM = {
@@ -107,6 +119,19 @@ const formatClock = (value) => {
   return text.slice(0, 5);
 };
 
+const formatDateTime = (value) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+};
+
 const normalizeItem = (item) => ({
   sourceType: item.sourceType ?? item.source_type ?? "CLASS_SESSION",
   sourceId: item.sourceId ?? item.source_id,
@@ -163,6 +188,19 @@ export const FacilityOpeningSchedulePage = () => {
   const [issueTarget, setIssueTarget] = useState(null);
   const [issueForm, setIssueForm] = useState(EMPTY_ISSUE_FORM);
 
+  // History tab state
+  const [historyItems, setHistoryItems] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyAction, setHistoryAction] = useState("ALL");
+  const [historyStartDate, setHistoryStartDate] = useState("");
+  const [historyEndDate, setHistoryEndDate] = useState("");
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyPage, setHistoryPage] = useState(0);
+  const [historySize, setHistorySize] = useState(10);
+  const [historyTotalItems, setHistoryTotalItems] = useState(0);
+  const [historyTotalPages, setHistoryTotalPages] = useState(0);
+  const [activeTab, setActiveTab] = useState("schedule");
+
   useEffect(() => {
     void loadInitial();
   }, []);
@@ -185,6 +223,11 @@ export const FacilityOpeningSchedulePage = () => {
     if (!semesterId || !assignment) return;
     void loadItems();
   }, [semesterId, assignment, page, size, date, search, sourceType, status]);
+
+  useEffect(() => {
+    if (activeTab !== "history") return;
+    void loadHistory();
+  }, [activeTab, historyPage, historySize, historyAction, historyStartDate, historyEndDate, historySearch]);
 
   const semesterOptions = useMemo(() => semesters, [semesters]);
 
@@ -266,6 +309,31 @@ export const FacilityOpeningSchedulePage = () => {
       setItems([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const response = await httpClient.get("/api/facility/room-access-history", {
+        params: {
+          action: historyAction === "ALL" ? undefined : historyAction,
+          startDate: historyStartDate || undefined,
+          endDate: historyEndDate || undefined,
+          search: normalize(historySearch) || undefined,
+          page: historyPage,
+          size: historySize,
+        },
+      });
+      const pageData = getPageData(response);
+      setHistoryItems(pageData.items || []);
+      setHistoryTotalItems(pageData.totalItems ?? 0);
+      setHistoryTotalPages(pageData.totalPages ?? 0);
+    } catch (exception) {
+      console.error("Failed to load room access history", exception);
+      setHistoryItems([]);
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
@@ -367,268 +435,468 @@ export const FacilityOpeningSchedulePage = () => {
         </div>
       </div>
 
-      <div className="grid gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm lg:grid-cols-5">
-        <div className="space-y-2">
-          <Label>Học kỳ</Label>
-          <select
-            value={semesterId}
-            onChange={(event) => {
-              setSemesterId(event.target.value);
-              setPage(0);
-            }}
-            className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-          >
-            {semesterOptions.map((semester) => (
-              <option key={semester.id} value={semester.id}>
-                {semester.name || semester.code}
-              </option>
-            ))}
-          </select>
-        </div>
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value)}>
+        <TabsList className="mb-2">
+          <TabsTrigger value="schedule">
+            <LockKeyhole className="mr-2 h-4 w-4" />
+            Lịch hôm nay
+          </TabsTrigger>
+          <TabsTrigger value="history">
+            <History className="mr-2 h-4 w-4" />
+            Lịch sử mở/đóng
+          </TabsTrigger>
+        </TabsList>
 
-        <div className="space-y-2">
-          <Label>Ngày</Label>
-          <Input
-            type="date"
-            value={date}
-            onChange={(event) => {
-              setDate(event.target.value);
-              setPage(0);
-            }}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label>Loại lịch</Label>
-          <select
-            value={sourceType}
-            onChange={(event) => {
-              setSourceType(event.target.value);
-              setPage(0);
-            }}
-            className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-          >
-            <option value="ALL">Tất cả</option>
-            <option value="CLASS_SESSION">Lịch học</option>
-            <option value="BORROW_REQUEST">Mượn phòng</option>
-            <option value="EXAM">Lịch thi</option>
-          </select>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Trạng thái</Label>
-          <select
-            value={status}
-            onChange={(event) => {
-              setStatus(event.target.value);
-              setPage(0);
-            }}
-            className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-          >
-            <option value="ALL">Tất cả</option>
-            {Object.keys(STATUS_LABELS).map((key) => (
-              <option key={key} value={key}>
-                {STATUS_LABELS[key]}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Tìm kiếm</Label>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
+        {/* ── Tab: Lịch hôm nay ── */}
+        <TabsContent value="schedule" className="space-y-4">
+          <div className="grid gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm lg:grid-cols-5">
+            <div className="space-y-2">
+              <Label>Học kỳ</Label>
+              <select
+                value={semesterId}
+                onChange={(event) => {
+                  setSemesterId(event.target.value);
                   setPage(0);
-                }
-              }}
-              className="pl-9"
-              placeholder="Phòng, môn, nội dung..."
-            />
-          </div>
-        </div>
-      </div>
-
-      {error && (
-        <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      {!assignment ? (
-        <div className="rounded-xl border border-dashed border-gray-200 bg-white p-12 text-center shadow-sm">
-          <ShieldAlert className="mx-auto h-12 w-12 text-gray-300" />
-          <h2 className="mt-4 text-lg font-semibold text-gray-900">Bạn chưa được phân công tòa nhà trong học kỳ này.</h2>
-          <p className="mt-2 text-sm text-gray-500">Liên hệ quản trị viên để được phân công trước khi thao tác mở/đóng phòng.</p>
-        </div>
-      ) : (
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-          <div className="flex flex-col gap-3 border-b border-gray-100 px-4 py-3 text-sm text-gray-600 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center gap-2">
-              <LockKeyhole className="h-4 w-4 text-blue-600" />
-              <span>{activeSemesterLabel}</span>
-              <span className="text-gray-400">•</span>
-              <span>{currentBuildingLabel}</span>
+                }}
+                className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              >
+                {semesterOptions.map((semester) => (
+                  <option key={semester.id} value={semester.id}>
+                    {semester.name || semester.code}
+                  </option>
+                ))}
+              </select>
             </div>
-            <div className="flex items-center gap-3">
-              <span>Tổng {totalItems} bản ghi</span>
-              <Button variant="outline" size="sm" onClick={refresh} disabled={loading || savingAction}>
+
+            <div className="space-y-2">
+              <Label>Ngày</Label>
+              <Input
+                type="date"
+                value={date}
+                onChange={(event) => {
+                  setDate(event.target.value);
+                  setPage(0);
+                }}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Loại lịch</Label>
+              <select
+                value={sourceType}
+                onChange={(event) => {
+                  setSourceType(event.target.value);
+                  setPage(0);
+                }}
+                className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="ALL">Tất cả</option>
+                <option value="CLASS_SESSION">Lịch học</option>
+                <option value="BORROW_REQUEST">Mượn phòng</option>
+                <option value="EXAM">Lịch thi</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Trạng thái</Label>
+              <select
+                value={status}
+                onChange={(event) => {
+                  setStatus(event.target.value);
+                  setPage(0);
+                }}
+                className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="ALL">Tất cả</option>
+                {Object.keys(STATUS_LABELS).map((key) => (
+                  <option key={key} value={key}>
+                    {STATUS_LABELS[key]}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Tìm kiếm</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <Input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      setPage(0);
+                    }
+                  }}
+                  className="pl-9"
+                  placeholder="Phòng, môn, nội dung..."
+                />
+              </div>
+            </div>
+          </div>
+
+          {error && (
+            <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          {!assignment ? (
+            <div className="rounded-xl border border-dashed border-gray-200 bg-white p-12 text-center shadow-sm">
+              <ShieldAlert className="mx-auto h-12 w-12 text-gray-300" />
+              <h2 className="mt-4 text-lg font-semibold text-gray-900">Bạn chưa được phân công tòa nhà trong học kỳ này.</h2>
+              <p className="mt-2 text-sm text-gray-500">Liên hệ quản trị viên để được phân công trước khi thao tác mở/đóng phòng.</p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+              <div className="flex flex-col gap-3 border-b border-gray-100 px-4 py-3 text-sm text-gray-600 md:flex-row md:items-center md:justify-between">
+                <div className="flex items-center gap-2">
+                  <LockKeyhole className="h-4 w-4 text-blue-600" />
+                  <span>{activeSemesterLabel}</span>
+                  <span className="text-gray-400">•</span>
+                  <span>{currentBuildingLabel}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span>Tổng {totalItems} bản ghi</span>
+                  <Button variant="outline" size="sm" onClick={refresh} disabled={loading || savingAction}>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Tải lại
+                  </Button>
+                </div>
+              </div>
+
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50/80">
+                    <TableHead>Giờ</TableHead>
+                    <TableHead>Phòng</TableHead>
+                    <TableHead>Nội dung</TableHead>
+                    <TableHead>Loại lịch</TableHead>
+                    <TableHead>Trạng thái</TableHead>
+                    <TableHead className="text-right">Thao tác</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="py-12 text-center">
+                        <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Đang tải lịch mở cửa...
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : items.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="py-14 text-center text-gray-500">
+                        <div className="flex flex-col items-center gap-3">
+                          <AlertCircle className="h-10 w-10 text-gray-300" />
+                          <div>
+                            <p className="font-semibold text-gray-700">Không có lịch phù hợp.</p>
+                            <p className="mt-1 text-xs text-gray-400">Hãy đổi bộ lọc hoặc ngày tra cứu.</p>
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    items.map((item) => (
+                      <TableRow key={`${item.sourceType}-${item.sourceId}-${item.classroomId}`} className="hover:bg-gray-50/50">
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Clock3 className="h-4 w-4 text-gray-400" />
+                            <div>
+                              <div className="text-sm font-semibold text-gray-900">{formatTimeRange(item)}</div>
+                              <div className="text-xs text-gray-400">Mở trước {formatClock(item.expectedOpenTime)}</div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-semibold text-blue-700">{item.classroomCode}</div>
+                          <div className="text-xs text-gray-400">{formatDateLabel(item.accessDate)}</div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-medium text-gray-900">{item.title}</div>
+                          <div className="text-xs text-gray-500">{item.subtitle}</div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100">
+                            {SOURCE_TYPE_LABELS[item.sourceType] || item.sourceType}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={STATUS_BADGES[item.status] || "bg-gray-100 text-gray-700"}>
+                            {STATUS_LABELS[item.status] || item.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openActionDialog(item, "open")}
+                              disabled={!item.canOpen || savingAction}
+                            >
+                              <Unlock className="mr-1 h-4 w-4" />
+                              Mở cửa
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-blue-700 hover:bg-blue-50"
+                              onClick={() => openActionDialog(item, "close")}
+                              disabled={!item.canClose || savingAction}
+                            >
+                              <CheckCircle2 className="mr-1 h-4 w-4" />
+                              Đóng cửa
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-amber-700 hover:bg-amber-50"
+                              onClick={() => openIssueDialog(item)}
+                              disabled={savingAction}
+                            >
+                              <SquarePen className="mr-1 h-4 w-4" />
+                              Báo sự cố
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+
+              <div className="flex flex-col gap-3 border-t border-gray-100 px-4 py-3 text-sm text-gray-600 md:flex-row md:items-center md:justify-between">
+                <div>
+                  Hiển thị {items.length} / {totalItems} lịch
+                </div>
+                <div className="flex items-center gap-3">
+                  <select
+                    value={size}
+                    onChange={(event) => {
+                      setSize(Number(event.target.value));
+                      setPage(0);
+                    }}
+                    className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  >
+                    {PAGE_SIZE_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option} dòng
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage((previous) => Math.max(0, previous - 1))}
+                      disabled={page === 0 || loading}
+                    >
+                      Trước
+                    </Button>
+                    <span className="min-w-20 text-center text-xs text-gray-500">
+                      {totalPages === 0 ? 0 : page + 1} / {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage((previous) => previous + 1)}
+                      disabled={page + 1 >= totalPages || loading}
+                    >
+                      Sau
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ── Tab: Lịch sử mở/đóng ── */}
+        <TabsContent value="history" className="space-y-4">
+          <div className="grid gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm lg:grid-cols-4">
+            <div className="space-y-2">
+              <Label>Loại thao tác</Label>
+              <select
+                value={historyAction}
+                onChange={(event) => {
+                  setHistoryAction(event.target.value);
+                  setHistoryPage(0);
+                }}
+                className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="ALL">Tất cả</option>
+                <option value="OPEN_ROOM">Mở cửa</option>
+                <option value="CLOSE_ROOM">Đóng cửa</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Từ ngày</Label>
+              <Input
+                type="date"
+                value={historyStartDate}
+                onChange={(event) => {
+                  setHistoryStartDate(event.target.value);
+                  setHistoryPage(0);
+                }}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Đến ngày</Label>
+              <Input
+                type="date"
+                value={historyEndDate}
+                onChange={(event) => {
+                  setHistoryEndDate(event.target.value);
+                  setHistoryPage(0);
+                }}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Tìm kiếm</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <Input
+                  value={historySearch}
+                  onChange={(event) => setHistorySearch(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") setHistoryPage(0);
+                  }}
+                  className="pl-9"
+                  placeholder="Tên phòng, mô tả..."
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 text-sm text-gray-600">
+              <div className="flex items-center gap-2">
+                <History className="h-4 w-4 text-blue-600" />
+                <span>Tổng {historyTotalItems} bản ghi</span>
+              </div>
+              <Button variant="outline" size="sm" onClick={loadHistory} disabled={historyLoading}>
                 <RefreshCw className="mr-2 h-4 w-4" />
                 Tải lại
               </Button>
             </div>
-          </div>
 
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-gray-50/80">
-                <TableHead>Giờ</TableHead>
-                <TableHead>Phòng</TableHead>
-                <TableHead>Nội dung</TableHead>
-                <TableHead>Loại lịch</TableHead>
-                <TableHead>Trạng thái</TableHead>
-                <TableHead className="text-right">Thao tác</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="py-12 text-center">
-                    <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Đang tải lịch mở cửa...
-                    </div>
-                  </TableCell>
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-gray-50/80">
+                  <TableHead>Thời gian</TableHead>
+                  <TableHead>Phòng</TableHead>
+                  <TableHead>Thao tác</TableHead>
+                  <TableHead>Loại lịch</TableHead>
+                  <TableHead>Mô tả</TableHead>
                 </TableRow>
-              ) : items.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="py-14 text-center text-gray-500">
-                    <div className="flex flex-col items-center gap-3">
-                      <AlertCircle className="h-10 w-10 text-gray-300" />
-                      <div>
-                        <p className="font-semibold text-gray-700">Không có lịch phù hợp.</p>
-                        <p className="mt-1 text-xs text-gray-400">Hãy đổi bộ lọc hoặc ngày tra cứu.</p>
-                      </div>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                items.map((item) => (
-                  <TableRow key={`${item.sourceType}-${item.sourceId}-${item.classroomId}`} className="hover:bg-gray-50/50">
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Clock3 className="h-4 w-4 text-gray-400" />
-                        <div>
-                          <div className="text-sm font-semibold text-gray-900">{formatTimeRange(item)}</div>
-                          <div className="text-xs text-gray-400">Mở trước {formatClock(item.expectedOpenTime)}</div>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-semibold text-blue-700">{item.classroomCode}</div>
-                      <div className="text-xs text-gray-400">{formatDateLabel(item.accessDate)}</div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-medium text-gray-900">{item.title}</div>
-                      <div className="text-xs text-gray-500">{item.subtitle}</div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100">
-                        {SOURCE_TYPE_LABELS[item.sourceType] || item.sourceType}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={STATUS_BADGES[item.status] || "bg-gray-100 text-gray-700"}>
-                        {STATUS_LABELS[item.status] || item.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openActionDialog(item, "open")}
-                          disabled={!item.canOpen || savingAction}
-                        >
-                          <Unlock className="mr-1 h-4 w-4" />
-                          Mở cửa
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-blue-700 hover:bg-blue-50"
-                          onClick={() => openActionDialog(item, "close")}
-                          disabled={!item.canClose || savingAction}
-                        >
-                          <CheckCircle2 className="mr-1 h-4 w-4" />
-                          Đóng cửa
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-amber-700 hover:bg-amber-50"
-                          onClick={() => openIssueDialog(item)}
-                          disabled={savingAction}
-                        >
-                          <SquarePen className="mr-1 h-4 w-4" />
-                          Báo sự cố
-                        </Button>
+              </TableHeader>
+              <TableBody>
+                {historyLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="py-12 text-center">
+                      <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Đang tải lịch sử...
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : historyItems.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="py-14 text-center text-gray-500">
+                      <div className="flex flex-col items-center gap-3">
+                        <AlertCircle className="h-10 w-10 text-gray-300" />
+                        <div>
+                          <p className="font-semibold text-gray-700">Không có lịch sử phù hợp.</p>
+                          <p className="mt-1 text-xs text-gray-400">Hãy đổi bộ lọc hoặc khoảng thời gian tra cứu.</p>
+                        </div>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  historyItems.map((item) => (
+                    <TableRow key={item.id} className="hover:bg-gray-50/50">
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Clock3 className="h-4 w-4 text-gray-400" />
+                          <span className="text-sm text-gray-700">{formatDateTime(item.createdAt)}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-semibold text-blue-700">{item.classroomCode || "—"}</span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={ACTION_BADGES[item.action] || "bg-gray-100 text-gray-700"}>
+                          {ACTION_LABELS[item.action] || item.action}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {item.sourceType ? (
+                          <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100">
+                            {SOURCE_TYPE_LABELS[item.sourceType] || item.sourceType}
+                          </Badge>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm text-gray-600">{item.description || "—"}</span>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
 
-          <div className="flex flex-col gap-3 border-t border-gray-100 px-4 py-3 text-sm text-gray-600 md:flex-row md:items-center md:justify-between">
-            <div>
-              Hiển thị {items.length} / {totalItems} lịch
-            </div>
-            <div className="flex items-center gap-3">
-              <select
-                value={size}
-                onChange={(event) => {
-                  setSize(Number(event.target.value));
-                  setPage(0);
-                }}
-                className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-              >
-                {PAGE_SIZE_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option} dòng
-                  </option>
-                ))}
-              </select>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((previous) => Math.max(0, previous - 1))}
-                  disabled={page === 0 || loading}
+            <div className="flex flex-col gap-3 border-t border-gray-100 px-4 py-3 text-sm text-gray-600 md:flex-row md:items-center md:justify-between">
+              <div>
+                Hiển thị {historyItems.length} / {historyTotalItems} bản ghi
+              </div>
+              <div className="flex items-center gap-3">
+                <select
+                  value={historySize}
+                  onChange={(event) => {
+                    setHistorySize(Number(event.target.value));
+                    setHistoryPage(0);
+                  }}
+                  className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 >
-                  Trước
-                </Button>
-                <span className="min-w-20 text-center text-xs text-gray-500">
-                  {totalPages === 0 ? 0 : page + 1} / {totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((previous) => previous + 1)}
-                  disabled={page + 1 >= totalPages || loading}
-                >
-                  Sau
-                </Button>
+                  {PAGE_SIZE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option} dòng
+                    </option>
+                  ))}
+                </select>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setHistoryPage((previous) => Math.max(0, previous - 1))}
+                    disabled={historyPage === 0 || historyLoading}
+                  >
+                    Trước
+                  </Button>
+                  <span className="min-w-20 text-center text-xs text-gray-500">
+                    {historyTotalPages === 0 ? 0 : historyPage + 1} / {historyTotalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setHistoryPage((previous) => previous + 1)}
+                    disabled={historyPage + 1 >= historyTotalPages || historyLoading}
+                  >
+                    Sau
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={Boolean(actionTarget)} onOpenChange={() => setActionTarget(null)}>
         <DialogContent>

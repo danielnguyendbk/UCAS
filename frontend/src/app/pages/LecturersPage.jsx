@@ -136,26 +136,51 @@ export const LecturersPage = () => {
       const response = await httpClient.get("/api/class-sections");
       const sections = getResponseData(response);
 
+      const validLecturerIds = new Set(
+        currentLecturers.map((lecturer) => String(lecturer.id)),
+      );
+
       const counts = {};
 
       sections.forEach((section) => {
-        const lecturerId = section.lecturer_id ?? section.lecturerId;
+        const lecturerId =
+          section.lecturer_id ??
+          section.lecturerId ??
+          section.lecturer?.id ??
+          section.lecturer?.lecturer_id ??
+          section.lecturer?.lecturerId;
 
         if (!lecturerId) return;
+        if (!validLecturerIds.has(String(lecturerId))) return;
 
-        const status = String(section.status || "").toUpperCase();
+        const status = String(section.status || "").trim().toUpperCase();
 
-        if (status && status !== "ACTIVE") return;
+        const isDeleted =
+          section.is_deleted === true ||
+          section.isDeleted === true ||
+          section.is_deleted === 1 ||
+          section.isDeleted === 1 ||
+          section.is_deleted === "1" ||
+          section.isDeleted === "1";
 
-        counts[lecturerId] = (counts[lecturerId] || 0) + 1;
+        if (isDeleted) return;
+
+        const inactiveStatuses = ["CANCELLED", "CANCELED", "DELETED", "INACTIVE"];
+
+        if (inactiveStatuses.includes(status)) return;
+
+        counts[String(lecturerId)] = (counts[String(lecturerId)] || 0) + 1;
       });
 
       setCourseCountByLecturer(counts);
-    } catch {
+    } catch (error) {
+      console.error("Không tải được số lớp học phần phụ trách:", error);
+
       const fallbackCounts = {};
       currentLecturers.forEach((lecturer) => {
-        fallbackCounts[lecturer.id] = Number(lecturer.active_courses || 0);
+        fallbackCounts[String(lecturer.id)] = Number(lecturer.active_courses || 0);
       });
+
       setCourseCountByLecturer(fallbackCounts);
     }
   };
@@ -317,8 +342,8 @@ export const LecturersPage = () => {
       console.error("Không lưu được giảng viên:", error);
       setErrorMessage(
         error?.response?.data?.message ||
-          error?.response?.data?.error ||
-          "Không lưu được giảng viên. Vui lòng kiểm tra dữ liệu nhập.",
+        error?.response?.data?.error ||
+        "Không lưu được giảng viên. Vui lòng kiểm tra dữ liệu nhập.",
       );
     } finally {
       setSaving(false);
@@ -339,7 +364,7 @@ export const LecturersPage = () => {
       console.error("Không xóa được giảng viên:", error);
       setErrorMessage(
         error?.response?.data?.message ||
-          "Không xóa được giảng viên. Giảng viên có thể đang được dùng trong lớp học phần.",
+        "Không xóa được giảng viên. Giảng viên có thể đang được dùng trong lớp học phần.",
       );
     } finally {
       setSaving(false);
@@ -433,12 +458,7 @@ export const LecturersPage = () => {
                 </div>
 
                 <div className="pt-4 border-t border-gray-200">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm text-gray-600">Lớp học phần phụ trách</span>
-                    <span className="text-lg font-semibold text-gray-900">
-                      {courseCountByLecturer[lecturer.id] || 0}
-                    </span>
-                  </div>
+
 
                   <div className="grid grid-cols-3 gap-2">
                     <Button

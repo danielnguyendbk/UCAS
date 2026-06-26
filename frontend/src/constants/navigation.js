@@ -14,6 +14,7 @@ import {
   Settings,
   Upload,
   Wrench,
+  ShieldAlert,
 } from "lucide-react";
 import { APP_ROUTES } from "./routes";
 
@@ -86,11 +87,6 @@ const NAVIGATION_BY_ROLE = {
           label: "Ngày nghỉ và lịch học vụ",
           path: APP_ROUTES.adminCalendarBlocks,
         },
-        {
-          id: "admin-timetable-versions",
-          label: "Lịch sử phiên bản",
-          path: APP_ROUTES.adminTimetableVersions,
-        },
       ],
     },
     {
@@ -104,11 +100,6 @@ const NAVIGATION_BY_ROLE = {
           id: "admin-facility-staff",
           label: "Nhân viên cơ sở vật chất",
           path: APP_ROUTES.adminFacilityStaff,
-        },
-        {
-          id: "admin-facility-assignments",
-          label: "Phân công tòa",
-          path: APP_ROUTES.adminFacilityAssignments,
         },
       ],
     },
@@ -137,6 +128,12 @@ const NAVIGATION_BY_ROLE = {
           id: "admin-settings",
           label: "Cài đặt hệ thống",
           path: APP_ROUTES.adminSettings,
+        },
+        {
+          id: "admin-audit-logs",
+          label: "Nhật ký hệ thống",
+          path: APP_ROUTES.adminAuditLogs,
+          icon: ShieldAlert,
         },
       ],
     },
@@ -187,12 +184,6 @@ const NAVIGATION_BY_ROLE = {
       path: APP_ROUTES.staffBookingList,
     },
     {
-      id: "staff-facility-assignments",
-      icon: Building2,
-      label: "Phân công tòa",
-      path: APP_ROUTES.staffFacilityAssignments,
-    },
-    {
       id: "staff-room-change-list",
       icon: ArrowLeftRight,
       label: "Danh sách đổi phòng",
@@ -201,6 +192,13 @@ const NAVIGATION_BY_ROLE = {
   ],
 
   Employee: [
+    {
+      id: "facility-open-close",
+      icon: Key,
+      label: "Mở khóa phòng",
+      path: APP_ROUTES.facilityOpenClose,
+      badge: "Hôm nay",
+    },
     {
       id: "facility-timetable",
       icon: Calendar,
@@ -219,18 +217,7 @@ const NAVIGATION_BY_ROLE = {
       label: "Lịch sử sự cố sửa chữa",
       path: APP_ROUTES.facilityIssues,
     },
-    {
-      id: "facility-open-close",
-      icon: Key,
-      label: "Mở/đóng cửa phòng",
-      path: APP_ROUTES.facilityOpenClose,
-    },
-    {
-      id: "facility-rooms",
-      icon: School,
-      label: "Tình trạng phòng",
-      path: APP_ROUTES.facilityRooms,
-    },
+
   ],
 
   Lecturer: [

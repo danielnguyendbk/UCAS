@@ -230,7 +230,7 @@ const StaffClassSectionsPage = ({
         <div className="flex-1 md:min-w-[260px] relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
-            placeholder="Tìm theo mã lớp, tên môn, giảng viên..."
+            placeholder="Tìm theo Mã lớp học phần, tên môn, giảng viên..."
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             className="pl-9 h-9 text-sm"
@@ -301,7 +301,7 @@ const StaffClassSectionsPage = ({
         <Table>
           <TableHeader>
             <TableRow className="bg-gray-50 border-b">
-              <TableHead className="text-xs font-bold text-gray-600">Mã lớp</TableHead>
+              <TableHead className="text-xs font-bold text-gray-600">Mã lớp học phần</TableHead>
               <TableHead className="text-xs font-bold text-gray-600">Môn học</TableHead>
               <TableHead className="text-xs font-bold text-gray-600">Bộ môn</TableHead>
               <TableHead className="text-xs font-bold text-gray-600">Classes</TableHead>

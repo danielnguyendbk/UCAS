@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
+import { decorateItemsWithCalendarBlocks, normalizeSemester } from "../utils/calendarBlockMatcher";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { httpClient } from "../../services/httpClient";
 
@@ -57,6 +58,12 @@ const STATUS_META = {
     dot: "bg-emerald-500",
     block: "border-emerald-200 bg-emerald-50 text-emerald-950 hover:bg-emerald-100",
     accent: "border-l-emerald-500",
+  },
+  INACTIVE: {
+    label: "Tạm dừng",
+    dot: "bg-gray-400",
+    block: "border-gray-200 bg-gray-100 text-gray-600 hover:bg-gray-200",
+    accent: "border-l-gray-400",
   },
 };
 
@@ -141,8 +148,7 @@ const resolveCurrentWeek = (weekOptions) => {
   const now = new Date();
   const found = weekOptions.find((week) => now >= week.start && now <= week.end);
   if (found) return found.value;
-  if (now < weekOptions[0].start) return weekOptions[0].value;
-  return weekOptions[weekOptions.length - 1].value;
+  return weekOptions[0].value;
 };
 
 const cleanRoomName = (roomCode) => {
@@ -179,33 +185,37 @@ const extractCourseAndGroup = (classCode, courseCodeHint) => {
 const getDisplayStatus = (item) => {
   const allocation = normalize(item.allocationStatus);
   const section = normalize(item.sectionStatus);
+  const direct = normalize(item.status);
   if (allocation === "CONFLICT") return "CONFLICT";
   if (allocation === "UNASSIGNED" || allocation === "NO_SCHEDULE") return "UNASSIGNED";
   if (allocation === "PUBLISHED" || section === "PUBLISHED") return "PUBLISHED";
+  // Fallback for student/lecturer direct status field
+  if (direct === "UNASSIGNED") return "UNASSIGNED";
+  if (direct === "INACTIVE" || direct === "CANCELLED") return "INACTIVE";
   return "ASSIGNED";
 };
 
 const mapScheduleItem = (item) => {
   const { courseCode, sectionGroup } = extractCourseAndGroup(item.classCode, item.courseCode);
-  const room = item.room || "";
-  const slotStart = Number(item.slotStart ?? item.slotStartNo ?? item.slot ?? 0);
-  const slotEnd = Number(item.slotEnd ?? item.slotEndNo ?? item.slot ?? slotStart);
+  const room = item.room || item.roomCode || item.room_code || "";
+  const slotStart = Number(item.slotStart ?? item.slotStartNo ?? item.slot_start ?? item.slot ?? 0);
+  const slotEnd = Number(item.slotEnd ?? item.slotEndNo ?? item.slot_end ?? item.slot ?? slotStart);
 
   return {
-    id: item.id,
+    id: item.id ?? item.scheduleId ?? item.schedule_id,
     courseCode,
     sectionGroup,
-    courseName: item.courseName || item.name || "Chưa có tên môn",
-    classCode: item.classCode || "",
-    classCodes: item.classCodes || item.classNames || item.className || "",
-    lecturer: item.lecturerName || "Chưa phân công",
+    courseName: item.courseName || item.course_name || item.name || "Chưa có tên môn",
+    classCode: item.classCode || item.class_code || item.sectionCode || item.section_code || "",
+    classCodes: item.classCodes || item.classNames || item.className || item.class_name || "",
+    lecturer: item.lecturerName || item.lecturer_name || "Chưa phân công",
     room,
     roomLabel: cleanRoomName(room),
-    building: item.buildingCode || getBuildingFromRoom(room),
-    dayCode: item.dayCode || item.day || "",
+    building: item.buildingCode || item.building_code || item.buildingName || item.building_name || getBuildingFromRoom(room),
+    dayCode: item.dayCode || item.day_code || item.day || "",
     slotStart,
     slotEnd: Math.max(slotEnd, slotStart),
-    semesterId: item.semesterId,
+    semesterId: item.semesterId ?? item.semester_id,
     status: getDisplayStatus(item),
     fromWeekNo: item.fromWeekNo ?? item.from_week_no ?? null,
     toWeekNo: item.toWeekNo ?? item.to_week_no ?? null,
@@ -217,6 +227,8 @@ const mapScheduleItem = (item) => {
 const getSectionsEndpoint = (backendRole) => {
   if (backendRole === "ADMIN") return "/api/admin/class-sections";
   if (backendRole === "FACILITY") return "/api/facility/timetable";
+  if (backendRole === "LECTURER") return "/api/lecturer/timetable";
+  if (backendRole === "STUDENT") return "/api/student/timetable";
   return "/api/staff/class-sections";
 };
 
@@ -244,21 +256,36 @@ const LoadingSkeleton = () => (
 );
 
 const LessonBlock = ({ item }) => {
-  const status = STATUS_META[item.status] || STATUS_META.ASSIGNED;
+  const isHolidayBlocked = Boolean(item.calendarBlock);
+  const status = isHolidayBlocked
+    ? {
+      label: "Lịch nghỉ",
+      dot: "bg-red-500",
+      block: "border-red-200 bg-red-50 text-red-950 hover:bg-red-100",
+      accent: "border-l-red-500",
+    }
+    : STATUS_META[item.status] || STATUS_META.ASSIGNED;
+  const blockLabel = item.calendarBlock?.title || item.calendarBlock?.notes || "";
   const rowSpan = Math.max(1, item.slotEnd - item.slotStart + 1);
 
   return (
     <div
       className={`m-1 overflow-hidden rounded-md border border-l-4 p-2 text-[11px] leading-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${status.block} ${status.accent}`}
-      style={{ minHeight: `${rowSpan * 36}px` }}
-      title={`${item.courseName} - ${item.lecturer}`}
+      style={{ minHeight: `${rowSpan * 38}px` }}
+      title={isHolidayBlocked ? `${item.courseName} - ${item.lecturer} - ${blockLabel || "Lịch nghỉ"}` : `${item.courseName} - ${item.lecturer}`}
     >
       <div className="line-clamp-2 font-bold">{item.courseName}</div>
       <div className="mt-0.5 font-semibold">({item.courseCode})</div>
       <div>Nhóm: {item.sectionGroup}</div>
       <div className="truncate">GV: {item.lecturer}</div>
       <div>Phòng: {item.roomLabel}</div>
-      {item.classCodes && <div className="truncate">Mã lớp: {item.classCodes}</div>}
+      {isHolidayBlocked && blockLabel && (
+        <div className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-white/70 px-1.5 py-0.5 text-[8px] font-semibold leading-none text-red-700">
+          <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+          Lịch nghỉ
+        </div>
+      )}
+      {item.classCodes && <div className="truncate">Mã lớp học phần: {item.classCodes}</div>}
       {item.startTime && item.endTime && (
         <div className="text-slate-500 font-medium mt-0.5">
           {item.startTime.slice(0, 5)} - {item.endTime.slice(0, 5)}
@@ -409,7 +436,9 @@ const TimetableGrid = ({ title, subtitle, items = [], selectedWeek, compact, onP
 const WeeklySchedulePage = () => {
   const { user } = useAuth();
   const backendRole = user?.backendRole || user?.role || "STAFF";
+  const isPersonalRole = backendRole === "STUDENT" || backendRole === "LECTURER";
   const [semesters, setSemesters] = useState([]);
+  const [semesterWeeks, setSemesterWeeks] = useState([]);
   const [buildings, setBuildings] = useState([]);
   const [classrooms, setClassrooms] = useState([]);
   const [rows, setRows] = useState([]);
@@ -420,6 +449,7 @@ const WeeklySchedulePage = () => {
   const [viewMode, setViewMode] = useState("room");
   const [assignedOnly, setAssignedOnly] = useState(false);
   const [showConflicts, setShowConflicts] = useState(true);
+  const [calendarBlocks, setCalendarBlocks] = useState([]);
   const [loadingMeta, setLoadingMeta] = useState(true);
   const [loadingRows, setLoadingRows] = useState(false);
   const [error, setError] = useState("");
@@ -476,7 +506,83 @@ const WeeklySchedulePage = () => {
     backendRole === "FACILITY" &&
     !["PUBLISHED", "LOCKED"].includes(selectedSemesterData?.timetableStatus);
 
-  const weekOptions = useMemo(() => buildWeekOptions(selectedSemesterData), [selectedSemesterData]);
+  useEffect(() => {
+    let mounted = true;
+    const semester = normalizeSemester(selectedSemesterData);
+
+    if (!semester?.id) {
+      setCalendarBlocks([]);
+      return () => {
+        mounted = false;
+      };
+    }
+
+    const loadCalendarBlocks = async () => {
+      try {
+        const response = await httpClient.get("/api/categories/calendar-blocks", {
+          params: { semesterId: semester.id },
+        });
+        if (!mounted) return;
+        const payload = response?.data?.data ?? response?.data ?? [];
+        setCalendarBlocks(Array.isArray(payload) ? payload : []);
+      } catch (loadError) {
+        if (mounted) {
+          setCalendarBlocks([]);
+          console.warn("Khong tai duoc calendar blocks:", loadError);
+        }
+      }
+    };
+
+    loadCalendarBlocks();
+    return () => {
+      mounted = false;
+    };
+  }, [selectedSemesterData]);
+
+  useEffect(() => {
+    if (!selectedSemester) {
+      setSemesterWeeks([]);
+      return;
+    }
+    let mounted = true;
+    const loadSemesterWeeks = async () => {
+      try {
+        const response = await httpClient.get("/api/categories/semester-weeks", {
+          params: { semesterId: selectedSemester },
+        });
+        if (!mounted) return;
+        const payload = unwrapList(response);
+        setSemesterWeeks(payload);
+      } catch (err) {
+        if (mounted) {
+          setSemesterWeeks([]);
+          console.warn("Khong tai duoc semester weeks:", err);
+        }
+      }
+    };
+    loadSemesterWeeks();
+    return () => {
+      mounted = false;
+    };
+  }, [selectedSemester]);
+
+  const weekOptions = useMemo(() => {
+    if (semesterWeeks && semesterWeeks.length > 0) {
+      return semesterWeeks.map((sw) => {
+        const weekNo = sw.weekNo ?? sw.week_no;
+        const weekStart = toDate(sw.startDate || sw.start_date);
+        const weekEnd = toDate(sw.endDate || sw.end_date) || (weekStart ? addDays(weekStart, 6) : null);
+        return {
+          value: String(weekNo),
+          weekNo,
+          start: weekStart,
+          end: weekEnd,
+          label: `Tuần ${weekNo} (${formatDate(weekStart)} - ${formatDate(weekEnd)})`,
+        };
+      });
+    }
+    return buildWeekOptions(selectedSemesterData);
+  }, [semesterWeeks, selectedSemesterData]);
 
   useEffect(() => {
     setSelectedWeek(resolveCurrentWeek(weekOptions));
@@ -562,29 +668,49 @@ const WeeklySchedulePage = () => {
       if (!row.dayCode || row.slotStart <= 0) return false;
       if (selectedSemester && String(row.semesterId) !== String(selectedSemester)) return false;
       if (!isInSelectedWeek(row, selectedWeek)) return false;
-      if (normalize(row.building) !== normalize(selectedBuilding)) return false;
-      if (selectedRoom !== "all" && row.room !== selectedRoom) return false;
+      if (!isPersonalRole) {
+        if (normalize(row.building) !== normalize(selectedBuilding)) return false;
+        if (selectedRoom !== "all" && row.room !== selectedRoom) return false;
+      }
       if (assignedOnly && row.status !== "ASSIGNED" && row.status !== "PUBLISHED") return false;
       if (!showConflicts && row.status === "CONFLICT") return false;
       return true;
     });
-  }, [assignedOnly, rows, selectedBuilding, selectedRoom, selectedSemester, selectedWeek, showConflicts]);
+  }, [assignedOnly, isPersonalRole, rows, selectedBuilding, selectedRoom, selectedSemester, selectedWeek, showConflicts]);
+
+  const rowsWithCalendarBlocks = useMemo(
+    () =>
+      decorateItemsWithCalendarBlocks(filteredRows, calendarBlocks, {
+        semester: selectedSemesterData,
+        weekNo: Number(selectedWeek),
+      }),
+    [calendarBlocks, filteredRows, selectedSemesterData, selectedWeek],
+  );
 
   const groups = useMemo(() => {
+    if (isPersonalRole) {
+      return [{
+        key: "personal",
+        title: backendRole === "STUDENT" ? "Lịch học của tôi" : "Lịch dạy của tôi",
+        subtitle: selectedWeekData?.label || "Tuần học",
+        items: rowsWithCalendarBlocks,
+      }];
+    }
+
     if (selectedRoom !== "all" && selectedRoom !== "") {
       return [
         {
           key: selectedRoom,
           title: `Phòng ${cleanRoomName(selectedRoom)}`,
           subtitle: `Tòa ${selectedBuilding} • ${selectedWeekData?.label || "Tuần học"}`,
-          items: filteredRows,
+          items: rowsWithCalendarBlocks,
         },
       ];
     }
 
     if (viewMode === "section") {
       const grouped = new Map();
-      filteredRows.forEach((row) => {
+      rowsWithCalendarBlocks.forEach((row) => {
         const key = row.classCode || row.classCodes || row.courseCode;
         if (!grouped.has(key)) grouped.set(key, []);
         grouped.get(key).push(row);
@@ -599,7 +725,7 @@ const WeeklySchedulePage = () => {
 
     if (viewMode === "lecturer") {
       const grouped = new Map();
-      filteredRows.forEach((row) => {
+      rowsWithCalendarBlocks.forEach((row) => {
         const key = row.lecturer || "Chưa phân công";
         if (!grouped.has(key)) grouped.set(key, []);
         grouped.get(key).push(row);
@@ -613,7 +739,7 @@ const WeeklySchedulePage = () => {
     }
 
     const allRoomCodes = roomOptions.map((room) => room.code);
-    const roomsWithSchedule = filteredRows.map((row) => row.room).filter(Boolean);
+    const roomsWithSchedule = rowsWithCalendarBlocks.map((row) => row.room).filter(Boolean);
     const roomCodes = Array.from(new Set([...allRoomCodes, ...roomsWithSchedule])).sort((a, b) =>
       cleanRoomName(a).localeCompare(cleanRoomName(b), "vi"),
     );
@@ -622,9 +748,9 @@ const WeeklySchedulePage = () => {
       key: roomCode,
       title: `Phòng ${cleanRoomName(roomCode)}`,
       subtitle: `Tòa ${selectedBuilding} • ${selectedWeekData?.label || "Tuần học"}`,
-      items: filteredRows.filter((row) => row.room === roomCode),
+      items: rowsWithCalendarBlocks.filter((row) => row.room === roomCode),
     }));
-  }, [filteredRows, roomOptions, selectedBuilding, selectedRoom, selectedWeekData, viewMode]);
+  }, [backendRole, isPersonalRole, rowsWithCalendarBlocks, roomOptions, selectedBuilding, selectedRoom, selectedWeekData, viewMode]);
 
   const currentWeekIdx = useMemo(() => weekOptions.findIndex((w) => w.value === selectedWeek), [weekOptions, selectedWeek]);
   const hasPrevWeek = currentWeekIdx > 0;
@@ -656,10 +782,14 @@ const WeeklySchedulePage = () => {
             Lịch học theo tuần
           </div>
           <h1 className="text-2xl font-extrabold tracking-normal text-slate-950">
-            THỜI KHÓA BIỂU TOÀN TRƯỜNG
+            {isPersonalRole
+              ? (backendRole === "STUDENT" ? "THỜI KHÓA BIỂU CÁ NHÂN" : "LỊCH GIẢNG DẠY")
+              : "THỜI KHÓA BIỂU TOÀN TRƯỜNG"}
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Theo dõi lịch học và sử dụng phòng học theo tuần
+            {isPersonalRole
+              ? "Lịch học / giảng dạy của bạn theo tuần"
+              : "Theo dõi lịch học và sử dụng phòng học theo tuần"}
           </p>
         </div>
 
@@ -677,7 +807,7 @@ const WeeklySchedulePage = () => {
       </header>
 
       <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_1.4fr_0.8fr_0.9fr_0.9fr]">
+        <div className={`grid grid-cols-1 gap-3 ${isPersonalRole ? "xl:grid-cols-[1fr_1.4fr]" : "xl:grid-cols-[1fr_1.4fr_0.8fr_0.9fr_0.9fr]"}`}>
           <Select value={selectedSemester} onValueChange={setSelectedSemester}>
             <SelectTrigger className="h-10 rounded-lg border-slate-200 bg-slate-50 text-sm">
               <SelectValue placeholder={DEFAULT_SEMESTER_LABEL} />
@@ -724,56 +854,66 @@ const WeeklySchedulePage = () => {
             </button>
           </div>
 
-          <Select value={selectedBuilding} onValueChange={setSelectedBuilding}>
-            <SelectTrigger className="h-10 rounded-lg border-slate-200 bg-slate-50 text-sm">
-              <SelectValue placeholder="Tòa A" />
-            </SelectTrigger>
-            <SelectContent>
-              {buildingOptions.map((building) => (
-                <SelectItem key={building.id || building.code} value={building.code}>
-                  {building.name || `Tòa ${building.code}`}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {!isPersonalRole && (
+            <Select value={selectedBuilding} onValueChange={setSelectedBuilding}>
+              <SelectTrigger className="h-10 rounded-lg border-slate-200 bg-slate-50 text-sm">
+                <SelectValue placeholder="Tòa A" />
+              </SelectTrigger>
+              <SelectContent>
+                {buildingOptions.map((building) => (
+                  <SelectItem key={building.id || building.code} value={building.code}>
+                    {building.name || `Tòa ${building.code}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
 
-          <Select value={selectedRoom} onValueChange={setSelectedRoom}>
-            <SelectTrigger className="h-10 rounded-lg border-slate-200 bg-slate-50 text-sm">
-              <SelectValue placeholder="Chọn phòng" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả phòng</SelectItem>
-              {roomOptions.map((room) => (
-                <SelectItem key={room.code} value={room.code}>
-                  Phòng {room.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {!isPersonalRole && (
+            <Select value={selectedRoom} onValueChange={setSelectedRoom}>
+              <SelectTrigger className="h-10 rounded-lg border-slate-200 bg-slate-50 text-sm">
+                <SelectValue placeholder="Chọn phòng" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả phòng</SelectItem>
+                {roomOptions.map((room) => (
+                  <SelectItem key={room.code} value={room.code}>
+                    Phòng {room.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
 
-          <Select value={viewMode} onValueChange={setViewMode}>
-            <SelectTrigger className="h-10 rounded-lg border-slate-200 bg-slate-50 text-sm">
-              <SelectValue placeholder="Chế độ xem" />
-            </SelectTrigger>
-            <SelectContent>
-              {VIEW_MODES.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {!isPersonalRole && (
+            <Select value={viewMode} onValueChange={setViewMode}>
+              <SelectTrigger className="h-10 rounded-lg border-slate-200 bg-slate-50 text-sm">
+                <SelectValue placeholder="Chế độ xem" />
+              </SelectTrigger>
+              <SelectContent>
+                {VIEW_MODES.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
-          <span className="inline-flex items-center gap-1.5">
-            <Building2 className="h-3.5 w-3.5 text-blue-500" />
-            {selectedBuildingLabel}
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <Layers3 className="h-3.5 w-3.5 text-blue-500" />
-            {VIEW_MODES.find((option) => option.value === viewMode)?.label}
-          </span>
+          {!isPersonalRole && (
+            <span className="inline-flex items-center gap-1.5">
+              <Building2 className="h-3.5 w-3.5 text-blue-500" />
+              {selectedBuildingLabel}
+            </span>
+          )}
+          {!isPersonalRole && (
+            <span className="inline-flex items-center gap-1.5">
+              <Layers3 className="h-3.5 w-3.5 text-blue-500" />
+              {VIEW_MODES.find((option) => option.value === viewMode)?.label}
+            </span>
+          )}
           <span className="inline-flex items-center gap-1.5">
             <Users className="h-3.5 w-3.5 text-blue-500" />
             {filteredRows.length} lịch phù hợp

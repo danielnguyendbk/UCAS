@@ -10,7 +10,7 @@ import java.util.List;
 
 public record AdminSplitSectionRequest(
         @NotNull Integer scheduleId,
-        @NotNull @Size(min = 2, max = 3) List<@Valid SplitPart> parts,
+        @NotNull @Size(min = 2, max = 5) List<@Valid SplitPart> parts,
         Boolean clearRoomAssignments
 ) {
 

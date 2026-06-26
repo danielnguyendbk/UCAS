@@ -91,6 +91,37 @@ public class AdminClassSectionController {
         );
     }
 
+    @GetMapping("/{sectionId}/schedules/{scheduleId}/available-rooms")
+    public ResponseEntity<?> getAvailableRooms(
+            @PathVariable Integer sectionId,
+            @PathVariable Integer scheduleId,
+            @RequestParam Integer semesterId,
+            @RequestParam String dayOfWeek,
+            @RequestParam Integer slotStartId,
+            @RequestParam Integer slotEndId,
+            @RequestParam Integer fromWeekNo,
+            @RequestParam Integer toWeekNo,
+            @RequestParam Integer expectedAttendees,
+            @RequestParam(required = false, defaultValue = "") String roomType,
+            @RequestParam(required = false) Integer buildingId,
+            @RequestParam(required = false) String search
+    ) {
+        return ResponseEntity.ok(scheduleEditService.getAvailableRooms(
+                sectionId,
+                scheduleId,
+                semesterId,
+                dayOfWeek,
+                slotStartId,
+                slotEndId,
+                fromWeekNo,
+                toWeekNo,
+                expectedAttendees,
+                roomType,
+                buildingId,
+                search
+        ));
+    }
+
     @PostMapping("/{sectionId}/split")
     public ResponseEntity<AdminSplitSectionResponse> splitSection(
             @PathVariable Integer sectionId,

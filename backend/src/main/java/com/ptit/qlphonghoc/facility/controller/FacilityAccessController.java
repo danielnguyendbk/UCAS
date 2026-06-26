@@ -7,6 +7,7 @@ import com.ptit.qlphonghoc.facility.dto.FacilityIssueReportResponse;
 import com.ptit.qlphonghoc.facility.dto.FacilityMyAssignmentResponse;
 import com.ptit.qlphonghoc.facility.dto.FacilityOpeningActionRequest;
 import com.ptit.qlphonghoc.facility.dto.FacilityOpeningScheduleItemResponse;
+import com.ptit.qlphonghoc.facility.dto.FacilityRoomAccessHistoryItemResponse;
 import com.ptit.qlphonghoc.facility.service.FacilityWorkflowService;
 import com.ptit.qlphonghoc.staff.dto.allocation.PageResponse;
 import jakarta.validation.Valid;
@@ -81,6 +82,30 @@ public class FacilityAccessController {
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
         return ApiResponse.success("OK", service.closeRoom(userDetails.getUserId(), request));
+    }
+
+    @GetMapping("/room-access-history")
+    public ApiResponse<PageResponse<FacilityRoomAccessHistoryItemResponse>> getRoomAccessHistory(
+            @RequestParam(required = false) String action,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        return ApiResponse.success(
+                "OK",
+                service.getRoomAccessHistory(
+                        userDetails.getUserId(),
+                        action,
+                        startDate,
+                        endDate,
+                        search,
+                        page,
+                        size
+                )
+        );
     }
 
     @PostMapping("/issue-reports")

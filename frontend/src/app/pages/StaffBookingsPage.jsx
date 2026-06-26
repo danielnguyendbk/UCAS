@@ -314,11 +314,11 @@ const StaffBookingsPage = () => {
     const nextErrors = {};
     if (!changeForm.semesterId) nextErrors.semesterId = "Vui lòng chọn học kỳ";
     if (!changeForm.sectionCode.trim() && !changeForm.courseName.trim()) {
-      nextErrors.sectionInfo = "Vui lòng nhập mã lớp hoặc tên môn";
+      nextErrors.sectionInfo = "Vui lòng nhập Mã lớp học phần hoặc tên môn";
     } else if (!selectedChangeSchedule) {
       nextErrors.sectionInfo =
         matchedChangeSchedules.length > 1
-          ? "Có nhiều lớp phù hợp, vui lòng nhập mã lớp chính xác hơn"
+          ? "Có nhiều lớp phù hợp, vui lòng nhập Mã lớp học phần chính xác hơn"
           : "Không tìm thấy lớp học phần đã phân phòng";
     }
     if (changeForm.scope === "SESSION" && !changeForm.targetDate) {
@@ -847,7 +847,7 @@ const StaffBookingsPage = () => {
                       onChange={(event) =>
                         resetChangeRoom({ sectionCode: event.target.value })
                       }
-                      placeholder="Mã lớp"
+                      placeholder="Mã lớp học phần"
                       className="h-10"
                     />
                     <Input

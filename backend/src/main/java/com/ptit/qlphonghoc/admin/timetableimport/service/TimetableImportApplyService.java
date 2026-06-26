@@ -67,7 +67,7 @@ public class TimetableImportApplyService {
             Integer userId
     ) {
         TimetableImportMode importMode = TimetableImportMode.from(mode);
-        TimetableImportValidationResult validation = validator.validate(file, semesterId, semesterCode);
+        TimetableImportValidationResult validation = validator.validate(file, semesterId, semesterCode, mode);
         ImportPreviewResponse preview = validation.preview();
         if (preview.errorRows() > 0) {
             throw new BadRequestException(
@@ -92,12 +92,13 @@ public class TimetableImportApplyService {
                 .collect(Collectors.groupingBy(ScheduleRef::sectionId, LinkedHashMap::new, Collectors.toList()));
         Counters counters = new Counters();
         Map<Long, Set<ScheduleKey>> fileScheduleKeysBySection = new LinkedHashMap<>();
+        Set<Long> fileSectionIds = new LinkedHashSet<>();
 
         try {
             for (ImportPreviewRow row : preview.rows()) {
                 try {
                     applyRow(row, lockedSemester.id(), source, batchCode, refs, sections, schedules,
-                            counters, fileScheduleKeysBySection, clearAssignments);
+                            counters, fileScheduleKeysBySection, fileSectionIds, clearAssignments);
                 } catch (Exception exception) {
                     if (exception instanceof BadRequestException badRequestException) throw badRequestException;
                     if (exception instanceof DuplicateKeyException) {
@@ -118,6 +119,9 @@ public class TimetableImportApplyService {
                 try {
                     counters.cancelledSchedules += softCancelSchedulesOutsideFileScope(
                             schedules, fileScheduleKeysBySection, batchCode, importMode
+                    );
+                    counters.cancelledSections += softCancelSectionsOutsideFileScope(
+                            refs.sections(), fileSectionIds, batchCode
                     );
                 } catch (Exception exception) {
                     if (exception instanceof BadRequestException badRequestException) throw badRequestException;
@@ -167,6 +171,7 @@ public class TimetableImportApplyService {
             Map<Long, List<ScheduleRef>> schedules,
             Counters counters,
             Map<Long, Set<ScheduleKey>> fileScheduleKeysBySection,
+            Set<Long> fileSectionIds,
             boolean clearAssignments
     ) {
         Map<String, String> values = row.values();
@@ -195,6 +200,7 @@ public class TimetableImportApplyService {
             writeStore.updateSection(sectionId, sectionWrite);
             counters.updatedSections++;
         }
+        fileSectionIds.add(sectionId);
 
         int slotStartNo = integer(values, "slot_start_no");
         int slotEndNo = integer(values, "slot_end_no");
@@ -209,9 +215,15 @@ public class TimetableImportApplyService {
                 .add(ScheduleKey.of(values.get("day_of_week"), slotStartNo, slotEndNo, practiceGroup));
 
         String classroomCode = values.getOrDefault("preferred_classroom_code", "").trim();
+        ClassroomRef preferredClassroom = classroomCode.isBlank() ? null : refs.classrooms().get(normalize(classroomCode));
         Long classroomId;
-        if (!classroomCode.isBlank()) {
-            classroomId = refs.classrooms().get(normalize(classroomCode)).id();
+        if (preferredClassroom != null) {
+            classroomId = preferredClassroom.id();
+        } else if (!classroomCode.isBlank()) {
+            classroomId = null;
+            if (existingSchedule != null && existingSchedule.classroomId() != null) {
+                counters.clearedClassroomAssignments++;
+            }
         } else if (existingSchedule != null && !clearAssignments) {
             classroomId = existingSchedule.classroomId();
             if (classroomId != null) counters.retainedClassroomAssignments++;
@@ -256,15 +268,29 @@ public class TimetableImportApplyService {
     ) {
         int cancelled = 0;
         String note = "Soft-cancelled by import " + batchCode + " (" + importMode.name() + ")";
-        for (Map.Entry<Long, Set<ScheduleKey>> sectionEntry : fileScheduleKeysBySection.entrySet()) {
-            Set<ScheduleKey> fileKeys = sectionEntry.getValue();
-            for (ScheduleRef existing : schedules.getOrDefault(sectionEntry.getKey(), List.of())) {
+        for (Map.Entry<Long, List<ScheduleRef>> sectionEntry : schedules.entrySet()) {
+            Set<ScheduleKey> fileKeys = fileScheduleKeysBySection.getOrDefault(sectionEntry.getKey(), Set.of());
+            for (ScheduleRef existing : sectionEntry.getValue()) {
                 if (Set.of("CANCELLED", "INACTIVE").contains(normalize(existing.status()))) continue;
                 if (fileKeys.contains(ScheduleKey.of(existing.dayOfWeek(), existing.slotStart(), existing.slotEnd(), existing.practiceGroup()))) {
                     continue;
                 }
                 cancelled += writeStore.softCancelSchedule(existing.id(), note);
             }
+        }
+        return cancelled;
+    }
+
+    private int softCancelSectionsOutsideFileScope(
+            List<SectionRef> sections,
+            Set<Long> fileSectionIds,
+            String batchCode
+    ) {
+        int cancelled = 0;
+        for (SectionRef existing : sections) {
+            if ("CANCELLED".equals(normalize(existing.status()))) continue;
+            if (fileSectionIds.contains(existing.id())) continue;
+            cancelled += writeStore.softCancelSection(existing.id(), batchCode);
         }
         return cancelled;
     }

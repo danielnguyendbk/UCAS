@@ -380,7 +380,7 @@ const RoomBookingRequestForm = ({
       }
     }
     if (isMakeupClass) {
-      if (!form.sectionCode.trim()) errs.sectionCode = "Vui lòng nhập mã lớp học phần.";
+      if (!form.sectionCode.trim()) errs.sectionCode = "Vui lòng nhập Mã lớp học phần.";
       else if (sectionLookup.error) errs.sectionCode = sectionLookup.error;
       else if (!form.sectionId) {
         errs.sectionCode = "Vui lòng chờ hệ thống xác nhận lớp học phần.";

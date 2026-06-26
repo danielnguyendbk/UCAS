@@ -20,7 +20,6 @@ import AdminExamsPage from "@/features/admin/pages/ExamsPage";
 import AdminFacilityStaffPage from "@/features/admin/pages/FacilityStaffPage";
 import AdminTimetableVersionsPage from "@/features/admin/pages/AdminTimetableVersionsPage";
 import AdminTimetableDiffPage from "@/features/admin/pages/AdminTimetableDiffPage";
-import FacilityAssignmentsPage from "@/features/facility/pages/FacilityAssignmentsPage";
 import FacilityOpeningSchedulePage from "@/features/facility/pages/FacilityOpeningSchedulePage";
 import EmployeeUsagePage from "@/features/employee/pages/EmployeeUsagePage";
 import EmployeeMaintenanceRequestPage from "@/features/employee/pages/EmployeeMaintenanceRequestPage";
@@ -103,7 +102,7 @@ const appRouter = createBrowserRouter([
       { path: "admin/reports", Component: AdminReportsPage },
       { path: "admin/users", Component: AdminUserManagementPage },
       { path: "admin/facility-staff", Component: AdminFacilityStaffPage },
-      { path: "admin/facility-assignments", Component: FacilityAssignmentsPage },
+      { path: "admin/facility-assignments", element: <Navigate to={APP_ROUTES.adminFacilityStaff} replace /> },
       { path: "admin/settings", Component: AdminSettingsPage },
 
       // STAFF routes
@@ -119,7 +118,7 @@ const appRouter = createBrowserRouter([
       { path: "staff/booking-list", Component: StaffBookingListPage },
       { path: "staff/maintenance-requests", Component: StaffMaintenanceListPage },
       { path: "staff/lookup", Component: StaffLookupPage },
-      { path: "staff/facility-assignments", Component: FacilityAssignmentsPage },
+      { path: "staff/facility-assignments", element: <Navigate to={APP_ROUTES.staffDashboard} replace /> },
 
       // FACILITY routes
       {

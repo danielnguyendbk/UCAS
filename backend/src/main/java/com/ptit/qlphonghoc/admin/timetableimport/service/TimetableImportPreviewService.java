@@ -15,6 +15,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -33,6 +36,7 @@ public class TimetableImportPreviewService implements TimetableImportValidator {
     private static final Set<String> DAYS = Set.of("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN");
     private static final Set<String> SESSION_TYPES = Set.of("THEORY", "PRACTICE");
     private static final Set<String> ROOM_TYPES = Set.of("LECTURE", "LAB", "SEMINAR", "AUDITORIUM");
+    private static final Set<String> INACTIVE_SCHEDULE_STATUSES = Set.of("CANCELLED", "INACTIVE");
 
     private final TimetableImportParser parser;
     private final TimetableImportDataSource repository;
@@ -44,21 +48,32 @@ public class TimetableImportPreviewService implements TimetableImportValidator {
 
     @Transactional(readOnly = true)
     public ImportPreviewResponse preview(MultipartFile file, Long semesterId, String semesterCode) {
-        return validate(file, semesterId, semesterCode).preview();
+        return validate(file, semesterId, semesterCode, null).preview();
+    }
+
+    @Transactional(readOnly = true)
+    public ImportPreviewResponse preview(MultipartFile file, Long semesterId, String semesterCode, String mode) {
+        return validate(file, semesterId, semesterCode, mode).preview();
     }
 
     @Override
     public TimetableImportValidationResult validate(MultipartFile file, Long semesterId, String semesterCode) {
+        return validate(file, semesterId, semesterCode, null);
+    }
+
+    @Override
+    public TimetableImportValidationResult validate(MultipartFile file, Long semesterId, String semesterCode, String mode) {
+        TimetableImportMode importMode = TimetableImportMode.from(mode);
         ParsedImportFile parsed = parser.parse(file);
         String inferredCode = firstNonBlank(parsed.rows(), "semester_code");
         String requestedCode = normalizeNullable(semesterCode);
         if (semesterId == null && requestedCode == null) requestedCode = normalizeNullable(inferredCode);
         if (semesterId == null && requestedCode == null) {
-            throw new ResourceNotFoundException("SEMESTER_NOT_FOUND", "Không xác định được học kỳ của file import.");
+            throw new ResourceNotFoundException("SEMESTER_NOT_FOUND", "Khong xac dinh duoc hoc ky cua file import.");
         }
 
         SemesterRef semester = repository.findSemester(semesterId, requestedCode)
-                .orElseThrow(() -> new ResourceNotFoundException("SEMESTER_NOT_FOUND", "Không tìm thấy học kỳ import."));
+                .orElseThrow(() -> new ResourceNotFoundException("SEMESTER_NOT_FOUND", "Khong tim thay hoc ky import."));
         assertMutable(semester);
         ReferenceData refs = repository.loadReferenceData(semester.id());
 
@@ -66,12 +81,16 @@ public class TimetableImportPreviewService implements TimetableImportValidator {
                 section -> section.courseId() + "|" + normalize(section.sectionCode()), Function.identity(), (a, b) -> a,
                 LinkedHashMap::new
         ));
+        Map<Long, SectionRef> sectionsById = refs.sections().stream().collect(Collectors.toMap(
+                SectionRef::id, Function.identity(), (a, b) -> a, LinkedHashMap::new
+        ));
         Map<Long, List<ScheduleRef>> schedulesBySection = refs.schedules().stream()
                 .collect(Collectors.groupingBy(ScheduleRef::sectionId, LinkedHashMap::new, Collectors.toList()));
         Set<String> rowSignatures = new LinkedHashSet<>();
         Set<String> sectionSignatures = new LinkedHashSet<>();
         Set<String> scheduleSignatures = new LinkedHashSet<>();
         List<ImportPreviewRow> resultRows = new ArrayList<>();
+        List<ImportCandidate> fileCandidates = new ArrayList<>();
 
         for (int index = 0; index < parsed.rows().size(); index++) {
             Map<String, String> values = normalizeValues(parsed.rows().get(index));
@@ -88,104 +107,111 @@ public class TimetableImportPreviewService implements TimetableImportValidator {
             require(messages, sectionCode, "section_code");
             require(messages, className, "class_name");
             require(messages, lecturerCode, "lecturer_code");
+            maxLength(messages, rowSemesterCode, "semester_code", 50);
+            maxLength(messages, courseCode, "course_code", 20);
+            maxLength(messages, sectionCode, "section_code", 20);
+            maxLength(messages, className, "class_name", 50);
+            maxLength(messages, lecturerCode, "lecturer_code", 20);
             if (!rowSemesterCode.isBlank() && !normalize(rowSemesterCode).equals(normalize(semester.code()))) {
-                error(messages, "SEMESTER_NOT_FOUND", "Học kỳ của dòng không khớp học kỳ đang preview.");
+                error(messages, "SEMESTER_NOT_FOUND", "Hoc ky cua dong khong khop hoc ky dang preview.");
             }
 
             CourseRef course = refs.courses().get(normalize(courseCode));
-            if (!courseCode.isBlank() && course == null) error(messages, "COURSE_NOT_FOUND", "Môn học không tồn tại hoặc đã ngừng hoạt động.");
+            if (!courseCode.isBlank() && course == null) error(messages, "COURSE_NOT_FOUND", "Mon hoc khong ton tai hoac da ngung hoat dong.");
             LecturerRef lecturer = refs.lecturers().get(normalize(lecturerCode));
-            if (!lecturerCode.isBlank() && lecturer == null) error(messages, "LECTURER_NOT_FOUND", "Giảng viên không tồn tại.");
+            if (!lecturerCode.isBlank() && lecturer == null) error(messages, "LECTURER_NOT_FOUND", "Giang vien khong ton tai.");
+            if (!className.isBlank() && !refs.classes().containsKey(normalize(className))) {
+                error(messages, "CLASS_NOT_FOUND", "Lop hanh chinh khong ton tai trong danh sach sinh vien.");
+            }
 
-            Integer enrolled = integer(values, "enrolled_count", messages, 0, null);
-            Integer maximum = integer(values, "max_capacity", messages, 1, null);
+            Integer enrolled = integer(values, "enrolled_count", messages, 0, null, "INVALID_IMPORT_ROW");
+            Integer maximum = integer(values, "max_capacity", messages, 1, null, "INVALID_IMPORT_ROW");
             if (enrolled != null && maximum != null && enrolled > maximum) {
-                error(messages, "INVALID_IMPORT_ROW", "enrolled_count không được lớn hơn max_capacity.");
+                error(messages, "INVALID_IMPORT_ROW", "enrolled_count khong duoc lon hon max_capacity.");
             }
             String day = normalize(value(values, "day_of_week"));
-            if (!DAYS.contains(day)) error(messages, "INVALID_IMPORT_ROW", "day_of_week phải là MON..SUN.");
-            Integer slotStart = integer(values, "slot_start_no", messages, 1, null);
-            Integer slotEnd = integer(values, "slot_end_no", messages, 1, null);
-            if (slotStart != null && !refs.slots().containsKey(slotStart)) error(messages, "TIME_SLOT_NOT_FOUND", "Không tìm thấy tiết bắt đầu.");
-            if (slotEnd != null && !refs.slots().containsKey(slotEnd)) error(messages, "TIME_SLOT_NOT_FOUND", "Không tìm thấy tiết kết thúc.");
-            if (slotStart != null && slotEnd != null && slotStart > slotEnd) error(messages, "INVALID_IMPORT_ROW", "Khoảng tiết học không hợp lệ.");
+            if (!DAYS.contains(day)) error(messages, "INVALID_IMPORT_ROW", "day_of_week phai la MON..SUN.");
+            Integer slotStart = integer(values, "slot_start_no", messages, 1, null, "INVALID_IMPORT_ROW");
+            Integer slotEnd = integer(values, "slot_end_no", messages, 1, null, "INVALID_IMPORT_ROW");
+            if (slotStart != null && !refs.slots().containsKey(slotStart)) error(messages, "TIME_SLOT_NOT_FOUND", "Khong tim thay tiet bat dau.");
+            if (slotEnd != null && !refs.slots().containsKey(slotEnd)) error(messages, "TIME_SLOT_NOT_FOUND", "Khong tim thay tiet ket thuc.");
+            if (slotStart != null && slotEnd != null && slotStart > slotEnd) error(messages, "INVALID_TIME_RANGE", "Khoang tiet hoc khong hop le.");
 
-            Integer fromWeek = optionalInteger(values, "from_week_no", messages, 1, null, null);
-            Integer toWeek = optionalInteger(values, "to_week_no", messages, 1, null, null);
+            Integer fromWeek = optionalInteger(values, "from_week_no", messages, 1, null, null, "INVALID_WEEK_RANGE");
+            Integer toWeek = optionalInteger(values, "to_week_no", messages, 1, null, null, "INVALID_WEEK_RANGE");
             if ((fromWeek == null) != (toWeek == null)) {
-                error(messages, "INVALID_IMPORT_ROW", "from_week_no và to_week_no phải cùng có giá trị hoặc cùng để trống.");
+                error(messages, "INVALID_WEEK_RANGE", "from_week_no va to_week_no phai cung co gia tri hoac cung de trong.");
             }
-            if (fromWeek != null && toWeek != null && fromWeek > toWeek) error(messages, "INVALID_IMPORT_ROW", "Khoảng tuần học không hợp lệ.");
+            if (fromWeek != null && toWeek != null && fromWeek > toWeek) error(messages, "INVALID_WEEK_RANGE", "Khoang tuan hoc khong hop le.");
             WeekRange semesterWeeks = refs.weekRange();
             if (semesterWeeks == null) {
-                error(messages, "INVALID_IMPORT_ROW", "Học kỳ chưa có cấu hình tuần học.");
+                error(messages, "INVALID_WEEK_RANGE", "Hoc ky chua co cau hinh tuan hoc.");
             } else if ((fromWeek != null && fromWeek < semesterWeeks.minimum()) ||
                     (toWeek != null && toWeek > semesterWeeks.maximum())) {
-                error(messages, "INVALID_IMPORT_ROW", "Khoảng tuần nằm ngoài học kỳ.");
+                error(messages, "INVALID_WEEK_RANGE", "Khoang tuan nam ngoai hoc ky.");
             }
 
             String sessionType = normalize(value(values, "session_type"));
-            if (!SESSION_TYPES.contains(sessionType)) error(messages, "INVALID_IMPORT_ROW", "session_type phải là THEORY hoặc PRACTICE.");
-            Integer practiceGroup = optionalInteger(values, "practice_group_no", messages, 0, 255, 0);
+            if (!SESSION_TYPES.contains(sessionType)) error(messages, "INVALID_IMPORT_ROW", "session_type phai la THEORY hoac PRACTICE.");
+            Integer practiceGroup = optionalInteger(values, "practice_group_no", messages, 0, 255, 0, "INVALID_IMPORT_ROW");
             if (practiceGroup != null && "THEORY".equals(sessionType) && practiceGroup != 0) {
-                error(messages, "INVALID_IMPORT_ROW", "Lịch lý thuyết phải có practice_group_no = 0.");
+                error(messages, "INVALID_IMPORT_ROW", "Lich ly thuyet phai co practice_group_no = 0.");
             }
             if (practiceGroup != null && "PRACTICE".equals(sessionType) && practiceGroup == 0) {
-                error(messages, "INVALID_IMPORT_ROW", "Lịch thực hành phải có practice_group_no > 0.");
+                error(messages, "INVALID_IMPORT_ROW", "Lich thuc hanh phai co practice_group_no > 0.");
             }
 
             String suppliedRoomType = normalize(value(values, "required_room_type"));
             if (!suppliedRoomType.isBlank() && !ROOM_TYPES.contains(suppliedRoomType)) {
-                error(messages, "INVALID_IMPORT_ROW", "required_room_type không hợp lệ.");
+                error(messages, "INVALID_IMPORT_ROW", "required_room_type khong hop le.");
             }
             String requiredRoomType = suppliedRoomType.isBlank() && course != null ? normalize(course.requiredRoomType()) : suppliedRoomType;
             String buildingCode = value(values, "preferred_building_code");
             BuildingRef building = buildingCode.isBlank() ? null : refs.buildings().get(normalize(buildingCode));
             if (!buildingCode.isBlank() && (building == null || building.deleted())) {
-                error(messages, "BUILDING_NOT_FOUND", "Tòa nhà ưu tiên không tồn tại hoặc đã bị xóa.");
+                warning(messages, "PREFERRED_BUILDING_UNAVAILABLE", "Toa nha uu tien khong kha dung; Staff se xu ly phan phong.");
             }
             String classroomCode = value(values, "preferred_classroom_code");
             ClassroomRef classroom = classroomCode.isBlank() ? null : refs.classrooms().get(normalize(classroomCode));
             if (!classroomCode.isBlank() && classroom == null) {
-                error(messages, "CLASSROOM_NOT_FOUND", "Phòng học ưu tiên không tồn tại.");
+                warning(messages, "PREFERRED_CLASSROOM_NOT_FOUND", "Phong hoc uu tien khong ton tai; lich se cho Staff phan phong.");
             } else if (classroom != null) {
                 if (!classroom.active() || classroom.deleted() || classroom.buildingDeleted()) {
-                    error(messages, "INVALID_IMPORT_ROW", "Phòng học ưu tiên không hoạt động hoặc đã bị xóa.");
+                    warning(messages, "ROOM_INACTIVE_OR_DELETED", "Phong hoc uu tien khong hoat dong hoac da bi xoa; Staff se xu ly.");
                 }
                 if (building != null && classroom.buildingId() != building.id()) {
-                    error(messages, "INVALID_IMPORT_ROW", "Phòng học không thuộc tòa nhà ưu tiên.");
+                    warning(messages, "PREFERRED_ROOM_BUILDING_MISMATCH", "Phong hoc khong thuoc toa nha uu tien; Staff se xu ly.");
                 }
                 if (maximum != null && classroom.capacity() < maximum) {
-                    error(messages, "INVALID_IMPORT_ROW", "Phòng học ưu tiên không đủ sức chứa.");
+                    warning(messages, "CAPACITY_EXCEEDED", "Phong hoc uu tien khong du suc chua; Staff se xu ly.");
                 }
                 if (!requiredRoomType.isBlank() && !requiredRoomType.equals(normalize(classroom.roomType()))) {
-                    error(messages, "INVALID_IMPORT_ROW", "Phòng học ưu tiên không đúng loại phòng yêu cầu.");
+                    warning(messages, "ROOM_TYPE_MISMATCH", "Phong hoc uu tien khong dung loai phong yeu cau; Staff se xu ly.");
                 }
             }
 
             String rowSignature = values.entrySet().stream().sorted(Map.Entry.comparingByKey())
                     .map(entry -> entry.getKey() + "=" + normalize(entry.getValue())).collect(Collectors.joining("|"));
-            if (!rowSignatures.add(rowSignature)) error(messages, "DUPLICATE_IMPORT_ROW", "Dòng import bị trùng hoàn toàn trong file.");
+            if (!rowSignatures.add(rowSignature)) error(messages, "DUPLICATE_ROW", "Dong import bi trung hoan toan trong file.");
             String sectionSignature = String.join("|", normalize(rowSemesterCode), normalize(courseCode), normalize(sectionCode));
             if (!sectionSignatures.add(sectionSignature)) {
-                error(messages, "DUPLICATE_IMPORT_ROW", "Lớp học phần bị lặp trong file.");
+                error(messages, "DUPLICATE_ROW", "Lop hoc phan bi lap trong file.");
             }
             String scheduleSignature = String.join("|", normalize(rowSemesterCode), normalize(courseCode), normalize(sectionCode),
                     day, string(slotStart), string(slotEnd), string(practiceGroup));
-            if (!scheduleSignatures.add(scheduleSignature)) error(messages, "DUPLICATE_IMPORT_ROW", "Khóa lịch học bị trùng trong file.");
+            if (!scheduleSignatures.add(scheduleSignature)) error(messages, "DUPLICATE_ROW", "Khoa lich hoc bi trung trong file.");
 
             SectionRef section = course == null ? null : sections.get(course.id() + "|" + normalize(sectionCode));
             ScheduleRef matchedSchedule = findSchedule(schedulesBySection.getOrDefault(section == null ? -1L : section.id(), List.of()),
                     day, slotStart, slotEnd, practiceGroup);
-            if (classroom != null && isScheduleRangeValid(day, slotStart, slotEnd, fromWeek, toWeek)) {
-                boolean occupied = refs.schedules().stream().anyMatch(existing ->
-                        classroom.id() == (existing.classroomId() == null ? -1L : existing.classroomId())
-                                && (matchedSchedule == null || existing.id() != matchedSchedule.id())
-                                && !Set.of("CANCELLED", "INACTIVE").contains(normalize(existing.status()))
-                                && day.equals(normalize(existing.dayOfWeek()))
-                                && overlaps(slotStart.intValue(), slotEnd.intValue(), existing.slotStart(), existing.slotEnd())
-                                && weekOverlaps(fromWeek, toWeek, existing.fromWeek(), existing.toWeek()));
-                if (occupied) warning(messages, "ROOM_TIME_CONFLICT", "Phòng học ưu tiên đang trùng lịch trong khoảng tuần đã chọn.");
+            if (lecturer != null && isScheduleRangeValid(day, slotStart, slotEnd, fromWeek, toWeek)) {
+                ImportCandidate candidate = new ImportCandidate(
+                        rowNumber, lecturer.id(), matchedSchedule == null ? null : matchedSchedule.id(),
+                        day, slotStart, slotEnd, fromWeek, toWeek
+                );
+                addLecturerConflicts(messages, candidate, fileCandidates, refs.schedules(), sectionsById, importMode);
+                addCalendarBlockConflicts(messages, candidate, refs);
+                fileCandidates.add(candidate);
             }
 
             String operation = determineOperation(section, matchedSchedule, lecturer, enrolled, maximum, className,
@@ -193,7 +219,7 @@ public class TimetableImportPreviewService implements TimetableImportValidator {
             String status = messages.stream().anyMatch(message -> "ERROR".equals(message.severity())) ? "ERROR"
                     : messages.isEmpty() ? "VALID" : "WARNING";
             if ("ERROR".equals(status)) operation = "ERROR";
-            String scheduleLabel = day + " " + string(slotStart) + "-" + string(slotEnd) + ", tuần "
+            String scheduleLabel = day + " " + string(slotStart) + "-" + string(slotEnd) + ", tuan "
                     + string(fromWeek) + "-" + string(toWeek);
             resultRows.add(new ImportPreviewRow(rowNumber, rowSemesterCode, courseCode, sectionCode, className,
                     lecturerCode, scheduleLabel, classroomCode, status, operation, List.copyOf(messages), Map.copyOf(values)));
@@ -211,6 +237,64 @@ public class TimetableImportPreviewService implements TimetableImportValidator {
                 semester.id(), semester.code(), resultRows.size(), valid, warnings, errorCount,
                 operations, errors, List.copyOf(resultRows));
         return new TimetableImportValidationResult(preview, semester, refs);
+    }
+
+    private void addLecturerConflicts(
+            List<ImportPreviewMessage> messages,
+            ImportCandidate candidate,
+            List<ImportCandidate> fileCandidates,
+            List<ScheduleRef> existingSchedules,
+            Map<Long, SectionRef> sectionsById,
+            TimetableImportMode importMode
+    ) {
+        boolean conflictsInFile = fileCandidates.stream().anyMatch(existing ->
+                existing.lecturerId() == candidate.lecturerId()
+                        && candidate.dayOfWeek().equals(existing.dayOfWeek())
+                        && overlaps(candidate.slotStart(), candidate.slotEnd(), existing.slotStart(), existing.slotEnd())
+                        && weekOverlaps(candidate.fromWeek(), candidate.toWeek(), existing.fromWeek(), existing.toWeek()));
+        if (conflictsInFile) {
+            error(messages, "LECTURER_TIME_CONFLICT", "Giang vien bi xep day trung thoi gian trong file import.");
+            return;
+        }
+        if (importMode == TimetableImportMode.SYNC_FILE_SCOPE) return;
+
+        boolean conflictsExisting = existingSchedules.stream().anyMatch(existing -> {
+            if (candidate.existingScheduleId() != null && candidate.existingScheduleId() == existing.id()) return false;
+            if (INACTIVE_SCHEDULE_STATUSES.contains(normalize(existing.status()))) return false;
+            SectionRef section = sectionsById.get(existing.sectionId());
+            return section != null
+                    && section.lecturerId() == candidate.lecturerId()
+                    && candidate.dayOfWeek().equals(normalize(existing.dayOfWeek()))
+                    && overlaps(candidate.slotStart(), candidate.slotEnd(), existing.slotStart(), existing.slotEnd())
+                    && weekOverlaps(candidate.fromWeek(), candidate.toWeek(), existing.fromWeek(), existing.toWeek());
+        });
+        if (conflictsExisting) {
+            error(messages, "LECTURER_TIME_CONFLICT", "Giang vien da co lich day trung thoi gian trong hoc ky.");
+        }
+    }
+
+    private void addCalendarBlockConflicts(
+            List<ImportPreviewMessage> messages,
+            ImportCandidate candidate,
+            ReferenceData refs
+    ) {
+        if (refs.calendarBlocks().isEmpty() || refs.semesterWeeks().isEmpty() || refs.weekRange() == null) return;
+        int from = candidate.fromWeek() == null ? refs.weekRange().minimum() : candidate.fromWeek();
+        int to = candidate.toWeek() == null ? refs.weekRange().maximum() : candidate.toWeek();
+        DayOfWeek targetDay = dayOfWeek(candidate.dayOfWeek());
+        if (targetDay == null) return;
+
+        for (int weekNo = from; weekNo <= to; weekNo++) {
+            SemesterWeekRef week = refs.semesterWeeks().get(weekNo);
+            if (week == null) continue;
+            LocalDate teachingDate = week.startDate().with(TemporalAdjusters.nextOrSame(targetDay));
+            if (teachingDate.isAfter(week.endDate())) continue;
+            boolean blocked = refs.calendarBlocks().stream().anyMatch(block ->
+                    !block.teachingAllowed()
+                            && !teachingDate.isBefore(block.startDate())
+                            && !teachingDate.isAfter(block.endDate()));
+
+        }
     }
 
     private void assertMutable(SemesterRef semester) {
@@ -268,33 +352,39 @@ public class TimetableImportPreviewService implements TimetableImportValidator {
     }
 
     private Integer integer(Map<String, String> values, String field, List<ImportPreviewMessage> messages,
-                            Integer minimum, Integer maximum) {
+                            Integer minimum, Integer maximum, String errorCode) {
         String raw = value(values, field);
         if (raw.isBlank()) {
-            error(messages, "INVALID_IMPORT_ROW", field + " không được để trống.");
+            error(messages, errorCode, field + " khong duoc de trong.");
             return null;
         }
         try {
             int value = raw.endsWith(".0") ? Integer.parseInt(raw.substring(0, raw.length() - 2)) : Integer.parseInt(raw);
             if (minimum != null && value < minimum || maximum != null && value > maximum) {
-                error(messages, "INVALID_IMPORT_ROW", field + " nằm ngoài giới hạn cho phép.");
+                error(messages, errorCode, field + " nam ngoai gioi han cho phep.");
                 return null;
             }
             return value;
         } catch (NumberFormatException exception) {
-            error(messages, "INVALID_IMPORT_ROW", field + " phải là số nguyên.");
+            error(messages, errorCode, field + " phai la so nguyen.");
             return null;
         }
     }
 
     private Integer optionalInteger(Map<String, String> values, String field, List<ImportPreviewMessage> messages,
-                                    Integer minimum, Integer maximum, Integer defaultValue) {
+                                    Integer minimum, Integer maximum, Integer defaultValue, String errorCode) {
         if (value(values, field).isBlank()) return defaultValue;
-        return integer(values, field, messages, minimum, maximum);
+        return integer(values, field, messages, minimum, maximum, errorCode);
     }
 
     private void require(List<ImportPreviewMessage> messages, String value, String field) {
-        if (value.isBlank()) error(messages, "INVALID_IMPORT_ROW", field + " không được để trống.");
+        if (value.isBlank()) error(messages, "INVALID_IMPORT_ROW", field + " khong duoc de trong.");
+    }
+
+    private void maxLength(List<ImportPreviewMessage> messages, String value, String field, int maximum) {
+        if (value != null && value.length() > maximum) {
+            error(messages, "INVALID_IMPORT_ROW", field + " vuot qua " + maximum + " ky tu.");
+        }
     }
 
     private void error(List<ImportPreviewMessage> messages, String code, String message) {
@@ -331,8 +421,32 @@ public class TimetableImportPreviewService implements TimetableImportValidator {
         return value == null ? "?" : String.valueOf(value);
     }
 
+    private DayOfWeek dayOfWeek(String value) {
+        return switch (normalize(value)) {
+            case "MON" -> DayOfWeek.MONDAY;
+            case "TUE" -> DayOfWeek.TUESDAY;
+            case "WED" -> DayOfWeek.WEDNESDAY;
+            case "THU" -> DayOfWeek.THURSDAY;
+            case "FRI" -> DayOfWeek.FRIDAY;
+            case "SAT" -> DayOfWeek.SATURDAY;
+            case "SUN" -> DayOfWeek.SUNDAY;
+            default -> null;
+        };
+    }
+
     private <T> Map<String, Integer> countBy(List<T> values, Function<T, String> classifier) {
         return values.stream().map(classifier).sorted(Comparator.naturalOrder())
                 .collect(Collectors.toMap(Function.identity(), item -> 1, Integer::sum, LinkedHashMap::new));
     }
+
+    private record ImportCandidate(
+            int rowNumber,
+            long lecturerId,
+            Long existingScheduleId,
+            String dayOfWeek,
+            int slotStart,
+            int slotEnd,
+            Integer fromWeek,
+            Integer toWeek
+    ) {}
 }

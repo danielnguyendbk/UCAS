@@ -238,11 +238,11 @@ const LecturerRoomChangeRequestPage = () => {
     if (!form.semesterId) nextErrors.semesterId = "Vui lòng chọn học kỳ.";
 
     if (!form.sectionCode.trim()) {
-      nextErrors.sectionInfo = "Vui lòng nhập mã lớp học phần.";
+      nextErrors.sectionInfo = "Vui lòng nhập Mã lớp học phần.";
     } else if (!selectedSchedule) {
       nextErrors.sectionInfo =
         matchedSchedules.length > 1
-          ? "Có nhiều lớp phù hợp, vui lòng nhập mã lớp chính xác hơn."
+          ? "Có nhiều lớp phù hợp, vui lòng nhập Mã lớp học phần chính xác hơn."
           : "Không tìm thấy lớp học phần đã phân phòng trong học kỳ này.";
     }
 
@@ -428,7 +428,7 @@ const LecturerRoomChangeRequestPage = () => {
                     onChange={(event) =>
                       resetRoom({ sectionCode: event.target.value })
                     }
-                    placeholder="Mã lớp"
+                    placeholder="Mã lớp học phần"
                     className="h-10"
                   />
                   <Input
@@ -450,7 +450,7 @@ const LecturerRoomChangeRequestPage = () => {
                 )}
                 {showMultipleMatches && (
                   <p className="text-xs text-amber-700">
-                    Có {matchedSchedules.length} lớp phù hợp, hãy nhập mã lớp
+                    Có {matchedSchedules.length} lớp phù hợp, hãy nhập Mã lớp học phần
                     chính xác hơn.
                   </p>
                 )}

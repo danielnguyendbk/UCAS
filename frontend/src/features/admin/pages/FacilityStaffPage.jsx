@@ -10,7 +10,7 @@ import {
   Building2,
   BadgeInfo,
   UserCheck,
-  UserX,
+  UserX
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
@@ -41,6 +41,8 @@ const EMPTY_FORM = {
   building_id: "none",
   note: "",
 };
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
 const getResponseData = (response) => {
   const payload = response?.data;
@@ -104,7 +106,8 @@ export const FacilityStaffPage = () => {
   const [buildings, setBuildings] = useState([]);
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [buildingFilter, setBuildingFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -192,6 +195,10 @@ export const FacilityStaffPage = () => {
     });
   }, [users, assignedUserIds, formMode, staffForm.user_id]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, pageSize]);
+
   const filteredStaff = useMemo(() => {
     const keyword = searchTerm.trim().toLowerCase();
 
@@ -208,14 +215,20 @@ export const FacilityStaffPage = () => {
           staff.note,
         ].some((value) => String(value || "").toLowerCase().includes(keyword));
 
-      const matchBuilding =
-        buildingFilter === "all" ||
-        (buildingFilter === "unassigned" && !staff.building_id) ||
-        String(staff.building_id) === String(buildingFilter);
-
-      return matchSearch && matchBuilding;
+      return matchSearch;
     });
-  }, [enrichedStaff, searchTerm, buildingFilter]);
+  }, [enrichedStaff, searchTerm]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredStaff.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+
+  const paginatedStaff = useMemo(() => {
+    const startIndex = (safePage - 1) * pageSize;
+    return filteredStaff.slice(startIndex, startIndex + pageSize);
+  }, [filteredStaff, safePage, pageSize]);
+
+  const visibleFrom = filteredStaff.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const visibleTo = Math.min(safePage * pageSize, filteredStaff.length);
 
   const stats = useMemo(() => {
     const total = enrichedStaff.length;
@@ -265,16 +278,24 @@ export const FacilityStaffPage = () => {
     return "";
   };
 
-  const buildPayload = () => ({
-    user_id: Number(staffForm.user_id),
-    staff_code: staffForm.staff_code.trim().toUpperCase(),
-    building_id:
+  const buildPayload = () => {
+    const selectedBuildingId =
       staffForm.building_id && staffForm.building_id !== "none"
         ? Number(staffForm.building_id)
-        : null,
-    note: staffForm.note.trim() || null,
-    is_deleted: 0,
-  });
+        : null;
+
+    return {
+      user_id: Number(staffForm.user_id),
+      userId: Number(staffForm.user_id),
+      staff_code: staffForm.staff_code.trim().toUpperCase(),
+      staffCode: staffForm.staff_code.trim().toUpperCase(),
+      building_id: selectedBuildingId,
+      buildingId: selectedBuildingId,
+      note: staffForm.note.trim() || null,
+      is_deleted: 0,
+      isDeleted: 0,
+    };
+  };
 
   const handleSaveStaff = async () => {
     const validationError = validateForm();
@@ -353,195 +374,224 @@ export const FacilityStaffPage = () => {
         </Button>
       </div>
 
-      {errorMessage && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-          {errorMessage}
-            </div>
-          )}
+      <div className="space-y-6">
+        {errorMessage && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+            {errorMessage}
+          </div>
+        )}
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <StatCard
-              title="Tổng nhân viên"
-              value={stats.total}
-              icon={UserRound}
-              tone="blue"
-            />
-            <StatCard
-              title="Đang hoạt động"
-              value={stats.active}
-              icon={UserCheck}
-              tone="green"
-            />
-            <StatCard
-              title="Đã phân công"
-              value={stats.assigned}
-              icon={Building2}
-              tone="purple"
-            />
-            <StatCard
-              title="Chưa phân công"
-              value={stats.unassigned}
-              icon={UserX}
-              tone="orange"
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <StatCard
+            title="Tổng nhân viên"
+            value={stats.total}
+            icon={UserRound}
+            tone="blue"
+          />
+          <StatCard
+            title="Đang hoạt động"
+            value={stats.active}
+            icon={UserCheck}
+            tone="green"
+          />
+          <StatCard
+            title="Đã phân công"
+            value={stats.assigned}
+            icon={Building2}
+            tone="purple"
+          />
+          <StatCard
+            title="Chưa phân công"
+            value={stats.unassigned}
+            icon={UserX}
+            tone="orange"
+          />
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Input
+              placeholder="Tìm theo tên, tài khoản, mã nhân viên, email, tòa nhà..."
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              className="pl-9 h-10 text-sm rounded-lg"
             />
           </div>
+        </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm grid grid-cols-1 lg:grid-cols-4 gap-3">
-            <div className="lg:col-span-3 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input
-                placeholder="Tìm theo tên, tài khoản, mã nhân viên, email, tòa nhà..."
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                className="pl-9 h-10 text-sm rounded-lg"
-              />
-            </div>
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <Table className="w-full table-fixed">
+            <TableHeader>
+              <TableRow className="bg-gray-50/50">
+                <TableHead className="w-[90px]">Mã NV</TableHead>
+                <TableHead className="w-[120px]">Họ và tên</TableHead>
+                <TableHead className="w-[120px]">Tài khoản</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead className="w-[190px]">Phân công tòa nhà</TableHead>
+                <TableHead className="w-[120px]">Ghi chú</TableHead>
+                <TableHead className="w-[140px]">Trạng thái</TableHead>
+                <TableHead className="w-[240px] text-center">Thao tác</TableHead>
+              </TableRow>
+            </TableHeader>
 
-            <select
-              value={buildingFilter}
-              onChange={(event) => setBuildingFilter(event.target.value)}
-              className="h-10 rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            >
-              <option value="all">Tất cả phân công</option>
-              <option value="unassigned">Chưa phân công</option>
-              {buildings.map((building) => (
-                <option key={building.id} value={building.id}>
-                  {building.name}
-                  {building.code ? ` (${building.code})` : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-gray-50/50">
-                  <TableHead>Mã NV</TableHead>
-                  <TableHead>Họ và tên</TableHead>
-                  <TableHead>Tài khoản</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Phân công tòa nhà</TableHead>
-                  <TableHead>Ghi chú</TableHead>
-                  <TableHead>Trạng thái</TableHead>
-                  <TableHead className="text-right">Thao tác</TableHead>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="py-12 text-center">
+                    <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Đang tải danh sách nhân viên CSVC...
+                    </div>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-
-              <TableBody>
-                {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="py-12 text-center">
-                      <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Đang tải danh sách nhân viên CSVC...
+              ) : filteredStaff.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="py-14 text-center text-gray-500">
+                    <div className="flex flex-col items-center gap-3">
+                      <BadgeInfo className="w-10 h-10 text-gray-300" />
+                      <div>
+                        <p className="font-semibold text-gray-700">
+                          Chưa có nhân viên CSVC phù hợp.
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          Bạn có thể thêm hồ sơ nhân viên CSVC mới từ tài khoản role FACILITY đã có.
+                        </p>
                       </div>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                paginatedStaff.map((staff) => (
+                  <TableRow key={staff.id} className="hover:bg-gray-50/60">
+                    <TableCell className="font-mono text-xs font-bold text-blue-700">
+                      {staff.staff_code}
                     </TableCell>
-                  </TableRow>
-                ) : filteredStaff.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="py-14 text-center text-gray-500">
-                      <div className="flex flex-col items-center gap-3">
-                        <BadgeInfo className="w-10 h-10 text-gray-300" />
-                        <div>
-                          <p className="font-semibold text-gray-700">
-                            Chưa có nhân viên CSVC phù hợp.
-                          </p>
-                          <p className="text-xs text-gray-400 mt-1">
-                            Bạn có thể thêm hồ sơ nhân viên CSVC mới từ tài khoản role FACILITY đã có.
-                          </p>
-                        </div>
-                      </div>
+
+                    <TableCell className="font-medium text-gray-900">
+                      {staff.full_name || "Chưa có họ tên"}
                     </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredStaff.map((staff) => (
-                    <TableRow key={staff.id} className="hover:bg-gray-50/60">
-                      <TableCell className="font-mono text-xs font-bold text-blue-700">
-                        {staff.staff_code}
-                      </TableCell>
 
-                      <TableCell className="font-medium text-gray-900">
-                        {staff.full_name || "Chưa có họ tên"}
-                      </TableCell>
+                    <TableCell className="text-sm text-gray-600">
+                      {staff.username || "Chưa liên kết"}
+                    </TableCell>
 
-                      <TableCell className="text-sm text-gray-600">
-                        {staff.username || "Chưa liên kết"}
-                      </TableCell>
+                    <TableCell className="text-sm text-gray-600">
+                      {staff.email || "Chưa có email"}
+                    </TableCell>
 
-                      <TableCell className="text-sm text-gray-600">
-                        {staff.email || "Chưa có email"}
-                      </TableCell>
-
-                      <TableCell>
-                        {staff.building_id ? (
-                          <Badge className="bg-blue-50 text-blue-700 border border-blue-100 hover:bg-blue-50">
-                            {getBuildingDisplay(staff)}
-                          </Badge>
-                        ) : (
-                          <Badge className="bg-amber-50 text-amber-700 border border-amber-100 hover:bg-amber-50">
-                            Chưa phân công
-                          </Badge>
-                        )}
-                      </TableCell>
-
-                      <TableCell className="text-sm text-gray-500 max-w-[220px] truncate">
-                        {staff.note || "Không có"}
-                      </TableCell>
-
-                      <TableCell>
-                        <Badge
-                          className={
-                            staff.is_active
-                              ? "bg-green-100 text-green-700 hover:bg-green-100"
-                              : "bg-gray-100 text-gray-700 hover:bg-gray-100"
-                          }
-                        >
-                          {staff.is_active ? "Đang hoạt động" : "Tạm khóa"}
+                    <TableCell>
+                      {staff.building_id ? (
+                        <Badge className="bg-blue-50 text-blue-700 border border-blue-100 hover:bg-blue-50">
+                          {getBuildingDisplay(staff)}
                         </Badge>
-                      </TableCell>
+                      ) : (
+                        <Badge className="bg-amber-50 text-amber-700 border border-amber-100 hover:bg-amber-50">
+                          Chưa phân công
+                        </Badge>
+                      )}
+                    </TableCell>
 
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setViewStaff(staff)}
-                          >
-                            <Eye className="w-4 h-4 mr-1" />
-                            Xem
-                          </Button>
+                    <TableCell className="text-sm text-gray-500 max-w-[220px] truncate">
+                      {staff.note || "Không có"}
+                    </TableCell>
 
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openEditDialog(staff)}
-                          >
-                            <Pencil className="w-4 h-4 mr-1" />
-                            Sửa
-                          </Button>
+                    <TableCell>
+                      <Badge
+                        className={
+                          staff.is_active
+                            ? "bg-green-100 text-green-700 hover:bg-green-100"
+                            : "bg-gray-100 text-gray-700 hover:bg-gray-100"
+                        }
+                      >
+                        {staff.is_active ? "Đang hoạt động" : "Tạm khóa"}
+                      </Badge>
+                    </TableCell>
 
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-red-600 hover:text-red-700"
-                            onClick={() => setDeleteStaff(staff)}
-                          >
-                            <Trash2 className="w-4 h-4 mr-1" />
-                            Xóa
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setViewStaff(staff)}
+                        >
+                          <Eye className="w-4 h-4 mr-1" />
+                          Xem
+                        </Button>
 
-            <div className="border-t border-gray-200 px-4 py-3 text-sm text-gray-600">
-              Hiển thị {filteredStaff.length} / {enrichedStaff.length} nhân viên CSVC
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openEditDialog(staff)}
+                        >
+                          <Pencil className="w-4 h-4 mr-1" />
+                          Sửa
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600 hover:text-red-700"
+                          onClick={() => setDeleteStaff(staff)}
+                        >
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          Xóa
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+
+          <div className="flex flex-col gap-3 border-t border-gray-200 px-4 py-3 text-sm text-gray-600 md:flex-row md:items-center md:justify-between">
+            <span>
+              Hiển thị {visibleFrom}-{visibleTo} / {filteredStaff.length} nhân viên CSVC
+              {filteredStaff.length !== enrichedStaff.length ? ` (lọc từ ${enrichedStaff.length})` : ""}
+            </span>
+
+            <div className="flex items-center gap-2">
+              <span>Số dòng</span>
+              <select
+                value={pageSize}
+                onChange={(event) => setPageSize(Number(event.target.value))}
+                className="h-8 rounded-md border border-gray-200 bg-white px-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              >
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={safePage <= 1}
+                onClick={() => setPage((previous) => Math.max(1, previous - 1))}
+              >
+                Trước
+              </Button>
+
+              <span className="min-w-[72px] text-center">
+                {safePage}/{totalPages}
+              </span>
+
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={safePage >= totalPages}
+                onClick={() => setPage((previous) => Math.min(totalPages, previous + 1))}
+              >
+                Sau
+              </Button>
             </div>
           </div>
+        </div>
+
+
+      </div>
 
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
         <DialogContent>
@@ -605,7 +655,7 @@ export const FacilityStaffPage = () => {
                 ))}
               </select>
               <p className="text-xs text-gray-500">
-                Có thể để “Chưa phân công”. Nhân viên sẽ được phân công tòa nhà sau.
+                Có thể để “Chưa phân công” hoặc chọn tòa nhà phụ trách ngay tại đây.
               </p>
             </div>
 
