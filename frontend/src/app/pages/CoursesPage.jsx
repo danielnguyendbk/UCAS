@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search, Plus, Eye, Pencil, Trash2, Loader2 } from "lucide-react";
+import ExcelImportActions from "@/features/admin/components/ExcelImportActions";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Badge } from "../components/ui/badge";
@@ -262,13 +263,17 @@ export const CoursesPage = () => {
           </p>
         </div>
 
-        <Button
-          className="bg-blue-600 hover:bg-blue-700"
-          onClick={openCreateDialog}
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Thêm môn học
-        </Button>
+        <div className="flex items-center gap-2">
+          <ExcelImportActions type="course" onImported={loadData} />
+
+          <Button
+            className="bg-blue-600 hover:bg-blue-700"
+            onClick={openCreateDialog}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Thêm môn học
+          </Button>
+        </div>
       </div>
 
       {errorMessage && (

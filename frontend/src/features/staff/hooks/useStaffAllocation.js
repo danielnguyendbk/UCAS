@@ -9,6 +9,22 @@ const getActiveSemesterId = (semesters) => {
   return (activeSemester || semesters[0])?.id?.toString() || "";
 };
 
+const getScheduleNoteError = (error) => {
+  const noteError =
+    error?.response?.data?.errors?.note ||
+    error?.response?.data?.details?.note;
+
+  if (noteError === "NOTE_REQUIRED") {
+    return "Vui long nhap ghi chu truoc khi luu.";
+  }
+
+  if (noteError === "NOTE_TOO_LONG") {
+    return "Ghi chu toi da 255 ky tu.";
+  }
+
+  return getApiError(error, "Khong the luu ghi chu cho Admin.").message;
+};
+
 export const useStaffAllocation = () => {
   const [activeTab, setActiveTab] = useState("allocation");
   const [semestersList, setSemestersList] = useState([]);
@@ -211,7 +227,7 @@ export const useStaffAllocation = () => {
     } catch (error) {
       setActionMessage({
         tone: "error",
-        text: getApiError(error, "Không thể lưu ghi chú cho Admin.").message,
+        text: getScheduleNoteError(error),
       });
       return false;
     }

@@ -107,3 +107,14 @@ export async function downloadClassroomImportTemplate() {
 export async function importClassroomsExcel(file) {
   return importExcel("/api/classrooms/import", file);
 }
+
+export async function downloadCourseImportTemplate() {
+  return downloadTemplate(
+    "/api/courses/import-template",
+    "courses_import_template.xlsx"
+  );
+}
+
+export async function importCoursesExcel(file) {
+  return importExcel("/api/courses/import", file);
+}

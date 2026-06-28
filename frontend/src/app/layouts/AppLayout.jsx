@@ -275,6 +275,9 @@ const defaultRootPaths = new Set([
   APP_ROUTES.studentDashboard,
 ]);
 
+
+
+
 const getGroupKey = (group) => group.id ?? `group-${group.label}`;
 
 const getNavItemKey = (item, { role = "unknown", groupLabel = "" } = {}) => {
@@ -358,6 +361,21 @@ const buildProfileDisplay = (authProfile, fallbackUser) => {
   };
 };
 
+
+const ROLE_NAV_KEY = {
+  ADMIN: "Admin",
+  STAFF: "Staff",
+  LECTURER: "Lecturer",
+  STUDENT: "Student",
+  FACILITY: "Employee",
+  EMPLOYEES: "Employee",
+
+  Admin: "Admin",
+  Staff: "Staff",
+  Lecturer: "Lecturer",
+  Student: "Student",
+  Employee: "Employee",
+};
 const AppLayout = () => {
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
@@ -383,12 +401,23 @@ const AppLayout = () => {
   const [changePasswordSuccess, setChangePasswordSuccess] = useState("");
   const [toastMessage, setToastMessage] = useState("");
 
+  const navigationRoleKey = useMemo(() => {
+    if (!user) return "";
+    return (
+      ROLE_NAV_KEY[user.backendRole] ||
+      ROLE_NAV_KEY[user.role] ||
+      user.role ||
+      ""
+    );
+  }, [user?.backendRole, user?.role]);
+
   const menuItems = useMemo(
-    () => (user ? NAVIGATION_BY_ROLE[user.role] || [] : []),
-    [user?.role],
+    () => (navigationRoleKey ? NAVIGATION_BY_ROLE[navigationRoleKey] || [] : []),
+    [navigationRoleKey],
   );
 
-  const useGroupedSidebar = user?.role === "Admin";
+  // Tất cả role đều dùng group nếu config có group/children.
+  const useGroupedSidebar = true;
 
   const displayUser = useMemo(
     () => buildProfileDisplay(currentUserProfile, user),
@@ -474,10 +503,12 @@ const AppLayout = () => {
   };
 
   useEffect(() => {
-    if (!useGroupedSidebar || !activeMenuPath) return;
+    if (!activeMenuPath) return;
+
     menuItems.forEach((item) => {
-      if (item.type === "group" && item.children) {
+      if (item.type === "group" && Array.isArray(item.children)) {
         const hasActiveChild = item.children.some((child) => child.path === activeMenuPath);
+
         if (hasActiveChild) {
           const groupKey = getGroupKey(item);
           setExpandedGroups((prev) => {
@@ -489,7 +520,7 @@ const AppLayout = () => {
         }
       }
     });
-  }, [activeMenuPath, menuItems, useGroupedSidebar]);
+  }, [activeMenuPath, menuItems]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -848,36 +879,7 @@ const AppLayout = () => {
                 );
               }
 
-              if (item.type === "group" && item.children && !useGroupedSidebar) {
-                return item.children.map((child) => {
-                  const active = isItemActive(child.path);
-                  const childKey = getNavItemKey(child, {
-                    role: user.role,
-                    groupLabel: item.label,
-                  });
-                  return (
-                    <li key={childKey}>
-                      <Link
-                        to={child.path}
-                        onClick={() => setIsSidebarOpen(false)}
-                        className={`
-                          flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group relative
-                          ${active
-                            ? "bg-blue-600 text-white shadow-md shadow-blue-200 font-semibold"
-                            : "text-gray-600 hover:bg-blue-50 hover:text-blue-700"}
-                          ${isSidebarCollapsed ? "justify-center px-0" : ""}
-                        `}
-                        title={isSidebarCollapsed ? child.label : undefined}
-                      >
-                        {!isSidebarCollapsed && <span className="text-sm flex-1">{child.label}</span>}
-                        {active && !isSidebarCollapsed && <ChevronRight className="w-3.5 h-3.5 text-blue-200" />}
-                      </Link>
-                    </li>
-                  );
-                });
-              }
-
-              if (useGroupedSidebar && item.type === "group") {
+              if (item.type === "group" && Array.isArray(item.children)) {
                 const Icon = item.icon;
                 const groupKey = getGroupKey(item);
                 const isExpanded = expandedGroups.has(groupKey);
@@ -939,6 +941,7 @@ const AppLayout = () => {
               }
 
               // Flat sidebar item (all non-admin roles; also fallback if misconfigured)
+              if (!item.path) return null;
               const Icon = item.icon;
               const active = isItemActive(item.path);
               const itemKey = getNavItemKey(item, { role: user.role });
@@ -956,7 +959,13 @@ const AppLayout = () => {
                     `}
                     title={isSidebarCollapsed ? item.label : undefined}
                   >
-                    <Icon className={`w-[18px] h-[18px] flex-shrink-0 ${active ? "text-white" : "text-gray-400 group-hover:text-blue-600"}`} />
+                  {Icon && (
+                    <Icon
+                      className={`w-[18px] h-[18px] flex-shrink-0 ${
+                        active ? "text-white" : "text-gray-400 group-hover:text-blue-600"
+                      }`}
+                    />
+                  )}
                     {!isSidebarCollapsed && <span className="text-sm flex-1">{item.label}</span>}
                     {item.badge && !isSidebarCollapsed && (
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${item.badge === 'Gấp' ? 'bg-red-500' : 'bg-orange-500'} text-white`}>

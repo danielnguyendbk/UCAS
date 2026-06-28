@@ -1,9 +1,11 @@
 import { useRef, useState } from "react";
 import {
   downloadClassroomImportTemplate,
+  downloadCourseImportTemplate,
   downloadFacilityStaffImportTemplate,
   downloadLecturerImportTemplate,
   importClassroomsExcel,
+  importCoursesExcel,
   importFacilityStaffExcel,
   importLecturersExcel,
 } from "../services/personnelImportService";
@@ -23,6 +25,11 @@ const TYPE_CONFIG = {
     templateAction: downloadClassroomImportTemplate,
     importAction: importClassroomsExcel,
     label: "phòng học",
+  },
+  course: {
+    templateAction: downloadCourseImportTemplate,
+    importAction: importCoursesExcel,
+    label: "môn học",
   },
 };
 

@@ -285,7 +285,7 @@ const LessonBlock = ({ item }) => {
           Lịch nghỉ
         </div>
       )}
-      {item.classCodes && <div className="truncate">Mã lớp học phần: {item.classCodes}</div>}
+      {item.classCodes && <div className="truncate">Mã lớp: {item.classCodes}</div>}
       {item.startTime && item.endTime && (
         <div className="text-slate-500 font-medium mt-0.5">
           {item.startTime.slice(0, 5)} - {item.endTime.slice(0, 5)}
@@ -683,8 +683,16 @@ const WeeklySchedulePage = () => {
       decorateItemsWithCalendarBlocks(filteredRows, calendarBlocks, {
         semester: selectedSemesterData,
         weekNo: Number(selectedWeek),
+        weekStart: selectedWeekData?.start,
+        weekEnd: selectedWeekData?.end,
       }),
-    [calendarBlocks, filteredRows, selectedSemesterData, selectedWeek],
+    [
+      calendarBlocks,
+      filteredRows,
+      selectedSemesterData,
+      selectedWeek,
+      selectedWeekData,
+    ],
   );
 
   const groups = useMemo(() => {

@@ -169,7 +169,12 @@ const findCalendarBlockForLesson = (lesson, calendarBlocks = [], context = {}) =
   for (const rawBlock of calendarBlocks) {
     const block = normalizeCalendarBlock(rawBlock);
     if (!block || !isBlockingCalendarBlock(block)) continue;
-    if (lessonSemesterId != null && block.semesterId != null && lessonSemesterId !== block.semesterId) {
+
+    if (
+      lessonSemesterId != null &&
+      block.semesterId != null &&
+      lessonSemesterId !== block.semesterId
+    ) {
       continue;
     }
 
@@ -178,17 +183,40 @@ const findCalendarBlockForLesson = (lesson, calendarBlocks = [], context = {}) =
     }
 
     if (block.slotStart != null || block.slotEnd != null) {
-      if (!lessonSlots || !rangesOverlap(lessonSlots.start, lessonSlots.end, block.slotStart, block.slotEnd)) {
+      if (
+        !lessonSlots ||
+        !rangesOverlap(
+          lessonSlots.start,
+          lessonSlots.end,
+          block.slotStart,
+          block.slotEnd,
+        )
+      ) {
         continue;
       }
     }
 
     if (block.startDate || block.endDate) {
-      const lessonDate = getLessonDateForWeek(semester, selectedWeekNo, lessonDayCode);
-      if (!lessonDate) continue;
-      const normalizedLessonDate = startOfDay(lessonDate);
-      if (block.startDate && normalizedLessonDate < block.startDate) continue;
-      if (block.endDate && normalizedLessonDate > block.endDate) continue;
+      const weekStart = context.weekStart ? startOfDay(context.weekStart) : null;
+      const weekEnd = context.weekEnd ? startOfDay(context.weekEnd) : null;
+
+      if (weekStart && weekEnd) {
+        if (block.startDate && weekEnd < block.startDate) continue;
+        if (block.endDate && weekStart > block.endDate) continue;
+      } else {
+        const lessonDate = getLessonDateForWeek(
+          semester,
+          selectedWeekNo,
+          lessonDayCode,
+        );
+
+        if (!lessonDate) continue;
+
+        const normalizedLessonDate = startOfDay(lessonDate);
+
+        if (block.startDate && normalizedLessonDate < block.startDate) continue;
+        if (block.endDate && normalizedLessonDate > block.endDate) continue;
+      }
     }
 
     return block;

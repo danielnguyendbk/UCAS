@@ -17,6 +17,8 @@ import AdminTimetableApprovalPage from "@/features/admin/pages/TimetableApproval
 import AdminTimetableImportPage from "@/features/admin/pages/TimetableImportPage";
 import AdminCalendarBlocksPage from "@/features/admin/pages/CalendarBlocksPage";
 import AdminExamsPage from "@/features/admin/pages/ExamsPage";
+import AdminExamImportPage from "@/features/admin/pages/AdminExamImportPage";
+import AdminExamApprovalPage from "@/features/admin/pages/AdminExamApprovalPage";
 import AdminFacilityStaffPage from "@/features/admin/pages/FacilityStaffPage";
 import AdminTimetableVersionsPage from "@/features/admin/pages/AdminTimetableVersionsPage";
 import AdminTimetableDiffPage from "@/features/admin/pages/AdminTimetableDiffPage";
@@ -25,6 +27,7 @@ import EmployeeUsagePage from "@/features/employee/pages/EmployeeUsagePage";
 import EmployeeMaintenanceRequestPage from "@/features/employee/pages/EmployeeMaintenanceRequestPage";
 import EmployeeMaintenanceHistoryPage from "@/features/employee/pages/EmployeeMaintenanceHistoryPage";
 import LecturerSchedulePage from "@/features/lecturer/pages/LecturerSchedulePage";
+import LecturerExamsPage from "@/features/lecturer/pages/LecturerExamsPage";
 import LecturerBookingPage from "@/features/lecturer/pages/LecturerBookingPage";
 import LecturerBookingHistoryPage from "@/features/lecturer/pages/LecturerBookingHistoryPage";
 import LecturerMaintenanceRequestPage from "@/features/lecturer/pages/LecturerMaintenanceRequestPage";
@@ -39,11 +42,16 @@ import StaffLookupPage from "@/features/staff/pages/StaffLookupPage";
 import StaffRoomChangeListPage from "@/features/staff/pages/StaffRoomChangeListPage";
 import StaffMaintenanceListPage from "@/features/staff/pages/StaffMaintenanceListPage";
 import StaffAutoAssignmentPage from "@/features/staff/pages/StaffAutoAssignmentPage";
+import StaffExamAllocationPage from "@/features/staff/pages/StaffExamAllocationPage";
+import StaffExamsPage from "@/features/staff/pages/StaffExamsPage";
+
 import StudentSchedulePage from "@/features/student/pages/StudentSchedulePage";
+import StudentExamsPage from "@/features/student/pages/StudentExamsPage";
 import StudentBookingPage from "@/features/student/pages/StudentBookingPage";
 import StudentBookingHistoryPage from "@/features/student/pages/StudentBookingHistoryPage";
 import StudentMaintenanceRequestPage from "@/features/student/pages/StudentMaintenanceRequestPage";
 import StudentMaintenanceHistoryPage from "@/features/student/pages/StudentMaintenanceHistoryPage";
+
 
 import { Info } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
@@ -99,6 +107,8 @@ const appRouter = createBrowserRouter([
       { path: "admin/timetable-versions", Component: AdminTimetableVersionsPage },
       { path: "admin/timetable-versions/diff", Component: AdminTimetableDiffPage },
       { path: "admin/exams", Component: AdminExamsPage },
+      { path: "admin/exams/import", Component: AdminExamImportPage },
+      { path: "admin/exams/approval", Component: AdminExamApprovalPage },
       { path: "admin/reports", Component: AdminReportsPage },
       { path: "admin/users", Component: AdminUserManagementPage },
       { path: "admin/facility-staff", Component: AdminFacilityStaffPage },
@@ -119,6 +129,11 @@ const appRouter = createBrowserRouter([
       { path: "staff/maintenance-requests", Component: StaffMaintenanceListPage },
       { path: "staff/lookup", Component: StaffLookupPage },
       { path: "staff/facility-assignments", element: <Navigate to={APP_ROUTES.staffDashboard} replace /> },
+      // thêm dòng này
+      { path: "staff/exams/allocation", Component: StaffExamAllocationPage },
+      { path: "staff/exams/schedule", Component: StaffExamsPage },
+
+
 
       // FACILITY routes
       {
@@ -138,7 +153,7 @@ const appRouter = createBrowserRouter([
         element: <Navigate to={APP_ROUTES.lecturerTimetable} replace />,
       },
       { path: "lecturer/timetable", Component: LecturerSchedulePage },
-      { path: "lecturer/exams", Component: PlaceholderPage },
+      { path: "lecturer/exams", Component: LecturerExamsPage },
       { path: "lecturer/room-requests", element: <Navigate to={APP_ROUTES.lecturerRoomChangeList} replace /> },
       { path: "lecturer/maintenance-request", Component: LecturerMaintenanceRequestPage },
       { path: "lecturer/maintenance-history", Component: LecturerMaintenanceHistoryPage },
@@ -153,7 +168,7 @@ const appRouter = createBrowserRouter([
         element: <Navigate to={APP_ROUTES.studentTimetable} replace />,
       },
       { path: "student/timetable", Component: StudentSchedulePage },
-      { path: "student/exams", Component: PlaceholderPage },
+      { path: "student/exams", Component: StudentExamsPage },
       { path: "student/room-booking", Component: StudentBookingPage },
       { path: "student/room-booking/history", Component: StudentBookingHistoryPage },
       { path: "student/maintenance-request", Component: StudentMaintenanceRequestPage },

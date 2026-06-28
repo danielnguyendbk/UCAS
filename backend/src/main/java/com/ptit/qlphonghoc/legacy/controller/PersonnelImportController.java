@@ -147,6 +147,119 @@ public class PersonnelImportController {
         return ResponseEntity.ok(response(success, success ? "Import nhân viên cơ sở vật chất thành công." : "Import nhân viên cơ sở vật chất hoàn tất nhưng có dòng lỗi.", data));
     }
 
+    @GetMapping({"/courses/import-template", "/api/courses/import-template"})
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<byte[]> downloadCourseTemplate() {
+        List<String> headers = List.of("department_id", "course_code", "course_name", "credits", "required_room_type", "description");
+        List<Object> sample = List.of(1, "CS101", "Cơ sở dữ liệu", 3, "LECTURE", "Nhập môn về cơ sở dữ liệu quan hệ");
+        return workbookResponse("courses_import_template.xlsx", "courses", headers, sample);
+    }
+
+    @PostMapping(value = {"/courses/import", "/api/courses/import"}, consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Map<String, Object>> importCourses(@RequestPart("file") MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest().body(response(false, "File import không hợp lệ.", null));
+        }
+
+        List<Map<String, Object>> imported = new ArrayList<>();
+        List<Map<String, Object>> errors = new ArrayList<>();
+
+        try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
+            Sheet sheet = workbook.getSheetAt(0);
+            if (sheet == null || sheet.getPhysicalNumberOfRows() < 2) {
+                return ResponseEntity.badRequest().body(response(false, "File không có dữ liệu môn học.", null));
+            }
+
+            DataFormatter formatter = new DataFormatter();
+            Map<String, Integer> headerMap = readHeader(sheet.getRow(0), formatter);
+
+            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                Row row = sheet.getRow(i);
+                if (row == null || isBlankRow(row, formatter)) continue;
+
+                CourseRow input = parseCourseRow(row, headerMap, formatter);
+                List<String> rowErrors = validateCourse(input);
+                if (!rowErrors.isEmpty()) {
+                    errors.add(errorItem(i + 1, rowErrors));
+                    continue;
+                }
+
+                try {
+                    long courseId = insertCourse(input);
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("row", i + 1);
+                    item.put("courseId", courseId);
+                    item.put("courseCode", input.courseCode);
+                    item.put("courseName", input.courseName);
+                    imported.add(item);
+                } catch (Exception ex) {
+                    errors.add(errorItem(i + 1, List.of(cleanError(ex))));
+                }
+            }
+        } catch (Exception ex) {
+            return ResponseEntity.internalServerError().body(response(false, "Không đọc được file import môn học.", cleanError(ex)));
+        }
+
+        Map<String, Object> data = resultData(imported, errors);
+        boolean success = errors.isEmpty();
+        return ResponseEntity.ok(response(success, success ? "Import môn học thành công." : "Import môn học hoàn tất nhưng có dòng lỗi.", data));
+    }
+
+    private long insertCourse(CourseRow input) {
+        if (existsActive("courses", "course_code", input.courseCode))
+            throw new IllegalArgumentException("Mã môn học đã tồn tại: " + input.courseCode);
+        if (!existsDepartment(input.departmentId))
+            throw new IllegalArgumentException("department_id không tồn tại: " + input.departmentId);
+
+        KeyHolder keyHolder = new GeneratedKeyHolder();
+        jdbcTemplate.update(connection -> {
+            PreparedStatement ps = connection.prepareStatement(
+                    """
+                    INSERT INTO courses
+                        (department_id, course_code, course_name, credits, required_room_type, description, is_deleted)
+                    VALUES (?, ?, ?, ?, ?, ?, 0)
+                    """,
+                    Statement.RETURN_GENERATED_KEYS);
+            ps.setInt(1, input.departmentId);
+            ps.setString(2, input.courseCode.toUpperCase(Locale.ROOT));
+            ps.setString(3, input.courseName);
+            ps.setInt(4, input.credits);
+            ps.setString(5, input.requiredRoomType);
+            ps.setString(6, blankToNull(input.description));
+            return ps;
+        }, keyHolder);
+
+        Number key = keyHolder.getKey();
+        if (key == null) throw new IllegalStateException("Không lấy được course_id.");
+        return key.longValue();
+    }
+
+    private List<String> validateCourse(CourseRow input) {
+        List<String> errors = new ArrayList<>();
+        if (input.courseCode == null || input.courseCode.isBlank()) errors.add("course_code không được để trống");
+        if (input.courseName == null || input.courseName.isBlank()) errors.add("course_name không được để trống");
+        if (input.departmentId == null) errors.add("department_id phải là số và không được để trống");
+        if (input.credits == null || input.credits <= 0) errors.add("credits phải là số nguyên lớn hơn 0");
+        Set<String> validRoomTypes = Set.of("LECTURE", "LAB", "SEMINAR", "AUDITORIUM");
+        if (!validRoomTypes.contains(input.requiredRoomType)) {
+            errors.add("required_room_type phải là LECTURE, LAB, SEMINAR hoặc AUDITORIUM");
+        }
+        return errors;
+    }
+
+    private CourseRow parseCourseRow(Row row, Map<String, Integer> headerMap, DataFormatter formatter) {
+        CourseRow input = new CourseRow();
+        input.departmentId = integerValue(cell(row, headerMap, formatter, "department_id", "departmentId", "faculty_id"));
+        input.courseCode = cell(row, headerMap, formatter, "course_code", "courseCode", "code", "ma_mon");
+        input.courseName = cell(row, headerMap, formatter, "course_name", "courseName", "name", "ten_mon");
+        input.credits = integerValue(cell(row, headerMap, formatter, "credits", "tin_chi", "so_tin_chi"));
+        String roomType = cell(row, headerMap, formatter, "required_room_type", "requiredRoomType", "room_type");
+        input.requiredRoomType = roomType.isBlank() ? "LECTURE" : roomType.trim().toUpperCase(Locale.ROOT);
+        input.description = cell(row, headerMap, formatter, "description", "mo_ta");
+        return input;
+    }
+
     private Number insertLecturer(LecturerRow input) {
         if (existsPlain("users", "username", input.username)) throw new IllegalArgumentException("Username đã tồn tại: " + input.username);
         if (existsPlain("users", "email", input.email)) throw new IllegalArgumentException("Email đã tồn tại: " + input.email);
@@ -419,5 +532,14 @@ public class PersonnelImportController {
         Integer buildingId;
         String note = "";
         String status = "";
+    }
+
+    private static class CourseRow {
+        Integer departmentId;
+        String courseCode = "";
+        String courseName = "";
+        Integer credits;
+        String requiredRoomType = "LECTURE";
+        String description = "";
     }
 }

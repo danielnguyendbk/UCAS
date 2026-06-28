@@ -8,14 +8,21 @@ const APP_ROUTES = {
   adminCourses: "/admin/courses",
   adminLecturers: "/admin/lecturers",
   adminSections: "/admin/sections",
+
   adminTimetable: "/admin/timetable",
   adminTimetableImport: "/admin/timetable-import",
   adminAutoAssignment: "/admin/auto-assignment",
   adminTimetableApproval: "/admin/timetable-approval",
   adminCalendarBlocks: "/admin/calendar-blocks",
+
+  // ADMIN EXAMS
   adminExams: "/admin/exams",
+  adminExamImport: "/admin/exams/import",
+  adminExamApproval: "/admin/exams/approval",
+
   adminReports: "/admin/reports",
   adminUsers: "/admin/users",
+  adminAuditLogs: "/admin/audit-logs",
   adminFacilityStaff: "/admin/facility-staff",
   adminFacilityAssignments: "/admin/facility-assignments",
   adminSettings: "/admin/settings",
@@ -35,6 +42,10 @@ const APP_ROUTES = {
   staffLookup: "/staff/lookup",
   staffFacilityAssignments: "/staff/facility-assignments",
 
+  // STAFF EXAMS
+  staffExamAllocation: "/staff/exams/allocation",
+  staffExamSchedule: "/staff/exams/schedule",
+
   // FACILITY
   facilityTimetable: "/facility/timetable",
   facilityOpenClose: "/facility/opening-schedule",
@@ -42,7 +53,6 @@ const APP_ROUTES = {
   facilityIssues: "/facility/issues",
   facilityRooms: "/facility/rooms",
   facilityMaintenanceRequest: "/facility/maintenance-request",
-  /** @deprecated use facilityTimetable */
   facilityDashboard: "/facility/timetable",
 
   // LECTURER
@@ -55,7 +65,6 @@ const APP_ROUTES = {
   lecturerMaintenanceHistory: "/lecturer/maintenance-history",
   lecturerRoomChangeRequest: "/lecturer/room-change-request",
   lecturerRoomChangeList: "/lecturer/room-change-list",
-  /** @deprecated use lecturerTimetable */
   lecturerDashboard: "/lecturer/timetable",
 
   // STUDENT
@@ -65,10 +74,9 @@ const APP_ROUTES = {
   studentBookingHistory: "/student/room-booking/history",
   studentMaintenanceRequest: "/student/maintenance-request",
   studentMaintenanceHistory: "/student/maintenance-history",
-  /** @deprecated use studentTimetable */
   studentDashboard: "/student/timetable",
 
-  // Legacy aliases (backward compatibility only)
+  // Legacy aliases
   classrooms: "/admin/rooms",
   courses: "/admin/courses",
   lecturers: "/admin/lecturers",
@@ -87,6 +95,7 @@ const APP_ROUTES = {
   lecturerSchedule: "/lecturer/timetable",
   lecturerBooking: "/lecturer/room-booking",
 
+  // Employee legacy aliases, giữ lại để không gãy code cũ
   employeeDashboard: "/facility/timetable",
   employeeUsage: "/facility/rooms",
   employeeMaintenanceRequest: "/facility/maintenance-request",
@@ -104,6 +113,8 @@ const ROLE_DEFAULT_PATHS = {
   LECTURER: APP_ROUTES.lecturerTimetable,
   STUDENT: APP_ROUTES.studentTimetable,
   FACILITY: APP_ROUTES.facilityTimetable,
+
+  // Legacy role, giữ nếu backend/cũ còn trả EMPLOYEES
   EMPLOYEES: APP_ROUTES.facilityTimetable,
 };
 

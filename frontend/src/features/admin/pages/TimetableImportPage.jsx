@@ -70,7 +70,7 @@ const SummaryItem = ({ label, value, tone = "text-slate-900" }) => (
 export default function TimetableImportPage() {
   const navigate = useNavigate();
   const [semesters, setSemesters] = useState([]);
-  const [semesterId, setSemesterId] = useState("");
+  const [semesterId, setSemesterId] = useState();
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -179,7 +179,7 @@ export default function TimetableImportPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">Đối soát dữ liệu học vụ</p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950">Import thời khóa biểu</h1>
           <p className="mt-1 max-w-2xl text-sm text-slate-500">
-            Preview từng dòng trước khi áp dụng. Backend luôn kiểm tra lại file và ghi toàn bộ trong một transaction.
+            Preview từng dòng trước khi áp dụng.
           </p>
         </div>
         <Button variant="outline" onClick={handleTemplate}>
