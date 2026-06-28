@@ -94,10 +94,6 @@ export const buildStudentPayload = (form, timeSlots) => {
   return {
     semesterId: Number(form.semesterId),
     requestType: purposeConfig?.requestType || "OTHER",
-    clubCode:
-      purposeConfig?.requestType === "CLUB_ACTIVITY"
-        ? form.clubCode.trim().toUpperCase()
-        : null,
     bookingDate: form.bookingDate,
     slotStartId: Number(slotStartId),
     slotEndId: Number(slotEndId),
@@ -129,10 +125,6 @@ export const buildLecturerPayload = (form, timeSlots) => {
   return {
     semesterId: Number(form.semesterId),
     requestType,
-    clubCode:
-      requestType === "CLUB_ACTIVITY"
-        ? form.clubCode.trim().toUpperCase()
-        : null,
     sectionId:
       requestType === "MAKEUP_CLASS" ? Number(form.sectionId) : null,
     bookingDate: form.bookingDate,

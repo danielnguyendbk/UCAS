@@ -35,8 +35,6 @@ public interface StaffRoomBorrowRequestRepository extends JpaRepository<ClassSec
             requester.username AS requesterName,
             requester.username AS requesterUsername,
             requester.role AS requesterRole,
-            rbr.club_id AS clubId,
-            club.club_name AS clubName,
             rbr.section_id AS sectionId,
             CASE
                 WHEN cs.section_id IS NULL THEN NULL
@@ -138,7 +136,6 @@ public interface StaffRoomBorrowRequestRepository extends JpaRepository<ClassSec
         JOIN time_slots ts_start ON ts_start.slot_id = rbr.slot_start_id
         JOIN time_slots ts_end ON ts_end.slot_id = rbr.slot_end_id
         JOIN users requester ON requester.user_id = rbr.requested_by
-        LEFT JOIN clubs club ON club.club_id = rbr.club_id
         LEFT JOIN class_sections cs ON cs.section_id = rbr.section_id
         LEFT JOIN courses course ON course.course_id = cs.course_id
         LEFT JOIN classrooms preferred_room ON preferred_room.classroom_id = rbr.preferred_classroom_id
@@ -237,9 +234,8 @@ public interface StaffRoomBorrowRequestRepository extends JpaRepository<ClassSec
 
         String getRequesterRole();
 
-        Integer getClubId();
 
-        String getClubName();
+        
 
         Integer getSectionId();
 

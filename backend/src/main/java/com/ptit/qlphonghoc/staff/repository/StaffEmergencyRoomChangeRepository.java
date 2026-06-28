@@ -330,10 +330,10 @@ public interface StaffEmergencyRoomChangeRepository extends JpaRepository<ClassS
                 ELSE cr.room_type
             END AS roomTypeText,
             CASE cr.room_type
-                WHEN 'LAB' THEN 'May tinh, May lanh'
-                WHEN 'SEMINAR' THEN 'Micro, Tivi, May lanh'
-                WHEN 'LECTURE' THEN 'Micro, Tivi, May lanh'
-                WHEN 'AUDITORIUM' THEN 'Micro, May chieu, May lanh'
+                WHEN 'LAB' THEN 'May tinh, Máy lạnh'
+                WHEN 'SEMINAR' THEN 'Micro, Tivi, Máy lạnh'
+                WHEN 'LECTURE' THEN 'Micro, Tivi, Máy lạnh'
+                WHEN 'AUDITORIUM' THEN 'Micro, May chieu, Máy lạnh'
                 ELSE 'Khong co'
             END AS mainEquipment,
             ts_s.slot_no AS slotStartNo,

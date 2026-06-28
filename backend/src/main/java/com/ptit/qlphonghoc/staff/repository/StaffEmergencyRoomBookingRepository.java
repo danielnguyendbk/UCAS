@@ -34,13 +34,13 @@ public interface StaffEmergencyRoomBookingRepository extends JpaRepository<Class
     int countActiveStaffOrAdminById(@Param("userId") Integer userId);
 
     @Query(value = """
-        SELECT COUNT(*)
-        FROM semesters
-        WHERE semester_id = :semesterId
-          AND is_deleted = FALSE
-          AND status = 'ACTIVE'
-          AND :bookingDate BETWEEN start_date AND end_date
-        """, nativeQuery = true)
+    SELECT COUNT(*)
+    FROM semesters
+    WHERE semester_id = :semesterId
+      AND is_deleted = FALSE
+      AND status IN ('ACTIVE', 'UPCOMING')
+      AND :bookingDate BETWEEN start_date AND end_date
+    """, nativeQuery = true)
     int countValidSemesterDate(
             @Param("semesterId") Integer semesterId,
             @Param("bookingDate") LocalDate bookingDate
@@ -152,10 +152,10 @@ public interface StaffEmergencyRoomBookingRepository extends JpaRepository<Class
                 ELSE cr.room_type
             END AS roomTypeText,
             CASE cr.room_type
-                WHEN 'LAB' THEN 'May tinh, May lanh'
-                WHEN 'SEMINAR' THEN 'Micro, Tivi, May lanh'
-                WHEN 'LECTURE' THEN 'Micro, Tivi, May lanh'
-                WHEN 'AUDITORIUM' THEN 'Micro, May chieu, May lanh'
+                WHEN 'LAB' THEN 'May tinh, Máy lạnh'
+                WHEN 'SEMINAR' THEN 'Micro, Tivi, Máy lạnh'
+                WHEN 'LECTURE' THEN 'Micro, Tivi, Máy lạnh'
+                WHEN 'AUDITORIUM' THEN 'Micro, May chieu, Máy lạnh'
                 ELSE 'Khong co'
             END AS mainEquipment,
             ts_s.slot_no AS slotStartNo,
@@ -179,10 +179,10 @@ public interface StaffEmergencyRoomBookingRepository extends JpaRepository<Class
                OR LOWER(cr.room_type) LIKE CONCAT('%', LOWER(:keyword), '%')
                OR LOWER(
                     CASE cr.room_type
-                        WHEN 'LAB' THEN 'May tinh, May lanh'
-                        WHEN 'SEMINAR' THEN 'Micro, Tivi, May lanh'
-                        WHEN 'LECTURE' THEN 'Micro, Tivi, May lanh'
-                        WHEN 'AUDITORIUM' THEN 'Micro, May chieu, May lanh'
+                        WHEN 'LAB' THEN 'May tinh, Máy lạnh'
+                        WHEN 'SEMINAR' THEN 'Micro, Tivi, Máy lạnh'
+                        WHEN 'LECTURE' THEN 'Micro, Tivi, Máy lạnh'
+                        WHEN 'AUDITORIUM' THEN 'Micro, May chieu, Máy lạnh'
                         ELSE ''
                     END
                   ) LIKE CONCAT('%', LOWER(:keyword), '%')
@@ -272,7 +272,6 @@ public interface StaffEmergencyRoomBookingRepository extends JpaRepository<Class
             start_time,
             end_time,
             requested_by,
-            club_id,
             expected_attendees,
             preferred_building_id,
             preferred_classroom_id,

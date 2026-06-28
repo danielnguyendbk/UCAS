@@ -35,7 +35,6 @@ public class CategoryController {
         categories.put("timeSlots", findTimeSlots());
         categories.put("classes", findClasses());
         categories.put("students", findStudents());
-        categories.put("clubs", findClubs());
         return ApiResponse.success("OK", categories);
     }
 
@@ -149,10 +148,7 @@ public class CategoryController {
         return ApiResponse.success("OK", findStudents());
     }
 
-    @GetMapping("/clubs")
-    public ApiResponse<List<Map<String, Object>>> getClubs() {
-        return ApiResponse.success("OK", findClubs());
-    }
+
 
     private List<Map<String, Object>> findFaculties() {
         return List.of();
@@ -326,24 +322,5 @@ public class CategoryController {
         return jdbcTemplate.queryForList(sql);
     }
 
-    private List<Map<String, Object>> findClubs() {
-        String sql = """
-            SELECT c.club_id AS id,
-                   c.club_code AS clubCode,
-                   c.club_name AS clubName,
-                   c.department_id AS facultyId,
-                   d.department_code AS facultyCode,
-                   d.department_name AS facultyName,
-                   c.advisor_user_id AS advisorUserId,
-                   u.username AS advisorName,
-                   c.status
-            FROM clubs c
-            JOIN departments d ON c.department_id = d.department_id
-            LEFT JOIN users u ON c.advisor_user_id = u.user_id
-            WHERE c.is_deleted = FALSE
-              AND d.is_deleted = FALSE
-            ORDER BY c.club_name
-            """;
-        return jdbcTemplate.queryForList(sql);
-    }
+
 }

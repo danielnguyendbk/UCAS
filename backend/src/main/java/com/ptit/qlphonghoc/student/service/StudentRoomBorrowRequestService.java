@@ -2,7 +2,6 @@ package com.ptit.qlphonghoc.student.service;
 
 import com.ptit.qlphonghoc.student.dto.roomborrow.CreateStudentRoomBorrowRequest;
 import com.ptit.qlphonghoc.student.dto.roomborrow.StudentAvailableRoomResponse;
-import com.ptit.qlphonghoc.student.dto.roomborrow.StudentClubLookupResponse;
 import com.ptit.qlphonghoc.student.dto.roomborrow.StudentRoomBorrowRequestResponse;
 import com.ptit.qlphonghoc.student.entity.Student;
 import com.ptit.qlphonghoc.student.repository.StudentRepository;
@@ -73,17 +72,6 @@ public class StudentRoomBorrowRequestService {
                 .toList();
     }
 
-    @Transactional(readOnly = true)
-    public StudentClubLookupResponse getClub(String clubCode, Integer userId) {
-        ensureStudentProfile(userId);
-
-        return repository.findClubLookupByCode(normalizeClubCode(clubCode), userId)
-                .map(this::toClubLookupResponse)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Club not found or inactive."
-                ));
-    }
 
     @Transactional(readOnly = true)
     public List<StudentRoomBorrowRequestResponse> getMyRequests(Integer userId) {
@@ -104,8 +92,7 @@ public class StudentRoomBorrowRequestService {
         validateCreateInput(request);
 
         String requestType = normalizeRequestType(request.getRequestType());
-        String bookingScope = "CLUB_ACTIVITY".equals(requestType) ? "CLUB" : "PERSONAL";
-        Integer clubId = resolveClubId(bookingScope, request.getClubCode(), userId);
+        String bookingScope = "PERSONAL";
 
         Integer preferredClassroomId = request.getPreferredClassroomId();
         if (preferredClassroomId != null) {
@@ -132,7 +119,6 @@ public class StudentRoomBorrowRequestService {
                 request.getSlotStartId(),
                 request.getSlotEndId(),
                 userId,
-                clubId,
                 request.getExpectedAttendees(),
                 preferredClassroomId,
                 normalizeRoomType(request.getRequestedRoomType()),
@@ -210,39 +196,8 @@ public class StudentRoomBorrowRequestService {
                 ));
     }
 
-    private Integer resolveClubId(String bookingScope, String clubCode, Integer userId) {
-        if (!"CLUB".equals(bookingScope)) {
-            return null;
-        }
 
-        String normalizedClubCode = normalizeClubCode(clubCode);
-        StudentRoomBorrowRequestRepository.ClubLookupProjection club = repository
-                .findClubLookupByCode(normalizedClubCode, userId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Club not found or inactive."
-                ));
 
-        if (!isRepresentative(club)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Only an active club representative can create a club room borrow request."
-            );
-        }
-
-        return club.getClubId();
-    }
-
-    private String normalizeClubCode(String clubCode) {
-        if (clubCode == null || clubCode.isBlank()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "clubCode is required for club activity requests."
-            );
-        }
-
-        return clubCode.trim().toUpperCase(Locale.ROOT);
-    }
 
     private String normalizeRequestType(String requestType) {
         if (requestType == null || requestType.isBlank()) {
@@ -316,23 +271,8 @@ public class StudentRoomBorrowRequestService {
         return response;
     }
 
-    private StudentClubLookupResponse toClubLookupResponse(
-            StudentRoomBorrowRequestRepository.ClubLookupProjection projection
-    ) {
-        StudentClubLookupResponse response = new StudentClubLookupResponse();
-        response.setClubId(projection.getClubId());
-        response.setClubCode(projection.getClubCode());
-        response.setClubName(projection.getClubName());
-        response.setRepresentative(isRepresentative(projection));
-        return response;
-    }
 
-    private boolean isRepresentative(
-            StudentRoomBorrowRequestRepository.ClubLookupProjection projection
-    ) {
-        Number representative = projection.getRepresentative();
-        return representative != null && representative.intValue() == 1;
-    }
+
 
     private StudentRoomBorrowRequestResponse toBorrowRequestResponse(
             StudentRoomBorrowRequestRepository.BorrowRequestProjection projection
@@ -351,8 +291,6 @@ public class StudentRoomBorrowRequestService {
         response.setSlotEnd(projection.getSlotEnd());
         response.setPeriodText(projection.getPeriodText());
         response.setRequestedBy(projection.getRequestedBy());
-        response.setClubId(projection.getClubId());
-        response.setClubName(projection.getClubName());
         response.setExpectedAttendees(projection.getExpectedAttendees());
         response.setPreferredClassroomId(projection.getPreferredClassroomId());
         response.setPreferredRoomCode(projection.getPreferredRoomCode());

@@ -82,7 +82,48 @@ const getTimeSlotId = (slot) =>
   Number(slot?.slotId ?? slot?.slot_id ?? slot?.id ?? 0);
 
 const getTimeSlotNo = (slot) =>
-  Number(slot?.slotNo ?? slot?.slot_no ?? slot?.slotNumber ?? 0);
+  Number(
+    slot?.slotOrder ??
+      slot?.slot_order ??
+      slot?.slotNo ??
+      slot?.slot_no ??
+      slot?.slotNumber ??
+      slot?.slot_number ??
+      slot?.order ??
+      0,
+  );
+
+const getTimeSlotStartTime = (slot) =>
+  slot?.startTime || slot?.start_time || slot?.start || "";
+
+const getTimeSlotEndTime = (slot) =>
+  slot?.endTime || slot?.end_time || slot?.end || "";
+
+const getTimeSlotSortValue = (slot) => {
+  const slotNo = getTimeSlotNo(slot);
+  if (slotNo > 0) return slotNo;
+
+  const timeText = getTimeSlotStartTime(slot);
+  const [hours, minutes] = String(timeText || "")
+    .slice(0, 5)
+    .split(":")
+    .map(Number);
+  if (Number.isFinite(hours) && Number.isFinite(minutes)) {
+    return hours * 60 + minutes;
+  }
+
+  return 0;
+};
+
+const isSlotRangeValid = (startSlot, endSlot) =>
+  Boolean(startSlot && endSlot) &&
+  getTimeSlotSortValue(endSlot) >= getTimeSlotSortValue(startSlot);
+
+const formatSlotTime = (value) => {
+  if (!value) return "";
+  const text = String(value);
+  return text.length >= 5 ? text.slice(0, 5) : text;
+};
 
 const getTimeSlotLabel = (slot) => {
   const slotNo = getTimeSlotNo(slot);
@@ -91,6 +132,45 @@ const getTimeSlotLabel = (slot) => {
 
 const getSchedulePeriod = (schedule) =>
   schedule?.periodText || schedule?.slotLabel || String(schedule?.slotNumber || "");
+
+const getRoomId = (room) =>
+  room?.classroomId ?? room?.classroom_id ?? room?.id ?? room?.classroomID;
+
+const normalizeAvailableRoom = (room) => {
+  const classroomId = getRoomId(room);
+  const buildingCode = room?.buildingCode ?? room?.building_code ?? "";
+  const roomNumber = room?.roomNumber ?? room?.room_number ?? "";
+  const roomCode =
+    room?.roomCode ??
+    room?.classroomCode ??
+    room?.classroom_code ??
+    roomNumber ??
+    (buildingCode && roomNumber ? `${buildingCode}-${roomNumber}` : "");
+
+  return {
+    ...room,
+    classroomId,
+    roomCode: roomCode || (classroomId ? `#${classroomId}` : ""),
+    buildingCode,
+    buildingName: room?.buildingName ?? room?.building_name ?? "",
+    capacity: room?.capacity,
+    roomType: room?.roomType ?? room?.room_type ?? "",
+    roomTypeText: room?.roomTypeText ?? room?.room_type_text ?? room?.room_type ?? room?.roomType ?? "",
+  };
+};
+
+const unwrapAvailableRooms = (data) => {
+  const payload = data?.data ?? data;
+  const rooms = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.items)
+      ? payload.items
+      : Array.isArray(payload?.content)
+        ? payload.content
+        : [];
+
+  return rooms.map(normalizeAvailableRoom).filter((room) => room.classroomId);
+};
 
 const initialBookingForm = {
   semesterId: "",
@@ -176,6 +256,31 @@ const StaffBookingsPage = () => {
     return matchedChangeSchedules.length === 1 ? matchedChangeSchedules[0] : null;
   }, [matchedChangeSchedules, changeForm.sectionCode, changeForm.courseName]);
 
+  const bookingStartSlot = useMemo(
+    () =>
+      timeSlots.find(
+        (slot) => getTimeSlotId(slot) === Number(bookingForm.slotStartId),
+      ),
+    [timeSlots, bookingForm.slotStartId],
+  );
+
+  const bookingEndSlot = useMemo(
+    () =>
+      timeSlots.find(
+        (slot) => getTimeSlotId(slot) === Number(bookingForm.slotEndId),
+      ),
+    [timeSlots, bookingForm.slotEndId],
+  );
+
+  const isBookingSlotRangeValid = isSlotRangeValid(bookingStartSlot, bookingEndSlot);
+
+  const bookingTimeRangeText =
+    bookingStartSlot && bookingEndSlot
+      ? `${formatSlotTime(getTimeSlotStartTime(bookingStartSlot)) || "--:--"} – ${
+          formatSlotTime(getTimeSlotEndTime(bookingEndSlot)) || "--:--"
+        }`
+      : "Chưa chọn đủ tiết";
+
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
@@ -186,7 +291,7 @@ const StaffBookingsPage = () => {
         const semesters = semestersRes.data?.data || semestersRes.data || [];
         const slots = (slotsRes.data?.data || slotsRes.data || [])
           .slice()
-          .sort((a, b) => getTimeSlotNo(a) - getTimeSlotNo(b));
+          .sort((a, b) => getTimeSlotSortValue(a) - getTimeSlotSortValue(b));
         const activeSemesterId = getActiveSemesterId(semesters);
         const firstSlotId = slots[0] ? String(getTimeSlotId(slots[0])) : "";
 
@@ -289,21 +394,15 @@ const StaffBookingsPage = () => {
     if (!bookingForm.slotStartId) nextErrors.slotStartId = "Vui lòng chọn tiết bắt đầu";
     if (!bookingForm.slotEndId) {
       nextErrors.slotEndId = "Vui lòng chọn tiết kết thúc";
-    } else {
-      const startSlot = timeSlots.find(
-        (slot) => getTimeSlotId(slot) === Number(bookingForm.slotStartId),
-      );
-      const endSlot = timeSlots.find(
-        (slot) => getTimeSlotId(slot) === Number(bookingForm.slotEndId),
-      );
-      if (startSlot && endSlot && getTimeSlotNo(endSlot) < getTimeSlotNo(startSlot)) {
-        nextErrors.slotEndId = "Tiết kết thúc phải lớn hơn hoặc bằng tiết bắt đầu";
+    } else if (bookingForm.slotStartId) {
+      if (!bookingStartSlot || !bookingEndSlot || !isBookingSlotRangeValid) {
+        nextErrors.slotEndId = "Khoảng tiết học không hợp lệ.";
       }
     }
     if (!bookingForm.attendees || Number(bookingForm.attendees) <= 0) {
       nextErrors.attendees = "Số người phải lớn hơn 0";
     }
-    if (!bookingForm.roomId) nextErrors.roomId = "Vui lòng chọn phòng";
+    if (!bookingForm.roomId) nextErrors.roomId = "Vui lòng chọn phòng cấp phát";
     if (!bookingForm.usedForName.trim()) {
       nextErrors.usedForName = "Vui lòng nhập người hoặc đơn vị sử dụng";
     }
@@ -441,6 +540,11 @@ const StaffBookingsPage = () => {
     }));
     setBookingAvailableRooms([]);
     setBookingRoomsError("");
+    setErrors((prev) => ({
+      ...prev,
+      roomId: "",
+      slotEndId: "",
+    }));
   };
 
   const resetChangeRoom = (patch) => {
@@ -459,7 +563,8 @@ const StaffBookingsPage = () => {
     bookingForm.date &&
     bookingForm.slotStartId &&
     bookingForm.slotEndId &&
-    bookingForm.attendees;
+    Number(bookingForm.attendees) > 0 &&
+    isBookingSlotRangeValid;
 
   const isChangeSessionDateValid =
     changeForm.scope !== "SESSION" ||
@@ -513,16 +618,19 @@ const StaffBookingsPage = () => {
         params: {
           semesterId: bookingForm.semesterId,
           bookingDate: bookingForm.date,
+          usageDate: bookingForm.date,
+          date: bookingForm.date,
           slotStartId: bookingForm.slotStartId,
           slotEndId: bookingForm.slotEndId,
           expectedAttendees: bookingForm.attendees,
+          expectedParticipants: bookingForm.attendees,
+          minCapacity: bookingForm.attendees,
         },
       });
-      const payload = response.data?.data ?? response.data;
-      const rooms = Array.isArray(payload) ? payload : payload?.items || [];
+      const rooms = unwrapAvailableRooms(response.data);
       setBookingAvailableRooms(rooms);
       if (rooms.length === 0) {
-        setBookingRoomsError("Không có phòng phù hợp.");
+        setBookingRoomsError("Không có phòng phù hợp");
       }
     } catch (error) {
       setBookingAvailableRooms([]);
@@ -555,11 +663,10 @@ const StaffBookingsPage = () => {
         }
       }
       const response = await httpClient.get("/api/staff/emergency-room-changes/available-rooms", { params });
-      const payload = response.data?.data ?? response.data;
-      const rooms = Array.isArray(payload) ? payload : payload?.items || [];
+      const rooms = unwrapAvailableRooms(response.data);
       setChangeAvailableRooms(rooms);
       if (rooms.length === 0) {
-        setChangeRoomsError("Không có phòng phù hợp.");
+        setChangeRoomsError("Không có phòng phù hợp");
       }
     } catch (error) {
       setChangeAvailableRooms([]);
@@ -689,7 +796,7 @@ const StaffBookingsPage = () => {
                       resetBookingRoom({
                         slotStartId: value,
                         slotEndId:
-                          currentEnd && nextStart && getTimeSlotNo(currentEnd) >= getTimeSlotNo(nextStart)
+                          currentEnd && nextStart && isSlotRangeValid(nextStart, currentEnd)
                             ? bookingForm.slotEndId
                             : value,
                       });
@@ -728,7 +835,7 @@ const StaffBookingsPage = () => {
                           (item) => getTimeSlotId(item) === Number(bookingForm.slotStartId),
                         );
                         const disabled =
-                          startSlot && getTimeSlotNo(slot) < getTimeSlotNo(startSlot);
+                          startSlot && !isSlotRangeValid(startSlot, slot);
                         return (
                           <SelectItem
                             key={getTimeSlotId(slot)}
@@ -744,6 +851,13 @@ const StaffBookingsPage = () => {
                   {errors.slotEndId && (
                     <p className="text-xs text-red-600">{errors.slotEndId}</p>
                   )}
+                </div>
+
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Thời gian đặt</Label>
+                  <div className="flex h-10 items-center rounded-md border border-gray-200 bg-gray-50 px-3 text-sm font-semibold text-gray-700">
+                    {bookingTimeRangeText}
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -779,7 +893,7 @@ const StaffBookingsPage = () => {
                       onClick={fetchBookingAvailableRooms}
                     >
                       <Search className="w-3.5 h-3.5" />
-                      Tìm phòng
+                      {loadingBookingRooms ? "Đang tìm..." : "Tìm phòng"}
                     </Button>
                   </Label>
                   <Input
@@ -812,6 +926,13 @@ const StaffBookingsPage = () => {
                   {bookingRoomsError && (
                     <p className="text-xs text-red-600">{bookingRoomsError}</p>
                   )}
+                  {!bookingRoomsError &&
+                    !loadingBookingRooms &&
+                    bookingAvailableRooms.length === 0 && (
+                      <p className="text-xs text-gray-500">
+                        Bấm Tìm phòng để tải danh sách phòng phù hợp.
+                      </p>
+                    )}
                   {errors.roomId && (
                     <p className="text-xs text-red-600">{errors.roomId}</p>
                   )}
@@ -1148,7 +1269,7 @@ const StaffBookingsPage = () => {
                       onClick={fetchChangeAvailableRooms}
                     >
                       <Search className="w-3.5 h-3.5" />
-                      Tìm phòng
+                      {loadingChangeRooms ? "Đang tìm..." : "Tìm phòng"}
                     </Button>
                   </Label>
                   <Input

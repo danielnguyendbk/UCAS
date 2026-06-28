@@ -3,7 +3,6 @@ package com.ptit.qlphonghoc.lecturer.controller;
 import com.ptit.qlphonghoc.auth.security.CustomUserDetails;
 import com.ptit.qlphonghoc.lecturer.dto.roomborrow.CreateLecturerRoomBorrowRequest;
 import com.ptit.qlphonghoc.lecturer.dto.roomborrow.LecturerAvailableRoomResponse;
-import com.ptit.qlphonghoc.lecturer.dto.roomborrow.LecturerClubLookupResponse;
 import com.ptit.qlphonghoc.lecturer.dto.roomborrow.LecturerRoomBorrowRequestResponse;
 import com.ptit.qlphonghoc.lecturer.dto.roomborrow.LecturerSectionLookupResponse;
 import com.ptit.qlphonghoc.lecturer.service.LecturerRoomBorrowRequestService;
@@ -19,6 +18,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.net.URI;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Locale;
 
 import java.net.URI;
 import java.time.LocalDate;
@@ -88,21 +92,23 @@ public class LecturerRoomBorrowRequestController {
         );
     }
 
-    @GetMapping("/clubs/{clubCode}")
-    public ResponseEntity<LecturerClubLookupResponse> getClub(
-            @PathVariable String clubCode,
-            @AuthenticationPrincipal CustomUserDetails userDetails
-    ) {
-        return ResponseEntity.ok(service.getClub(clubCode, userDetails.getUserId()));
-    }
+
 
     @GetMapping("/sections/lookup")
-    public ResponseEntity<LecturerSectionLookupResponse> getSection(
+    public ResponseEntity<?> lookupSections(
             @RequestParam Integer semesterId,
-            @RequestParam String sectionCode,
+            @RequestParam(required = false) String sectionCode,
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
-        return ResponseEntity.ok(service.getSection(semesterId, sectionCode, userDetails.getUserId()));
+        if (sectionCode == null || sectionCode.isBlank()) {
+            return ResponseEntity.ok(
+                    service.getSections(semesterId, userDetails.getUserId())
+            );
+        }
+
+        return ResponseEntity.ok(
+                service.getSection(semesterId, sectionCode, userDetails.getUserId())
+        );
     }
 
     @PostMapping

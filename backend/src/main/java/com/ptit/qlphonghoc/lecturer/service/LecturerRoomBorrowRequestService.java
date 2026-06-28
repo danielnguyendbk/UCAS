@@ -4,7 +4,6 @@ import com.ptit.qlphonghoc.common.exception.BadRequestException;
 import com.ptit.qlphonghoc.common.exception.ResourceNotFoundException;
 import com.ptit.qlphonghoc.lecturer.dto.roomborrow.CreateLecturerRoomBorrowRequest;
 import com.ptit.qlphonghoc.lecturer.dto.roomborrow.LecturerAvailableRoomResponse;
-import com.ptit.qlphonghoc.lecturer.dto.roomborrow.LecturerClubLookupResponse;
 import com.ptit.qlphonghoc.lecturer.dto.roomborrow.LecturerRoomBorrowRequestResponse;
 import com.ptit.qlphonghoc.lecturer.dto.roomborrow.LecturerSectionLookupResponse;
 import com.ptit.qlphonghoc.lecturer.entity.Lecturer;
@@ -82,15 +81,23 @@ public class LecturerRoomBorrowRequestService {
     }
 
     @Transactional(readOnly = true)
-    public LecturerClubLookupResponse getClub(String clubCode, Integer userId) {
-        ensureLecturerProfile(userId);
+    public List<LecturerSectionLookupResponse> getSections(
+            Integer semesterId,
+            Integer userId
+    ) {
+        Lecturer lecturer = ensureLecturerProfile(userId);
 
-        return repository.findClubLookupByCode(normalizeClubCode(clubCode), userId)
-                .map(this::toClubLookupResponse)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Club not found or inactive."
-                ));
+        if (semesterId == null) {
+            throw new BadRequestException("SEMESTER_NOT_FOUND", "semesterId is required.");
+        }
+
+        return repository.findSectionsBySemesterAndLecturer(
+                        semesterId,
+                        lecturer.getId()
+                )
+                .stream()
+                .map(this::toSectionLookupResponse)
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -135,9 +142,14 @@ public class LecturerRoomBorrowRequestService {
         validateCreateInput(request);
 
         String requestType = normalizeRequestType(request.getRequestType());
-        String bookingScope = "CLUB_ACTIVITY".equals(requestType) ? "CLUB" : "PERSONAL";
-        Integer clubId = resolveClubId(bookingScope, request.getClubCode(), userId);
-        Integer sectionId = resolveSectionId(requestType, request.getSectionId(), request, lecturer.getId());
+        String bookingScope = "PERSONAL";
+
+        Integer sectionId = resolveSectionId(
+                requestType,
+                request.getSectionId(),
+                request,
+                lecturer.getId()
+        );
 
         int classroomCount = repository.countUsableClassroom(
                 request.getPreferredClassroomId(),
@@ -194,7 +206,6 @@ public class LecturerRoomBorrowRequestService {
                 request.getSlotStartId(),
                 request.getSlotEndId(),
                 userId,
-                clubId,
                 request.getExpectedAttendees(),
                 request.getPreferredClassroomId(),
                 request.getPurposeNote().trim()
@@ -248,7 +259,10 @@ public class LecturerRoomBorrowRequestService {
             throw new BadRequestException("INVALID_TIME_RANGE", "bookingDate is required.");
         }
         if (bookingDate.isBefore(LocalDate.now())) {
-            throw new BadRequestException("INVALID_TIME_RANGE", "Khong the tao yeu cau cho ngay trong qua khu.");
+            throw new BadRequestException(
+                    "BOOKING_DATE_IN_PAST",
+                    "Khong the tao yeu cau cho ngay trong qua khu."
+            );
         }
         if (slotStartId == null || slotEndId == null) {
             throw new BadRequestException("INVALID_TIME_RANGE", "slotStartId and slotEndId are required.");
@@ -318,28 +332,6 @@ public class LecturerRoomBorrowRequestService {
         return value;
     }
 
-    private Integer resolveClubId(String bookingScope, String clubCode, Integer userId) {
-        if (!"CLUB".equals(bookingScope)) {
-            return null;
-        }
-
-        LecturerRoomBorrowRequestRepository.ClubLookupProjection club = repository
-                .findClubLookupByCode(normalizeClubCode(clubCode), userId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Club not found or inactive."
-                ));
-
-        if (!isAdvisor(club)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Only the club advisor can create a club room borrow request."
-            );
-        }
-
-        return club.getClubId();
-    }
-
     private Integer resolveSectionId(
             String requestType,
             Integer sectionId,
@@ -370,17 +362,6 @@ public class LecturerRoomBorrowRequestService {
         }
 
         return sectionId;
-    }
-
-    private String normalizeClubCode(String clubCode) {
-        if (clubCode == null || clubCode.isBlank()) {
-            throw new BadRequestException(
-                    "VALIDATION_FAILED",
-                    "clubCode is required for club activity requests."
-            );
-        }
-
-        return clubCode.trim().toUpperCase(Locale.ROOT);
     }
 
     private String normalizeSectionCode(String sectionCode) {
@@ -454,24 +435,6 @@ public class LecturerRoomBorrowRequestService {
         return response;
     }
 
-    private LecturerClubLookupResponse toClubLookupResponse(
-            LecturerRoomBorrowRequestRepository.ClubLookupProjection projection
-    ) {
-        LecturerClubLookupResponse response = new LecturerClubLookupResponse();
-        response.setClubId(projection.getClubId());
-        response.setClubCode(projection.getClubCode());
-        response.setClubName(projection.getClubName());
-        response.setAdvisor(isAdvisor(projection));
-        return response;
-    }
-
-    private boolean isAdvisor(
-            LecturerRoomBorrowRequestRepository.ClubLookupProjection projection
-    ) {
-        Number advisor = projection.getAdvisor();
-        return advisor != null && advisor.intValue() == 1;
-    }
-
     private LecturerSectionLookupResponse toSectionLookupResponse(
             LecturerRoomBorrowRequestRepository.SectionLookupProjection projection
     ) {
@@ -502,8 +465,6 @@ public class LecturerRoomBorrowRequestService {
         response.setSlotEnd(projection.getSlotEnd());
         response.setPeriodText(projection.getPeriodText());
         response.setRequestedBy(projection.getRequestedBy());
-        response.setClubId(projection.getClubId());
-        response.setClubName(projection.getClubName());
         response.setSectionId(projection.getSectionId());
         response.setSectionCode(projection.getSectionCode());
         response.setCourseName(projection.getCourseName());

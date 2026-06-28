@@ -28,8 +28,6 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
             ts_end.slot_no AS slotEnd,
             CONCAT(ts_start.slot_no, '-', ts_end.slot_no) AS periodText,
             rbr.requested_by AS requestedBy,
-            rbr.club_id AS clubId,
-            c.club_name AS clubName,
             rbr.expected_attendees AS expectedAttendees,
             rbr.preferred_classroom_id AS preferredClassroomId,
             CONCAT(b.building_code, '-', cr.room_number) AS preferredRoomCode,
@@ -48,7 +46,6 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
         FROM room_borrow_requests rbr
         JOIN time_slots ts_start ON ts_start.slot_id = rbr.slot_start_id
         JOIN time_slots ts_end ON ts_end.slot_id = rbr.slot_end_id
-        LEFT JOIN clubs c ON c.club_id = rbr.club_id
         LEFT JOIN classrooms cr ON cr.classroom_id = rbr.preferred_classroom_id
         LEFT JOIN buildings b ON b.building_id = cr.building_id
         LEFT JOIN classrooms approved_room ON approved_room.classroom_id = rbr.approved_classroom_id
@@ -93,31 +90,6 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
 
     @Query(value = """
         SELECT
-            c.club_id AS clubId,
-            c.club_code AS clubCode,
-            c.club_name AS clubName,
-            CASE WHEN EXISTS (
-                SELECT 1
-                FROM club_memberships cm
-                JOIN students s ON s.student_id = cm.student_id
-                WHERE cm.club_id = c.club_id
-                  AND s.user_id = :userId
-                  AND s.is_deleted = FALSE
-                  AND cm.is_active = TRUE
-                  AND cm.is_representative = TRUE
-            ) THEN 1 ELSE 0 END AS representative
-        FROM clubs c
-        WHERE UPPER(c.club_code) = :clubCode
-          AND c.status = 'ACTIVE'
-          AND c.is_deleted = FALSE
-        """, nativeQuery = true)
-    Optional<ClubLookupProjection> findClubLookupByCode(
-            @Param("clubCode") String clubCode,
-            @Param("userId") Integer userId
-    );
-
-    @Query(value = """
-        SELECT
             cr.classroom_id AS classroomId,
             CONCAT(b.building_code, '-', cr.room_number) AS roomCode,
             cr.capacity AS capacity,
@@ -130,10 +102,10 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
                 ELSE cr.room_type
             END AS roomTypeText,
             CASE cr.room_type
-                WHEN 'LAB' THEN 'May tinh, May lanh'
-                WHEN 'SEMINAR' THEN 'Micro, Tivi, May lanh'
-                WHEN 'LECTURE' THEN 'Micro, Tivi, May lanh'
-                WHEN 'AUDITORIUM' THEN 'Micro, May chieu, May lanh'
+                WHEN 'LAB' THEN 'May tinh, Máy lạnh'
+                WHEN 'SEMINAR' THEN 'Micro, Tivi, Máy lạnh'
+                WHEN 'LECTURE' THEN 'Micro, Tivi, Máy lạnh'
+                WHEN 'AUDITORIUM' THEN 'Micro, May chieu, Máy lạnh'
                 ELSE 'Khong co'
             END AS mainEquipment,
             'Kha dung theo du lieu hien tai' AS statusText
@@ -196,7 +168,6 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
             start_time,
             end_time,
             requested_by,
-            club_id,
             expected_attendees,
             preferred_building_id,
             preferred_classroom_id,
@@ -221,7 +192,6 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
             start_slot.start_time,
             end_slot.end_time,
             :requestedBy,
-            :clubId,
             :expectedAttendees,
             NULL,
             :preferredClassroomId,
@@ -246,7 +216,6 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
             @Param("slotStartId") Integer slotStartId,
             @Param("slotEndId") Integer slotEndId,
             @Param("requestedBy") Integer requestedBy,
-            @Param("clubId") Integer clubId,
             @Param("expectedAttendees") Integer expectedAttendees,
             @Param("preferredClassroomId") Integer preferredClassroomId,
             @Param("requestedRoomType") String requestedRoomType,
@@ -283,15 +252,7 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
         String getStatusText();
     }
 
-    interface ClubLookupProjection {
-        Integer getClubId();
 
-        String getClubCode();
-
-        String getClubName();
-
-        Number getRepresentative();
-    }
 
     interface BorrowRequestProjection {
         Integer getId();
@@ -320,9 +281,8 @@ public interface StudentRoomBorrowRequestRepository extends JpaRepository<Studen
 
         Integer getRequestedBy();
 
-        Integer getClubId();
 
-        String getClubName();
+        
 
         Integer getExpectedAttendees();
 

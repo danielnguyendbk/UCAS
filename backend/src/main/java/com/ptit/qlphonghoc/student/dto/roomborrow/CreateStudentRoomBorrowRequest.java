@@ -14,7 +14,6 @@ public class CreateStudentRoomBorrowRequest {
     @NotBlank(message = "requestType is required")
     private String requestType;
 
-    private String clubCode;
 
     @NotNull(message = "bookingDate is required")
     private LocalDate bookingDate;
@@ -57,13 +56,7 @@ public class CreateStudentRoomBorrowRequest {
         this.requestType = requestType;
     }
 
-    public String getClubCode() {
-        return clubCode;
-    }
 
-    public void setClubCode(String clubCode) {
-        this.clubCode = clubCode;
-    }
 
     public LocalDate getBookingDate() {
         return bookingDate;

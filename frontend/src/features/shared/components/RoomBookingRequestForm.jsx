@@ -1,19 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  AlertCircle,
-  CheckCircle,
-  MapPin,
-  PlusSquare,
+  BookOpen,
+  CalendarDays,
+  Clock3,
+  DoorOpen,
+  Loader2,
   Search,
   Send,
+  Users,
 } from "lucide-react";
+import { toast } from "sonner";
 import RoomSearchModal from "@/app/components/booking/RoomSearchModal";
 import { Button } from "@/app/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/app/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { Badge } from "@/app/components/ui/badge";
-import { Checkbox } from "@/app/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -21,921 +27,863 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/app/components/ui/select";
-import {
-  EQUIPMENT_OPTIONS,
-  PURPOSE_OPTIONS,
-  ROOM_TYPE_OPTIONS,
-} from "@/features/shared/constants/bookingFormConstants";
-import {
-  buildLecturerPayload,
-  buildStudentPayload,
-  getPurposeConfig,
-  getTimeSlotNo,
-  resolveSlotIds,
-} from "@/features/shared/utils/roomBookingAdapter";
+import { Textarea } from "@/app/components/ui/textarea";
 import { httpClient } from "@/services/httpClient";
 
-const getSemesterId = (semester) => semester?.id ?? semester?.ID;
+const PURPOSE_OPTIONS = [
+  { value: "MAKEUP_CLASS", label: "Học bù" },
+  { value: "CLUB_ACTIVITY", label: "Hoạt động CLB" },
+  { value: "SEMINAR", label: "Seminar" },
+  { value: "WORKSHOP", label: "Workshop" },
+  { value: "MEETING", label: "Họp chuyên môn" },
+  { value: "EVENT", label: "Sự kiện" },
+  { value: "OTHER", label: "Khác" },
+];
+
+const DEFAULT_FORM = {
+  semesterId: "",
+  requestTitle: "",
+  requestType: "MAKEUP_CLASS",
+  bookingDate: "",
+  slotStartId: "",
+  slotEndId: "",
+  expectedAttendees: "",
+  preferredBuildingId: "",
+  requestedRoomType: "",
+  classroomId: "",
+  roomCode: "",
+  sectionId: "",
+  sectionCode: "",
+  courseName: "",
+  purposeNote: "",
+};
+
+const unwrapList = (response) => {
+  const payload = response?.data?.data ?? response?.data ?? [];
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload.items)) return payload.items;
+  if (Array.isArray(payload.content)) return payload.content;
+  return [];
+};
+
+const unwrapData = (response) => response?.data?.data ?? response?.data ?? null;
+
+const getErrorMessage = (error, fallback = "Thao tác thất bại.") =>
+  error?.response?.data?.message ||
+  error?.response?.data?.error ||
+  error?.message ||
+  fallback;
+
+const getSemesterId = (semester) =>
+  semester?.semesterId ?? semester?.semester_id ?? semester?.id;
+
 const getSemesterName = (semester) =>
-  semester?.name ?? semester?.NAME ?? semester?.semesterName ?? semester?.SEMESTER_NAME;
+  semester?.semesterName ??
+  semester?.semester_name ??
+  semester?.name ??
+  semester?.semesterCode ??
+  semester?.semester_code ??
+  "—";
 
 const getSemesterStatus = (semester) =>
   String(
     semester?.status ??
-      semester?.STATUS ??
       semester?.semesterStatus ??
-      semester?.SEMESTER_STATUS ??
+      semester?.semester_status ??
       "",
-  )
-    .trim()
-    .toUpperCase();
+  ).toUpperCase();
 
-const getActiveSemesterId = (semesters) => {
-  const activeSemester = semesters.find((semester) => {
-    const status = getSemesterStatus(semester);
-    return (
-      status === "ACTIVE" ||
-      semester?.active === true ||
-      semester?.isActive === true
-    );
-  });
-  return String(getSemesterId(activeSemester || semesters[0]) || "");
+const getSlotId = (slot) =>
+  slot?.timeSlotId ??
+  slot?.time_slot_id ??
+  slot?.slotId ??
+  slot?.slot_id ??
+  slot?.id;
+
+const getSlotNo = (slot) =>
+  slot?.slotNo ?? slot?.slot_no ?? slot?.slotNumber ?? slot?.slot_number;
+
+const getSlotStartTime = (slot) => slot?.startTime ?? slot?.start_time ?? "";
+const getSlotEndTime = (slot) => slot?.endTime ?? slot?.end_time ?? "";
+
+const getSlotLabel = (slot) => {
+  const no = getSlotNo(slot);
+  const start = String(getSlotStartTime(slot)).slice(0, 5);
+  const end = String(getSlotEndTime(slot)).slice(0, 5);
+
+  return [`Tiết ${no ?? getSlotId(slot)}`, start && end ? `${start}-${end}` : ""]
+    .filter(Boolean)
+    .join(" · ");
 };
 
-const createEmptyForm = (role) => ({
-  semesterId: "",
-  title: "",
-  purpose: role === "lecturer" ? "MAKEUP_CLASS" : "GROUP_STUDY",
-  customPurpose: "",
-  buildingId: "",
-  roomType: "LECTURE",
-  customRoomType: "",
-  expectedAttendees: "",
-  bookingDate: "",
-  startTime: "",
-  endTime: "",
-  equipment: [],
-  customEquipment: "",
-  description: "",
-  preferredClassroomId: "",
-  preferredRoomCode: "",
-  clubCode: "",
-  clubName: "",
-  sectionCode: "",
-  sectionId: "",
-  sectionName: "",
-  sectionMaxCapacity: "",
-});
+const getSectionId = (section) =>
+  section?.sectionId ?? section?.section_id ?? section?.id;
+
+const getSectionCode = (section) =>
+  section?.sectionCode ??
+  section?.section_code ??
+  section?.classCode ??
+  section?.class_code ??
+  "";
+
+const getSectionCourseCode = (section) =>
+  section?.courseCode ?? section?.course_code ?? "";
+
+const getSectionCourseName = (section) =>
+  section?.courseName ?? section?.course_name ?? "";
+
+const getSectionStudentCount = (section) =>
+  section?.studentCount ??
+  section?.student_count ??
+  section?.enrolledCount ??
+  section?.enrolled_count ??
+  section?.maxCapacity ??
+  section?.max_capacity ??
+  "";
+
+const getSectionRequiredRoomType = (section) =>
+  section?.requiredRoomType ?? section?.required_room_type ?? "";
+
+const isMakeupType = (value) =>
+  ["MAKEUP_CLASS", "MAKEUP", "HOC_BU"].includes(
+    String(value || "").toUpperCase(),
+  );
+
+const isClubType = (value) =>
+  ["CLUB_ACTIVITY", "CLUB"].includes(String(value || "").toUpperCase());
+
+const pickDefaultSemesterId = (items) => {
+  const active = items.find((item) => getSemesterStatus(item) === "ACTIVE");
+  return String(getSemesterId(active || items[0]) || "");
+};
+
+const bySlotNo = (a, b) => Number(getSlotNo(a) ?? 0) - Number(getSlotNo(b) ?? 0);
+
+const FieldError = ({ children }) =>
+  children ? (
+    <p className="text-xs font-medium text-red-600">{children}</p>
+  ) : null;
+
+const SectionTitle = ({ icon: Icon, title, description }) => (
+  <div className="mb-4 flex items-start gap-3">
+    <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+      <Icon className="h-4 w-4" />
+    </span>
+    <div>
+      <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+      {description && (
+        <p className="mt-0.5 text-xs text-gray-500">{description}</p>
+      )}
+    </div>
+  </div>
+);
 
 const RoomBookingRequestForm = ({
-  role,
-  title: pageTitle,
-  subtitle,
+  role = "lecturer",
+  title = "Yêu cầu đặt phòng",
+  subtitle = "",
   submitEndpoint,
-  clubLookupEndpoint,
   sectionLookupEndpoint,
-  accent = "green",
+  accent = "blue",
   guidelines = [],
 }) => {
-  const [form, setForm] = useState(() => createEmptyForm(role));
+  const [form, setForm] = useState(DEFAULT_FORM);
   const [semesters, setSemesters] = useState([]);
   const [timeSlots, setTimeSlots] = useState([]);
-  const [buildings, setBuildings] = useState([]);
-  const [formErrors, setFormErrors] = useState({});
+  const [sections, setSections] = useState([]);
+  const [selectedSection, setSelectedSection] = useState(null);
+  const [loadingSemesters, setLoadingSemesters] = useState(false);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [loadingSections, setLoadingSections] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [submittedRequest, setSubmittedRequest] = useState(null);
+  const [errors, setErrors] = useState({});
   const [isRoomSearchOpen, setIsRoomSearchOpen] = useState(false);
-  const [clubLookup, setClubLookup] = useState({
-    loading: false,
-    data: null,
-    error: "",
-  });
-  const [sectionLookup, setSectionLookup] = useState({
-    loading: false,
-    data: null,
-    error: "",
-  });
 
-  const purposeOptions = PURPOSE_OPTIONS[role] || [];
-  const purposeConfig = getPurposeConfig(role, form.purpose);
-  const requestType = purposeConfig?.requestType || "OTHER";
-  const isClubRequest = requestType === "CLUB_ACTIVITY";
-  const isMakeupClass = role === "lecturer" && requestType === "MAKEUP_CLASS";
+  const isMakeupClass = isMakeupType(form.requestType);
+  const isClubRequest = isClubType(form.requestType);
 
-  const selectedSemester = useMemo(
+  const accentClasses = {
+    blue: "bg-blue-600 hover:bg-blue-700 focus-visible:ring-blue-600",
+    orange: "bg-orange-600 hover:bg-orange-700 focus-visible:ring-orange-600",
+    emerald: "bg-emerald-600 hover:bg-emerald-700 focus-visible:ring-emerald-600",
+  };
+
+  const orderedSlots = useMemo(() => [...timeSlots].sort(bySlotNo), [timeSlots]);
+
+  const startSlot = useMemo(
     () =>
-      semesters.find(
-        (semester) => String(getSemesterId(semester)) === form.semesterId,
+      orderedSlots.find(
+        (slot) => String(getSlotId(slot)) === String(form.slotStartId),
       ),
-    [semesters, form.semesterId],
+    [orderedSlots, form.slotStartId],
   );
 
-  const slotPreview = useMemo(
-    () => resolveSlotIds(timeSlots, form.startTime, form.endTime),
-    [timeSlots, form.startTime, form.endTime],
+  const endSlot = useMemo(
+    () =>
+      orderedSlots.find(
+        (slot) => String(getSlotId(slot)) === String(form.slotEndId),
+      ),
+    [orderedSlots, form.slotEndId],
   );
 
-  const accentButton =
-    accent === "blue" ? "bg-blue-600 hover:bg-blue-700" : "bg-green-600 hover:bg-green-700";
-  const accentText = accent === "blue" ? "text-blue-600" : "text-green-600";
+  const slotRangeValid =
+    startSlot &&
+    endSlot &&
+    Number(getSlotNo(endSlot) ?? 0) >= Number(getSlotNo(startSlot) ?? 0);
 
-  useEffect(() => {
-    const fetchInitialData = async () => {
-      try {
-        const [semesterRes, slotRes, buildingRes] = await Promise.all([
-          httpClient.get("/api/categories/semesters"),
-          httpClient.get("/api/categories/time-slots"),
-          httpClient.get("/api/categories/buildings"),
-        ]);
-        const list = semesterRes.data?.data || [];
-        const slots = [...(slotRes.data?.data || [])].sort(
-          (a, b) => getTimeSlotNo(a) - getTimeSlotNo(b),
-        );
-        setSemesters(list);
-        setTimeSlots(slots);
-        setBuildings(buildingRes.data?.data || []);
-        setForm((prev) => ({
-          ...prev,
-          semesterId: getActiveSemesterId(list) || prev.semesterId,
-        }));
-      } catch (error) {
-        console.error("Lỗi tải dữ liệu ban đầu:", error);
-      }
-    };
-    fetchInitialData();
-  }, []);
-
-  useEffect(() => {
-    if (!isClubRequest || !clubLookupEndpoint) {
-      setClubLookup({ loading: false, data: null, error: "" });
-      setForm((prev) => ({ ...prev, clubCode: "", clubName: "" }));
-      return;
-    }
-
-    const clubCode = form.clubCode.trim().toUpperCase();
-    if (!clubCode) {
-      setClubLookup({ loading: false, data: null, error: "" });
-      setForm((prev) => ({ ...prev, clubName: "" }));
-      return;
-    }
-
-    const timeout = window.setTimeout(async () => {
-      setClubLookup({ loading: true, data: null, error: "" });
-      try {
-        const res = await httpClient.get(
-          `${clubLookupEndpoint}/${encodeURIComponent(clubCode)}`,
-        );
-        const club = res.data;
-        const valid =
-          role === "lecturer" ? Boolean(club.advisor) : Boolean(club.representative);
-        setClubLookup({
-          loading: false,
-          data: club,
-          error: valid
-            ? ""
-            : role === "lecturer"
-              ? "Bạn không phải cố vấn của CLB này."
-              : "Bạn không phải đại diện đang hoạt động của CLB này.",
-        });
-        setForm((prev) => ({ ...prev, clubName: club.clubName || "" }));
-      } catch (error) {
-        setClubLookup({
-          loading: false,
-          data: null,
-          error: error.response?.data?.message || "Không tìm thấy CLB.",
-        });
-        setForm((prev) => ({ ...prev, clubName: "" }));
-      }
-    }, 450);
-
-    return () => window.clearTimeout(timeout);
-  }, [form.clubCode, isClubRequest, clubLookupEndpoint, role]);
-
-  useEffect(() => {
-    if (!isMakeupClass || !sectionLookupEndpoint) {
-      setSectionLookup({ loading: false, data: null, error: "" });
-      setForm((prev) => ({
-        ...prev,
-        sectionCode: "",
-        sectionId: "",
-        sectionName: "",
-        sectionMaxCapacity: "",
-      }));
-      return;
-    }
-
-    const sectionCode = form.sectionCode.trim().toUpperCase();
-    if (!sectionCode || !form.semesterId) {
-      setSectionLookup({ loading: false, data: null, error: "" });
-      return;
-    }
-
-    const timeout = window.setTimeout(async () => {
-      setSectionLookup({ loading: true, data: null, error: "" });
-      try {
-        const res = await httpClient.get(sectionLookupEndpoint, {
-          params: { semesterId: form.semesterId, sectionCode },
-        });
-        const section = res.data;
-        const maxCapacity = section.maxCapacity ? String(section.maxCapacity) : "";
-        setSectionLookup({ loading: false, data: section, error: "" });
-        setForm((prev) => ({
-          ...prev,
-          sectionId: section.sectionId ? String(section.sectionId) : "",
-          sectionName: section.courseName || "",
-          sectionMaxCapacity: maxCapacity,
-          expectedAttendees: maxCapacity,
-          preferredClassroomId: "",
-          preferredRoomCode: "",
-        }));
-      } catch (error) {
-        setSectionLookup({
-          loading: false,
-          data: null,
-          error:
-            error.response?.data?.message ||
-            "Không tìm thấy lớp học phần của giảng viên trong học kỳ này.",
-        });
-        setForm((prev) => ({
-          ...prev,
-          sectionId: "",
-          sectionName: "",
-          sectionMaxCapacity: "",
-          expectedAttendees: "",
-          preferredClassroomId: "",
-          preferredRoomCode: "",
-        }));
-      }
-    }, 450);
-
-    return () => window.clearTimeout(timeout);
-  }, [form.sectionCode, form.semesterId, isMakeupClass, sectionLookupEndpoint]);
-
-  const canSearchRooms =
-    form.semesterId &&
-    form.bookingDate &&
-    slotPreview.slotStartId &&
-    slotPreview.slotEndId &&
-    Number(form.expectedAttendees) > 0 &&
-    form.buildingId &&
-    form.roomType;
+  const bookingTimeText =
+    startSlot && endSlot && slotRangeValid
+      ? `${String(getSlotStartTime(startSlot)).slice(0, 5)} – ${String(
+          getSlotEndTime(endSlot),
+        ).slice(0, 5)}`
+      : "Chưa chọn đủ tiết";
 
   const updateForm = (patch) => {
     setForm((prev) => ({ ...prev, ...patch }));
-    setSubmittedRequest(null);
+    setErrors((prev) => ({
+      ...prev,
+      ...Object.fromEntries(Object.keys(patch).map((key) => [key, undefined])),
+    }));
   };
 
-  const resetSelectedRoom = (patch) => {
+  const resetRoom = (patch = {}) => {
     updateForm({
       ...patch,
-      preferredClassroomId: "",
-      preferredRoomCode: "",
+      classroomId: "",
+      roomCode: "",
     });
   };
 
-  const handlePurposeChange = (purpose) => {
-    updateForm({
-      purpose,
-      customPurpose: "",
-      clubCode: "",
-      clubName: "",
-      sectionCode: "",
+  useEffect(() => {
+    const loadSemesters = async () => {
+      setLoadingSemesters(true);
+
+      try {
+        const response = await httpClient.get("/api/categories/semesters");
+        const items = unwrapList(response);
+        setSemesters(items);
+
+        const defaultSemesterId = pickDefaultSemesterId(items);
+        if (defaultSemesterId) {
+          setForm((prev) => ({ ...prev, semesterId: defaultSemesterId }));
+        }
+      } catch (error) {
+        toast.error(getErrorMessage(error, "Không tải được danh sách học kỳ."));
+      } finally {
+        setLoadingSemesters(false);
+      }
+    };
+
+    const loadTimeSlots = async () => {
+      setLoadingSlots(true);
+
+      try {
+        const response = await httpClient.get("/api/categories/time-slots");
+        setTimeSlots(unwrapList(response));
+      } catch (error) {
+        toast.error(getErrorMessage(error, "Không tải được danh sách tiết học."));
+      } finally {
+        setLoadingSlots(false);
+      }
+    };
+
+    loadSemesters();
+    loadTimeSlots();
+  }, []);
+
+  useEffect(() => {
+    setSelectedSection(null);
+
+    if (!sectionLookupEndpoint || !form.semesterId || !isMakeupClass) {
+      setSections([]);
+      return;
+    }
+
+    const loadSections = async () => {
+      setLoadingSections(true);
+
+      try {
+        const response = await httpClient.get(sectionLookupEndpoint, {
+          params: { semesterId: form.semesterId },
+        });
+        setSections(unwrapList(response));
+      } catch (error) {
+        setSections([]);
+        toast.error(
+          getErrorMessage(error, "Không tải được học phần được phân công."),
+        );
+      } finally {
+        setLoadingSections(false);
+      }
+    };
+
+    loadSections();
+  }, [sectionLookupEndpoint, form.semesterId, isMakeupClass]);
+
+  const handleRequestTypeChange = (value) => {
+    setSelectedSection(null);
+
+    resetRoom({
+      requestType: value,
       sectionId: "",
-      sectionName: "",
-      sectionMaxCapacity: "",
+      sectionCode: "",
+      courseName: "",
       expectedAttendees: "",
-      preferredClassroomId: "",
-      preferredRoomCode: "",
+      requestedRoomType: "",
     });
   };
 
-  const toggleEquipment = (value, checked) => {
-    setForm((prev) => ({
-      ...prev,
-      equipment: checked
-        ? [...prev.equipment, value]
-        : prev.equipment.filter((item) => item !== value),
-      customEquipment: value === "OTHER" && !checked ? "" : prev.customEquipment,
-    }));
-    setSubmittedRequest(null);
+  const handleSectionChange = (value) => {
+    const section = sections.find((item) => String(getSectionId(item)) === value);
+    setSelectedSection(section || null);
+
+    resetRoom({
+      sectionId: value,
+      sectionCode: section ? getSectionCode(section) : "",
+      courseName: section ? getSectionCourseName(section) : "",
+      expectedAttendees: section ? String(getSectionStudentCount(section) || "") : "",
+      requestedRoomType: section ? getSectionRequiredRoomType(section) || "" : "",
+      requestTitle: section
+        ? `Học bù ${getSectionCourseCode(section) || getSectionCourseName(section)} - ${getSectionCode(section)}`
+        : form.requestTitle,
+    });
   };
 
   const handleRoomSelect = (classroomId, roomCode) => {
     setForm((prev) => ({
       ...prev,
-      preferredClassroomId: String(classroomId),
-      preferredRoomCode: roomCode,
+      classroomId: String(classroomId),
+      roomCode,
     }));
     setIsRoomSearchOpen(false);
   };
 
-  const validateForm = () => {
-    const errs = {};
-    if (!form.title.trim()) errs.title = "Vui lòng nhập tiêu đề đặt phòng.";
-    if (!form.purpose) errs.purpose = "Vui lòng chọn mục đích.";
-    if (form.purpose === "OTHER" && !form.customPurpose.trim()) {
-      errs.customPurpose = "Vui lòng nhập mục đích cụ thể.";
+  const validate = () => {
+    const nextErrors = {};
+
+    if (!submitEndpoint) nextErrors.submitEndpoint = "Thiếu endpoint gửi yêu cầu.";
+    if (!form.semesterId) nextErrors.semesterId = "Vui lòng chọn học kỳ.";
+    if (!form.requestTitle.trim()) {
+      nextErrors.requestTitle = "Vui lòng nhập tiêu đề đặt phòng.";
     }
-    if (!form.buildingId) errs.buildingId = "Vui lòng chọn tòa nhà.";
-    if (!form.roomType) errs.roomType = "Vui lòng chọn loại phòng.";
-    if (form.roomType === "OTHER" && !form.customRoomType.trim()) {
-      errs.customRoomType = "Vui lòng nhập loại phòng cụ thể.";
+    if (!form.requestType) nextErrors.requestType = "Vui lòng chọn mục đích.";
+    if (!form.bookingDate) nextErrors.bookingDate = "Vui lòng chọn ngày sử dụng.";
+    if (!form.slotStartId) nextErrors.slotStartId = "Vui lòng chọn tiết bắt đầu.";
+    if (!form.slotEndId) nextErrors.slotEndId = "Vui lòng chọn tiết kết thúc.";
+    if (form.slotStartId && form.slotEndId && !slotRangeValid) {
+      nextErrors.slotEndId = "Khoảng tiết học không hợp lệ.";
     }
     if (!form.expectedAttendees || Number(form.expectedAttendees) <= 0) {
-      errs.expectedAttendees = "Số người dự kiến phải lớn hơn 0.";
+      nextErrors.expectedAttendees = "Số người dự kiến phải lớn hơn 0.";
     }
-    if (!form.bookingDate) errs.bookingDate = "Vui lòng chọn ngày.";
-    if (!form.startTime) errs.startTime = "Vui lòng chọn giờ bắt đầu.";
-    if (!form.endTime) errs.endTime = "Vui lòng chọn giờ kết thúc.";
-    if (form.startTime && form.endTime && form.endTime <= form.startTime) {
-      errs.endTime = "Giờ kết thúc phải sau giờ bắt đầu.";
+    if (isMakeupClass && !form.sectionId) {
+      nextErrors.sectionId = "Vui lòng chọn học phần được phân công.";
     }
-    if (form.startTime && form.endTime && !slotPreview.slotStartId) {
-      errs.startTime = "Không tìm thấy tiết học tương ứng với giờ bắt đầu.";
+    if (!form.classroomId) {
+      nextErrors.classroomId = "Vui lòng chọn phòng mong muốn.";
     }
-    if (form.startTime && form.endTime && !slotPreview.slotEndId) {
-      errs.endTime = "Không tìm thấy tiết học tương ứng với giờ kết thúc.";
+    if (!form.purposeNote.trim()) {
+      nextErrors.purposeNote = isClubRequest
+        ? "Vui lòng nhập tên CLB hoặc nhu cầu sử dụng."
+        : "Vui lòng nhập thiết bị hoặc mô tả nhu cầu.";
+    } else if (form.purposeNote.trim().length < 10) {
+      nextErrors.purposeNote = "Mô tả nhu cầu phải có ít nhất 10 ký tự.";
     }
-    if (
-      slotPreview.startSlot &&
-      slotPreview.endSlot &&
-      getTimeSlotNo(slotPreview.endSlot) < getTimeSlotNo(slotPreview.startSlot)
-    ) {
-      errs.endTime = "Khung giờ kết thúc phải sau khung giờ bắt đầu.";
-    }
-    if (!form.preferredClassroomId) {
-      errs.preferredClassroomId = "Vui lòng chọn phòng.";
-    }
-    if (!form.description.trim() || form.description.trim().length < 10) {
-      errs.description = "Mô tả/lý do phải có ít nhất 10 ký tự.";
-    }
-    if (form.equipment.includes("OTHER") && !form.customEquipment.trim()) {
-      errs.customEquipment = "Vui lòng mô tả thiết bị khác.";
-    }
-    if (isClubRequest) {
-      if (!form.clubCode.trim()) errs.clubCode = "Vui lòng nhập mã CLB.";
-      else if (clubLookup.error) errs.clubCode = clubLookup.error;
-      else if (role === "lecturer" && !clubLookup.data?.advisor) {
-        errs.clubCode = "Bạn cần là cố vấn CLB để gửi yêu cầu này.";
-      } else if (role === "student" && !clubLookup.data?.representative) {
-        errs.clubCode = "Bạn cần là đại diện CLB để gửi yêu cầu này.";
-      }
-    }
-    if (isMakeupClass) {
-      if (!form.sectionCode.trim()) errs.sectionCode = "Vui lòng nhập Mã lớp học phần.";
-      else if (sectionLookup.error) errs.sectionCode = sectionLookup.error;
-      else if (!form.sectionId) {
-        errs.sectionCode = "Vui lòng chờ hệ thống xác nhận lớp học phần.";
-      }
-    }
-    return errs;
+
+    return nextErrors;
   };
+
+  const getRoomSearchMissingReasons = () => {
+    const missing = [];
+
+    if (!form.semesterId) missing.push("chọn học kỳ");
+    if (isMakeupClass && !form.sectionId) missing.push("chọn học phần");
+    if (!form.bookingDate) missing.push("chọn ngày sử dụng");
+    if (!form.slotStartId) missing.push("chọn tiết bắt đầu");
+    if (!form.slotEndId) missing.push("chọn tiết kết thúc");
+    if (form.slotStartId && form.slotEndId && !slotRangeValid) {
+      missing.push("chọn khoảng tiết hợp lệ");
+    }
+    if (!form.expectedAttendees || Number(form.expectedAttendees) <= 0) {
+      missing.push("nhập số người dự kiến");
+    }
+
+    return missing;
+  };
+
+  const handleOpenRoomSearch = () => {
+    const missing = getRoomSearchMissingReasons();
+
+    if (missing.length > 0) {
+      toast.error(`Vui lòng ${missing.join(", ")} trước khi tìm phòng.`);
+      return;
+    }
+
+    setIsRoomSearchOpen(true);
+  };
+
+  const buildPayload = () => ({
+    requestTitle: form.requestTitle.trim(),
+    requestType: form.requestType,
+    bookingScope: isMakeupClass ? "CLASS_SECTION" : "PERSONAL",
+    semesterId: Number(form.semesterId),
+    bookingDate: form.bookingDate,
+    slotStartId: Number(form.slotStartId),
+    slotEndId: Number(form.slotEndId),
+    expectedAttendees: Number(form.expectedAttendees),
+    preferredBuildingId: form.preferredBuildingId
+      ? Number(form.preferredBuildingId)
+      : null,
+    preferredClassroomId: form.classroomId ? Number(form.classroomId) : null,
+    requestedRoomType: form.requestedRoomType || null,
+    sectionId: form.sectionId ? Number(form.sectionId) : null,
+    sectionCode: form.sectionCode || null,
+    purposeNote: form.purposeNote.trim(),
+    role,
+  });
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    const errs = validateForm();
-    setFormErrors(errs);
-    if (Object.keys(errs).length > 0) return;
+
+    const nextErrors = validate();
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
 
     setSubmitting(true);
-    try {
-      const payload =
-        role === "lecturer"
-          ? buildLecturerPayload(form, timeSlots)
-          : buildStudentPayload(form, timeSlots);
 
-      const res = await httpClient.post(submitEndpoint, payload);
-      setSubmittedRequest(res.data?.data ?? res.data);
+    try {
+      const response = await httpClient.post(submitEndpoint, buildPayload());
+      const saved = unwrapData(response);
+
+      toast.success(
+        saved?.message || "Đã gửi yêu cầu đặt phòng, vui lòng chờ giáo vụ duyệt.",
+      );
+
       setForm((prev) => ({
-        ...createEmptyForm(role),
+        ...DEFAULT_FORM,
         semesterId: prev.semesterId,
       }));
-      setFormErrors({});
+      setSelectedSection(null);
+      setErrors({});
     } catch (error) {
-      setFormErrors({
-        submit:
-          error.response?.data?.message ||
-          "Có lỗi xảy ra khi gửi yêu cầu đặt phòng.",
-      });
+      toast.error(getErrorMessage(error, "Không gửi được yêu cầu đặt phòng."));
     } finally {
       setSubmitting(false);
     }
   };
 
-  const resetForm = () => {
-    setForm((prev) => ({
-      ...createEmptyForm(role),
-      semesterId: prev.semesterId,
-    }));
-    setFormErrors({});
-    setSubmittedRequest(null);
-  };
-
   return (
-    <div className="p-5 md:p-6 space-y-5">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">{pageTitle}</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{subtitle}</p>
-        </div>
-        <Badge variant="outline" className="bg-gray-50 px-3 py-1 w-fit">
-          {getSemesterName(selectedSemester) || "Chưa chọn học kỳ"}
-        </Badge>
-      </div>
+    <div className="mx-auto grid w-full max-w-7xl gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <Card className="overflow-hidden border border-gray-200 shadow-sm">
+        <CardHeader className="border-b border-gray-100 bg-gradient-to-r from-blue-50 via-white to-white px-6 py-5">
+          <CardTitle className="flex items-center gap-3 text-lg font-semibold text-gray-950">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm">
+              <BookOpen className="h-5 w-5" />
+            </span>
+            <span>{title}</span>
+          </CardTitle>
+          {subtitle && <p className="mt-2 max-w-3xl text-sm text-gray-600">{subtitle}</p>}
+        </CardHeader>
 
-      {submittedRequest && (
-        <Card className="border-green-200 bg-green-50 shadow-sm rounded-xl">
-          <CardContent className="p-5 flex items-start gap-3">
-            <CheckCircle className="w-6 h-6 text-green-600 mt-0.5" />
-            <div>
-              <h3 className="text-sm font-bold text-green-900">
-                Gửi yêu cầu thành công
-              </h3>
-              <p className="text-sm text-green-700 mt-1">
-                Mã yêu cầu #{submittedRequest.id} — trạng thái{" "}
-                {submittedRequest.status}. Bộ phận quản lý sẽ phê duyệt và
-                thông báo kết quả sau.
+        <CardContent className="p-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {errors.submitEndpoint && (
+              <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {errors.submitEndpoint}
               </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+            )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2 shadow-sm border-gray-200 rounded-xl">
-          <CardHeader className="border-b border-gray-50 pb-4">
-            <CardTitle className="text-base font-semibold text-gray-800 flex items-center gap-2">
-              <PlusSquare className={`w-5 h-5 ${accentText}`} />
-              Phiếu đăng ký đặt phòng
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-6">
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {formErrors.submit && (
-                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                  {formErrors.submit}
+            <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+              <SectionTitle
+                icon={BookOpen}
+                title="Thông tin yêu cầu"
+                description="Chọn mục đích, học kỳ và học phần liên quan."
+              />
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="space-y-2 md:col-span-2">
+                  <Label>
+                    Tiêu đề đặt phòng <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    value={form.requestTitle}
+                    onChange={(event) =>
+                      updateForm({ requestTitle: event.target.value })
+                    }
+                    placeholder="VD: Học bù môn Cơ sở dữ liệu"
+                    className="h-11 rounded-xl bg-gray-50"
+                  />
+                  <FieldError>{errors.requestTitle}</FieldError>
                 </div>
-              )}
 
-              <div>
-                <h3 className="text-sm font-semibold text-gray-800 mb-3">
-                  Thông tin chung
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div className="space-y-2 md:col-span-2">
-                    <Label>
-                      Tiêu đề đặt phòng <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      value={form.title}
-                      onChange={(e) => updateForm({ title: e.target.value })}
-                      placeholder="VD: Họp nhóm đồ án, Seminar khoa..."
-                      className={`h-11 ${formErrors.title ? "border-red-400" : ""}`}
-                    />
-                    {formErrors.title && (
-                      <p className="text-[11px] text-red-500">{formErrors.title}</p>
-                    )}
-                  </div>
+                <div className="space-y-2">
+                  <Label>
+                    Mục đích <span className="text-red-500">*</span>
+                  </Label>
+                  <Select
+                    value={form.requestType}
+                    onValueChange={handleRequestTypeChange}
+                  >
+                    <SelectTrigger className="h-11 rounded-xl bg-gray-50">
+                      <SelectValue placeholder="Chọn mục đích" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PURPOSE_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FieldError>{errors.requestType}</FieldError>
+                </div>
 
-                  <div className="space-y-2">
-                    <Label>
-                      Mục đích <span className="text-red-500">*</span>
-                    </Label>
-                    <Select value={form.purpose} onValueChange={handlePurposeChange}>
-                      <SelectTrigger className={`h-11 ${formErrors.purpose ? "border-red-400" : ""}`}>
-                        <SelectValue placeholder="Chọn mục đích" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {purposeOptions.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
+                <div className="space-y-2">
+                  <Label>
+                    Học kỳ <span className="text-red-500">*</span>
+                  </Label>
+                  <Select
+                    value={form.semesterId}
+                    onValueChange={(value) => {
+                      setSelectedSection(null);
+                      resetRoom({
+                        semesterId: value,
+                        sectionId: "",
+                        sectionCode: "",
+                        courseName: "",
+                      });
+                    }}
+                    disabled={loadingSemesters}
+                  >
+                    <SelectTrigger className="h-11 rounded-xl bg-gray-50">
+                      <SelectValue
+                        placeholder={
+                          loadingSemesters ? "Đang tải học kỳ..." : "Chọn học kỳ"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {semesters.map((semester) => {
+                        const id = String(getSemesterId(semester));
+                        return (
+                          <SelectItem key={id} value={id}>
+                            {getSemesterName(semester)}
                           </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {formErrors.purpose && (
-                      <p className="text-[11px] text-red-500">{formErrors.purpose}</p>
-                    )}
-                  </div>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  <FieldError>{errors.semesterId}</FieldError>
+                </div>
 
-                  {form.purpose === "OTHER" && (
+                {isMakeupClass && (
+                  <>
                     <div className="space-y-2">
                       <Label>
-                        Mục đích cụ thể <span className="text-red-500">*</span>
+                        Học phần được phân công{" "}
+                        <span className="text-red-500">*</span>
                       </Label>
-                      <Input
-                        value={form.customPurpose}
-                        onChange={(e) =>
-                          updateForm({ customPurpose: e.target.value })
-                        }
-                        className={`h-11 ${formErrors.customPurpose ? "border-red-400" : ""}`}
-                      />
-                      {formErrors.customPurpose && (
-                        <p className="text-[11px] text-red-500">
-                          {formErrors.customPurpose}
+                      <Select
+                        value={form.sectionId}
+                        onValueChange={handleSectionChange}
+                        disabled={loadingSections || !form.semesterId}
+                      >
+                        <SelectTrigger className="h-11 rounded-xl bg-gray-50">
+                          <SelectValue
+                            placeholder={
+                              loadingSections
+                                ? "Đang tải học phần..."
+                                : "Chọn học phần"
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {sections.length === 0 ? (
+                            <SelectItem value="__EMPTY_SECTIONS__" disabled>
+                              Không có học phần được phân công trong học kỳ này
+                            </SelectItem>
+                          ) : (
+                            sections.map((section) => {
+                              const id = String(getSectionId(section));
+                              const code = getSectionCode(section);
+                              const courseCode = getSectionCourseCode(section);
+                              const courseName = getSectionCourseName(section);
+
+                              return (
+                                <SelectItem key={id} value={id}>
+                                  {[code, courseCode, courseName]
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                                </SelectItem>
+                              );
+                            })
+                          )}
+                        </SelectContent>
+                      </Select>
+                      {!loadingSections && form.semesterId && sections.length === 0 && (
+                        <p className="text-xs text-gray-500">
+                          Không có học phần được phân công trong học kỳ này.
                         </p>
                       )}
+                      <FieldError>{errors.sectionId}</FieldError>
                     </div>
-                  )}
 
-                  {isClubRequest && (
-                    <>
-                      <div className="space-y-2">
-                        <Label>
-                          Mã CLB <span className="text-red-500">*</span>
-                        </Label>
-                        <Input
-                          value={form.clubCode}
-                          onChange={(e) =>
-                            updateForm({
-                              clubCode: e.target.value.toUpperCase(),
-                              clubName: "",
-                            })
-                          }
-                          placeholder="VD: ITC"
-                          className={`h-11 uppercase ${formErrors.clubCode ? "border-red-400" : ""}`}
-                        />
-                        {(formErrors.clubCode || clubLookup.error) && (
-                          <p className="text-[11px] text-red-500">
-                            {formErrors.clubCode || clubLookup.error}
-                          </p>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Tên CLB</Label>
-                        <Input
-                          readOnly
-                          value={
-                            clubLookup.loading ? "Đang tìm CLB..." : form.clubName
-                          }
-                          className="h-11 bg-gray-50 font-semibold"
-                        />
-                      </div>
-                    </>
-                  )}
+                    <div className="space-y-2">
+                      <Label>Tên môn học</Label>
+                      <Input
+                        readOnly
+                        value={form.courseName}
+                        placeholder="Tên môn học"
+                        className="h-11 rounded-xl bg-gray-50 font-medium text-gray-800"
+                      />
+                    </div>
+                  </>
+                )}
 
-                  {isMakeupClass && (
-                    <>
-                      <div className="space-y-2">
-                        <Label>
-                          Mã lớp học phần <span className="text-red-500">*</span>
-                        </Label>
-                        <Input
-                          value={form.sectionCode}
-                          onChange={(e) =>
-                            resetSelectedRoom({
-                              sectionCode: e.target.value.toUpperCase(),
-                              sectionId: "",
-                              sectionName: "",
-                              sectionMaxCapacity: "",
-                              expectedAttendees: "",
-                            })
-                          }
-                          placeholder="VD: CS101.01"
-                          className={`h-11 uppercase ${formErrors.sectionCode ? "border-red-400" : ""}`}
-                        />
-                        {(formErrors.sectionCode || sectionLookup.error) && (
-                          <p className="text-[11px] text-red-500">
-                            {formErrors.sectionCode || sectionLookup.error}
-                          </p>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Lớp học phần</Label>
-                        <Input
-                          readOnly
-                          value={
-                            sectionLookup.loading
-                              ? "Đang tìm lớp..."
-                              : form.sectionName
-                          }
-                          className="h-11 bg-gray-50 font-semibold"
-                        />
-                      </div>
-                    </>
-                  )}
-                </div>
+                {selectedSection && (
+                  <div className="md:col-span-2 rounded-2xl border border-blue-100 bg-blue-50/60 px-4 py-3">
+                    <div className="grid gap-3 text-sm text-blue-950 md:grid-cols-3">
+                      <p>
+                        <span className="font-semibold">Lớp:</span>{" "}
+                        {getSectionCode(selectedSection)}
+                      </p>
+                      <p>
+                        <span className="font-semibold">Môn:</span>{" "}
+                        {getSectionCourseName(selectedSection)}
+                      </p>
+                      <p>
+                        <span className="font-semibold">Sĩ số:</span>{" "}
+                        {getSectionStudentCount(selectedSection) || "—"}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
+            </section>
 
-              <div>
-                <h3 className="text-sm font-semibold text-gray-800 mb-3">
-                  Phòng & thời gian
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div className="space-y-2">
-                    <Label>
-                      Tòa nhà <span className="text-red-500">*</span>
-                    </Label>
-                    <Select
-                      value={form.buildingId}
-                      onValueChange={(value) =>
-                        resetSelectedRoom({ buildingId: value })
-                      }
-                    >
-                      <SelectTrigger className={`h-11 ${formErrors.buildingId ? "border-red-400" : ""}`}>
-                        <SelectValue placeholder="Chọn tòa nhà" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {buildings.map((building) => (
-                          <SelectItem key={building.id} value={String(building.id)}>
-                            {building.name || building.buildingName || building.code}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {formErrors.buildingId && (
-                      <p className="text-[11px] text-red-500">{formErrors.buildingId}</p>
-                    )}
-                  </div>
+            <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+              <SectionTitle
+                icon={Clock3}
+                title="Thời gian và quy mô"
+                description="Chọn ngày, tiết học và số người dự kiến."
+              />
 
-                  <div className="space-y-2">
-                    <Label>
-                      Loại phòng <span className="text-red-500">*</span>
-                    </Label>
-                    <Select
-                      value={form.roomType}
-                      onValueChange={(value) =>
-                        resetSelectedRoom({
-                          roomType: value,
-                          customRoomType: value === "OTHER" ? form.customRoomType : "",
-                        })
-                      }
-                    >
-                      <SelectTrigger className={`h-11 ${formErrors.roomType ? "border-red-400" : ""}`}>
-                        <SelectValue placeholder="Chọn loại phòng" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ROOM_TYPE_OPTIONS.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {formErrors.roomType && (
-                      <p className="text-[11px] text-red-500">{formErrors.roomType}</p>
-                    )}
-                  </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>
+                    Ngày sử dụng <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    type="date"
+                    value={form.bookingDate}
+                    onChange={(event) =>
+                      resetRoom({ bookingDate: event.target.value })
+                    }
+                    className="h-11 rounded-xl bg-gray-50"
+                  />
+                  <FieldError>{errors.bookingDate}</FieldError>
+                </div>
 
-                  {form.roomType === "OTHER" && (
-                    <div className="space-y-2 md:col-span-2">
-                      <Label>
-                        Loại phòng cụ thể <span className="text-red-500">*</span>
-                      </Label>
-                      <Input
-                        value={form.customRoomType}
-                        onChange={(e) =>
-                          updateForm({ customRoomType: e.target.value })
-                        }
-                        className={`h-11 ${formErrors.customRoomType ? "border-red-400" : ""}`}
-                      />
-                      {formErrors.customRoomType && (
-                        <p className="text-[11px] text-red-500">
-                          {formErrors.customRoomType}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="space-y-2">
-                    <Label>
-                      Số người dự kiến <span className="text-red-500">*</span>
-                    </Label>
+                <div className="space-y-2">
+                  <Label>
+                    Số người dự kiến <span className="text-red-500">*</span>
+                  </Label>
+                  <div className="relative">
+                    <Users className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                     <Input
                       type="number"
                       min="1"
-                      readOnly={isMakeupClass}
                       value={form.expectedAttendees}
-                      onChange={(e) =>
-                        resetSelectedRoom({ expectedAttendees: e.target.value })
+                      onChange={(event) =>
+                        resetRoom({ expectedAttendees: event.target.value })
                       }
-                      className={`h-11 ${formErrors.expectedAttendees ? "border-red-400" : ""} ${
-                        isMakeupClass ? "bg-gray-50 font-semibold" : ""
-                      }`}
+                      placeholder="VD: 60"
+                      className="h-11 rounded-xl bg-gray-50 pl-9"
                     />
-                    {formErrors.expectedAttendees && (
-                      <p className="text-[11px] text-red-500">
-                        {formErrors.expectedAttendees}
-                      </p>
-                    )}
                   </div>
+                  <FieldError>{errors.expectedAttendees}</FieldError>
+                </div>
 
-                  <div className="space-y-2">
-                    <Label>
-                      Ngày <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      type="date"
-                      value={form.bookingDate}
-                      onChange={(e) =>
-                        resetSelectedRoom({ bookingDate: e.target.value })
-                      }
-                      className={`h-11 ${formErrors.bookingDate ? "border-red-400" : ""}`}
-                    />
-                    {formErrors.bookingDate && (
-                      <p className="text-[11px] text-red-500">{formErrors.bookingDate}</p>
-                    )}
-                  </div>
+                <div className="space-y-2">
+                  <Label>
+                    Tiết bắt đầu <span className="text-red-500">*</span>
+                  </Label>
+                  <Select
+                    value={form.slotStartId}
+                    onValueChange={(value) => resetRoom({ slotStartId: value })}
+                    disabled={loadingSlots}
+                  >
+                    <SelectTrigger className="h-11 rounded-xl bg-gray-50">
+                      <SelectValue placeholder="Chọn tiết bắt đầu" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {orderedSlots.map((slot) => {
+                        const id = String(getSlotId(slot));
+                        return (
+                          <SelectItem key={id} value={id}>
+                            {getSlotLabel(slot)}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  <FieldError>{errors.slotStartId}</FieldError>
+                </div>
 
-                  <div className="space-y-2">
-                    <Label>
-                      Giờ bắt đầu <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      type="time"
-                      value={form.startTime}
-                      onChange={(e) =>
-                        resetSelectedRoom({ startTime: e.target.value })
-                      }
-                      className={`h-11 ${formErrors.startTime ? "border-red-400" : ""}`}
-                    />
-                    {formErrors.startTime && (
-                      <p className="text-[11px] text-red-500">{formErrors.startTime}</p>
-                    )}
-                  </div>
+                <div className="space-y-2">
+                  <Label>
+                    Tiết kết thúc <span className="text-red-500">*</span>
+                  </Label>
+                  <Select
+                    value={form.slotEndId}
+                    onValueChange={(value) => resetRoom({ slotEndId: value })}
+                    disabled={loadingSlots}
+                  >
+                    <SelectTrigger className="h-11 rounded-xl bg-gray-50">
+                      <SelectValue placeholder="Chọn tiết kết thúc" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {orderedSlots.map((slot) => {
+                        const id = String(getSlotId(slot));
+                        return (
+                          <SelectItem key={id} value={id}>
+                            {getSlotLabel(slot)}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  <FieldError>{errors.slotEndId}</FieldError>
+                </div>
 
-                  <div className="space-y-2">
-                    <Label>
-                      Giờ kết thúc <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      type="time"
-                      value={form.endTime}
-                      onChange={(e) =>
-                        resetSelectedRoom({ endTime: e.target.value })
-                      }
-                      className={`h-11 ${formErrors.endTime ? "border-red-400" : ""}`}
-                    />
-                    {formErrors.endTime && (
-                      <p className="text-[11px] text-red-500">{formErrors.endTime}</p>
-                    )}
-                  </div>
-
-                  {slotPreview.slotStartId && slotPreview.slotEndId && (
-                    <div className="md:col-span-2 text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
-                      Ánh xạ tiết học: tiết {getTimeSlotNo(slotPreview.startSlot)} → tiết{" "}
-                      {getTimeSlotNo(slotPreview.endSlot)}
-                    </div>
-                  )}
-
-                  <div className="space-y-2 md:col-span-2">
-                    <div className="flex justify-between items-center">
-                      <Label>
-                        Phòng <span className="text-red-500">*</span>
-                      </Label>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className={`h-8 gap-1.5 px-3 rounded-full border ${accentText}`}
-                        disabled={!canSearchRooms}
-                        onClick={() => setIsRoomSearchOpen(true)}
-                      >
-                        <Search className="w-3.5 h-3.5" />
-                        <span className="text-xs font-bold">Tìm phòng trống</span>
-                      </Button>
-                    </div>
-                    <div className="relative">
-                      <MapPin className="absolute left-3 top-3.5 w-4 h-4 text-gray-400" />
-                      <Input
-                        readOnly
-                        value={form.preferredRoomCode}
-                        placeholder="Chọn phòng từ danh sách phòng trống"
-                        className={`h-11 pl-10 bg-gray-50 font-semibold ${
-                          formErrors.preferredClassroomId ? "border-red-400" : ""
-                        }`}
-                      />
-                    </div>
-                    {formErrors.preferredClassroomId && (
-                      <p className="text-[11px] text-red-500">
-                        {formErrors.preferredClassroomId}
-                      </p>
-                    )}
-                  </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Thời gian đặt</Label>
+                  <Input
+                    readOnly
+                    value={bookingTimeText}
+                    className="h-11 rounded-xl bg-blue-50 font-semibold text-blue-700"
+                  />
                 </div>
               </div>
+            </section>
 
-              <div>
-                <h3 className="text-sm font-semibold text-gray-800 mb-3">
-                  Thiết bị & mô tả
-                </h3>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    {EQUIPMENT_OPTIONS.map((option) => (
-                      <label
-                        key={option.value}
-                        className="flex items-center gap-2 text-sm text-gray-700"
-                      >
-                        <Checkbox
-                          checked={form.equipment.includes(option.value)}
-                          onCheckedChange={(checked) =>
-                            toggleEquipment(option.value, Boolean(checked))
-                          }
-                        />
-                        {option.label}
-                      </label>
-                    ))}
-                  </div>
-                  {form.equipment.includes("OTHER") && (
-                    <div className="space-y-2">
-                      <Label>
-                        Thiết bị khác <span className="text-red-500">*</span>
-                      </Label>
-                      <Input
-                        value={form.customEquipment}
-                        onChange={(e) =>
-                          updateForm({ customEquipment: e.target.value })
-                        }
-                        className={`h-11 ${formErrors.customEquipment ? "border-red-400" : ""}`}
-                      />
-                      {formErrors.customEquipment && (
-                        <p className="text-[11px] text-red-500">
-                          {formErrors.customEquipment}
-                        </p>
-                      )}
-                    </div>
-                  )}
+            <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+              <SectionTitle
+                icon={DoorOpen}
+                title="Phòng mong muốn"
+                description="Tìm phòng trống phù hợp với ngày, tiết và số người dự kiến."
+              />
 
-                  <div className="space-y-2">
-                    <Label>
-                      Mô tả / Lý do <span className="text-red-500">*</span>
-                    </Label>
-                    <textarea
-                      value={form.description}
-                      onChange={(e) => updateForm({ description: e.target.value })}
-                      rows={4}
-                      placeholder="Mô tả chi tiết mục đích sử dụng phòng..."
-                      className={`w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 ${
-                        formErrors.description ? "border-red-400" : "border-gray-300"
-                      }`}
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="space-y-2 md:col-span-2">
+                  <Label>
+                    Phòng mong muốn <span className="text-red-500">*</span>
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      readOnly
+                      value={form.roomCode}
+                      placeholder="Chưa chọn phòng"
+                      className="h-11 rounded-xl bg-gray-50 font-semibold text-blue-700"
                     />
-                    {formErrors.description && (
-                      <p className="text-[11px] text-red-500">{formErrors.description}</p>
-                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11 shrink-0 rounded-xl"
+                      onClick={handleOpenRoomSearch}
+                    >
+                      <Search className="mr-2 h-4 w-4" />
+                      Tìm phòng
+                    </Button>
                   </div>
+                  <FieldError>{errors.classroomId}</FieldError>
+                </div>
+
+                <div className="space-y-2 md:col-span-2">
+                  <Label>
+                    {isClubRequest
+                      ? "Ghi chú / Tên CLB / nhu cầu"
+                      : "Thiết bị & mô tả"}{" "}
+                    <span className="text-red-500">*</span>
+                  </Label>
+                  <Textarea
+                    value={form.purposeNote}
+                    onChange={(event) =>
+                      updateForm({ purposeNote: event.target.value })
+                    }
+                    rows={4}
+                    placeholder={
+                      isClubRequest
+                        ? "VD: CLB Tin học - cần phòng sinh hoạt chuyên đề, máy chiếu, micro..."
+                        : "Mô tả nhu cầu sử dụng phòng, thiết bị cần hỗ trợ..."
+                    }
+                    className="rounded-xl bg-gray-50"
+                  />
+                  <FieldError>{errors.purposeNote}</FieldError>
                 </div>
               </div>
+            </section>
 
-              <div className="flex gap-4 pt-4 border-t border-gray-100">
-                <Button
-                  type="submit"
-                  className={`${accentButton} h-11 px-8 text-sm font-bold gap-2`}
-                  disabled={submitting}
-                >
-                  <Send className="w-4 h-4" />
-                  {submitting ? "Đang xử lý..." : "Gửi yêu cầu đặt phòng"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-11 px-8 text-sm font-semibold"
-                  onClick={resetForm}
-                >
-                  Hủy / Làm mới
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+            <div className="flex items-center justify-end border-t border-gray-100 pt-2">
+              <Button
+                type="submit"
+                disabled={submitting}
+                className={`h-11 rounded-xl px-6 text-white ${
+                  accentClasses[accent] || accentClasses.blue
+                }`}
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Đang gửi...
+                  </>
+                ) : (
+                  <>
+                    <Send className="mr-2 h-4 w-4" />
+                    Gửi yêu cầu
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
 
-        {guidelines.length > 0 && (
-          <Card className="border-amber-100 bg-amber-50/30 rounded-xl h-fit">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-bold text-amber-800 flex items-center gap-2">
-                <AlertCircle className="w-4 h-4" />
-                Quy định đặt phòng
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {guidelines.map((note) => (
-                <div key={note} className="flex gap-2 items-start">
-                  <div className="w-1 h-1 rounded-full bg-amber-400 mt-2 flex-shrink-0" />
-                  <p className="text-[11px] text-amber-700 leading-relaxed font-medium">
-                    {note}
-                  </p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-      </div>
+      <Card className="h-fit border border-gray-200 shadow-sm xl:sticky xl:top-5">
+        <CardHeader className="border-b border-gray-100">
+          <CardTitle className="flex items-center gap-2 text-base font-semibold text-gray-900">
+            <CalendarDays className="h-4 w-4 text-blue-600" />
+            Quy định đặt phòng
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-5">
+          <ul className="space-y-4 text-sm leading-6 text-gray-600">
+            {guidelines.map((item, index) => (
+              <li key={`${item}-${index}`} className="flex gap-3">
+                <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500" />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </CardContent>
+      </Card>
 
       <RoomSearchModal
         open={isRoomSearchOpen}
         onOpenChange={setIsRoomSearchOpen}
         onSelect={handleRoomSelect}
-        date={form.bookingDate}
-        slotStartId={slotPreview.slotStartId ? String(slotPreview.slotStartId) : ""}
-        slotEndId={slotPreview.slotEndId ? String(slotPreview.slotEndId) : ""}
         semesterId={form.semesterId}
+        date={form.bookingDate}
+        slotStartId={form.slotStartId}
+        slotEndId={form.slotEndId}
         expectedAttendees={form.expectedAttendees}
-        buildingId={form.buildingId}
-        initialRoomType={form.roomType}
-        isStudentBorrowMode={role === "student"}
+        initialRoomType={form.requestedRoomType || "all"}
         isLecturerBorrowMode={role === "lecturer"}
+        isStudentBorrowMode={role === "student"}
       />
     </div>
   );
 };
 
+export { RoomBookingRequestForm };
 export default RoomBookingRequestForm;

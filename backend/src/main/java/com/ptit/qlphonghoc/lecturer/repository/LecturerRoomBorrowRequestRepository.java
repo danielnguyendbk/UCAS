@@ -28,8 +28,6 @@ public interface LecturerRoomBorrowRequestRepository extends JpaRepository<Lectu
             ts_end.slot_no AS slotEnd,
             CONCAT(ts_start.slot_no, '-', ts_end.slot_no) AS periodText,
             rbr.requested_by AS requestedBy,
-            rbr.club_id AS clubId,
-            cl.club_name AS clubName,
             rbr.section_id AS sectionId,
             CASE
                 WHEN cs.section_id IS NULL THEN NULL
@@ -54,7 +52,6 @@ public interface LecturerRoomBorrowRequestRepository extends JpaRepository<Lectu
         FROM room_borrow_requests rbr
         JOIN time_slots ts_start ON ts_start.slot_id = rbr.slot_start_id
         JOIN time_slots ts_end ON ts_end.slot_id = rbr.slot_end_id
-        LEFT JOIN clubs cl ON cl.club_id = rbr.club_id
         LEFT JOIN class_sections cs ON cs.section_id = rbr.section_id
         LEFT JOIN courses co ON co.course_id = cs.course_id
         LEFT JOIN classrooms cr ON cr.classroom_id = rbr.preferred_classroom_id
@@ -79,7 +76,7 @@ public interface LecturerRoomBorrowRequestRepository extends JpaRepository<Lectu
         FROM semesters
         WHERE semester_id = :semesterId
           AND is_deleted = FALSE
-          AND status = 'ACTIVE'
+          AND status IN ('ACTIVE', 'UPCOMING')
           AND :bookingDate BETWEEN start_date AND end_date
         """, nativeQuery = true)
     int countValidSemesterDate(
@@ -105,20 +102,36 @@ public interface LecturerRoomBorrowRequestRepository extends JpaRepository<Lectu
     );
 
     @Query(value = """
-        SELECT
-            c.club_id AS clubId,
-            c.club_code AS clubCode,
-            c.club_name AS clubName,
-            CASE WHEN c.advisor_user_id = :userId THEN 1 ELSE 0 END AS advisor
-        FROM clubs c
-        WHERE UPPER(c.club_code) = :clubCode
-          AND c.status = 'ACTIVE'
-          AND c.is_deleted = FALSE
-        """, nativeQuery = true)
-    Optional<ClubLookupProjection> findClubLookupByCode(
-            @Param("clubCode") String clubCode,
-            @Param("userId") Integer userId
+    SELECT
+        cs.section_id AS sectionId,
+        CONCAT(c.course_code, '.L', cs.section_code) AS sectionCode,
+        c.course_name AS courseName,
+        cs.max_capacity AS maxCapacity,
+        COALESCE(COUNT(sse.student_id), 0) AS enrolledCount,
+        c.required_room_type AS requiredRoomType
+    FROM class_sections cs
+    JOIN courses c ON c.course_id = cs.course_id
+    LEFT JOIN student_section_enrollments sse
+        ON sse.section_id = cs.section_id
+       
+    WHERE cs.semester_id = :semesterId
+      AND cs.lecturer_id = :lecturerId
+      AND cs.status = 'ACTIVE'
+    GROUP BY
+        cs.section_id,
+        c.course_code,
+        cs.section_code,
+        c.course_name,
+        cs.max_capacity,
+        c.required_room_type
+    ORDER BY c.course_code, cs.section_code
+    """, nativeQuery = true)
+    List<SectionLookupProjection> findSectionsBySemesterAndLecturer(
+            @Param("semesterId") Integer semesterId,
+            @Param("lecturerId") Integer lecturerId
     );
+
+
 
     @Query(value = """
         SELECT
@@ -181,10 +194,10 @@ public interface LecturerRoomBorrowRequestRepository extends JpaRepository<Lectu
                 ELSE cr.room_type
             END AS roomTypeText,
             CASE cr.room_type
-                WHEN 'LAB' THEN 'May tinh, May lanh'
-                WHEN 'SEMINAR' THEN 'Micro, Tivi, May lanh'
-                WHEN 'LECTURE' THEN 'Micro, Tivi, May lanh'
-                WHEN 'AUDITORIUM' THEN 'Micro, May chieu, May lanh'
+                WHEN 'LAB' THEN 'May tinh, Máy lạnh'
+                WHEN 'SEMINAR' THEN 'Micro, Tivi, Máy lạnh'
+                WHEN 'LECTURE' THEN 'Micro, Tivi, Máy lạnh'
+                WHEN 'AUDITORIUM' THEN 'Micro, May chieu, Máy lạnh'
                 ELSE 'Khong co'
             END AS mainEquipment,
             'Kha dung theo du lieu hien tai' AS statusText
@@ -334,7 +347,6 @@ public interface LecturerRoomBorrowRequestRepository extends JpaRepository<Lectu
             start_time,
             end_time,
             requested_by,
-            club_id,
             expected_attendees,
             preferred_building_id,
             preferred_classroom_id,
@@ -359,7 +371,6 @@ public interface LecturerRoomBorrowRequestRepository extends JpaRepository<Lectu
             start_slot.start_time,
             end_slot.end_time,
             :requestedBy,
-            :clubId,
             :expectedAttendees,
             NULL,
             :preferredClassroomId,
@@ -385,7 +396,6 @@ public interface LecturerRoomBorrowRequestRepository extends JpaRepository<Lectu
             @Param("slotStartId") Integer slotStartId,
             @Param("slotEndId") Integer slotEndId,
             @Param("requestedBy") Integer requestedBy,
-            @Param("clubId") Integer clubId,
             @Param("expectedAttendees") Integer expectedAttendees,
             @Param("preferredClassroomId") Integer preferredClassroomId,
             @Param("purposeNote") String purposeNote
@@ -438,15 +448,7 @@ public interface LecturerRoomBorrowRequestRepository extends JpaRepository<Lectu
         String getStatusText();
     }
 
-    interface ClubLookupProjection {
-        Integer getClubId();
 
-        String getClubCode();
-
-        String getClubName();
-
-        Number getAdvisor();
-    }
 
     interface SectionLookupProjection {
         Integer getSectionId();
@@ -489,9 +491,7 @@ public interface LecturerRoomBorrowRequestRepository extends JpaRepository<Lectu
 
         Integer getRequestedBy();
 
-        Integer getClubId();
-
-        String getClubName();
+        
 
         Integer getSectionId();
 

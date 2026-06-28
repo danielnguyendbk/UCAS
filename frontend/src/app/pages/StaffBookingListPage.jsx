@@ -738,12 +738,7 @@ const StaffBookingListPage = () => {
                       )}
                     />
                   )}
-                  {selectedBooking.clubName && (
-                    <DetailItem
-                      label="Câu lạc bộ"
-                      value={selectedBooking.clubName}
-                    />
-                  )}
+
                 </div>
 
                 {selectedBooking.purposeNote && (

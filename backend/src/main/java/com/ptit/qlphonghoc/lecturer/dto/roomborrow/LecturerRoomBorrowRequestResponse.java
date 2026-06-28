@@ -18,8 +18,7 @@ public class LecturerRoomBorrowRequestResponse {
     private Integer slotEnd;
     private String periodText;
     private Integer requestedBy;
-    private Integer clubId;
-    private String clubName;
+
     private Integer sectionId;
     private String sectionCode;
     private String courseName;
@@ -140,21 +139,9 @@ public class LecturerRoomBorrowRequestResponse {
         this.requestedBy = requestedBy;
     }
 
-    public Integer getClubId() {
-        return clubId;
-    }
 
-    public void setClubId(Integer clubId) {
-        this.clubId = clubId;
-    }
 
-    public String getClubName() {
-        return clubName;
-    }
-
-    public void setClubName(String clubName) {
-        this.clubName = clubName;
-    }
+    
 
     public Integer getSectionId() {
         return sectionId;

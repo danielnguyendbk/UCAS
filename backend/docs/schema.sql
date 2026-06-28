@@ -311,7 +311,6 @@ CREATE TABLE club_memberships (
     is_active           BOOLEAN NOT NULL DEFAULT TRUE,
     joined_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    UNIQUE (club_id, student_id),
 
     CONSTRAINT fk_club_memberships_club
         FOREIGN KEY (club_id) REFERENCES clubs(club_id),
@@ -870,8 +869,7 @@ ON room_borrow_requests(requested_by, status);
 CREATE INDEX idx_room_borrow_requests_room_date_time
 ON room_borrow_requests(approved_classroom_id, booking_date, start_time, end_time, status);
 
-CREATE INDEX idx_club_memberships_club_rep
-ON club_memberships(club_id, is_representative, is_active);
+
 
 CREATE INDEX idx_issue_reports_reporter_status
 ON classroom_issue_reports(reporter_user_id, status, created_at);
