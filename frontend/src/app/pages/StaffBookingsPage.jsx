@@ -131,6 +131,12 @@ const StaffBookingsPage = () => {
   const [timeSlots, setTimeSlots] = useState([]);
   const [changeSchedules, setChangeSchedules] = useState([]);
   const [loadingSchedules, setLoadingSchedules] = useState(false);
+  const [bookingAvailableRooms, setBookingAvailableRooms] = useState([]);
+  const [changeAvailableRooms, setChangeAvailableRooms] = useState([]);
+  const [loadingBookingRooms, setLoadingBookingRooms] = useState(false);
+  const [loadingChangeRooms, setLoadingChangeRooms] = useState(false);
+  const [bookingRoomsError, setBookingRoomsError] = useState("");
+  const [changeRoomsError, setChangeRoomsError] = useState("");
 
   const [bookingForm, setBookingForm] = useState(initialBookingForm);
   const [changeForm, setChangeForm] = useState(initialChangeForm);
@@ -433,6 +439,8 @@ const StaffBookingsPage = () => {
       roomId: "",
       roomCode: "",
     }));
+    setBookingAvailableRooms([]);
+    setBookingRoomsError("");
   };
 
   const resetChangeRoom = (patch) => {
@@ -442,6 +450,8 @@ const StaffBookingsPage = () => {
       roomId: "",
       roomCode: "",
     }));
+    setChangeAvailableRooms([]);
+    setChangeRoomsError("");
   };
 
   const canOpenBookingRoomSearch =
@@ -469,6 +479,97 @@ const StaffBookingsPage = () => {
         changeForm.fromWeek &&
         changeForm.toWeek) ||
       (changeForm.scope === "REST_OF_SEMESTER" && changeForm.fromWeek));
+
+  const formatRoomOption = (room) => {
+    const roomCode = room.roomCode || `#${room.classroomId}`;
+    const building = room.buildingName || room.buildingCode || "";
+    const type = room.roomTypeText || room.roomType || "";
+    const capacity = room.capacity ? `${room.capacity} chỗ` : "";
+    return [roomCode, building, type, capacity].filter(Boolean).join(" - ");
+  };
+
+  const handleBookingRoomDropdownSelect = (value) => {
+    const room = bookingAvailableRooms.find(
+      (item) => String(item.classroomId) === String(value),
+    );
+    if (!room) return;
+    handleBookingRoomSelect(room.classroomId, room.roomCode || formatRoomOption(room));
+  };
+
+  const handleChangeRoomDropdownSelect = (value) => {
+    const room = changeAvailableRooms.find(
+      (item) => String(item.classroomId) === String(value),
+    );
+    if (!room) return;
+    handleChangeRoomSelect(room.classroomId, room.roomCode || formatRoomOption(room));
+  };
+
+  const fetchBookingAvailableRooms = async () => {
+    if (!canOpenBookingRoomSearch) return;
+    setLoadingBookingRooms(true);
+    setBookingRoomsError("");
+    try {
+      const response = await httpClient.get("/api/staff/emergency-room-bookings/available-rooms", {
+        params: {
+          semesterId: bookingForm.semesterId,
+          bookingDate: bookingForm.date,
+          slotStartId: bookingForm.slotStartId,
+          slotEndId: bookingForm.slotEndId,
+          expectedAttendees: bookingForm.attendees,
+        },
+      });
+      const payload = response.data?.data ?? response.data;
+      const rooms = Array.isArray(payload) ? payload : payload?.items || [];
+      setBookingAvailableRooms(rooms);
+      if (rooms.length === 0) {
+        setBookingRoomsError("Không có phòng phù hợp.");
+      }
+    } catch (error) {
+      setBookingAvailableRooms([]);
+      setBookingRoomsError(
+        error.response?.data?.message || "Không tải được danh sách phòng khả dụng.",
+      );
+    } finally {
+      setLoadingBookingRooms(false);
+    }
+  };
+
+  const fetchChangeAvailableRooms = async () => {
+    if (!canOpenChangeRoomSearch || !selectedChangeSchedule) return;
+    setLoadingChangeRooms(true);
+    setChangeRoomsError("");
+    try {
+      const params = {
+        semesterId: changeForm.semesterId,
+        scheduleId: selectedChangeSchedule.scheduleId,
+        scope: changeForm.scope,
+        expectedAttendees: selectedChangeSchedule.maxCapacity,
+        roomType: selectedChangeSchedule.requiredRoomType || "",
+      };
+      if (changeForm.scope === "SESSION") {
+        params.targetDate = changeForm.targetDate;
+      } else {
+        params.fromWeek = changeForm.fromWeek;
+        if (changeForm.scope === "WEEK_RANGE") {
+          params.toWeek = changeForm.toWeek;
+        }
+      }
+      const response = await httpClient.get("/api/staff/emergency-room-changes/available-rooms", { params });
+      const payload = response.data?.data ?? response.data;
+      const rooms = Array.isArray(payload) ? payload : payload?.items || [];
+      setChangeAvailableRooms(rooms);
+      if (rooms.length === 0) {
+        setChangeRoomsError("Không có phòng phù hợp.");
+      }
+    } catch (error) {
+      setChangeAvailableRooms([]);
+      setChangeRoomsError(
+        error.response?.data?.message || "Không tải được danh sách phòng khả dụng.",
+      );
+    } finally {
+      setLoadingChangeRooms(false);
+    }
+  };
 
   return (
     <div className="p-5 md:p-6 space-y-5">
@@ -674,8 +775,8 @@ const StaffBookingsPage = () => {
                       variant="ghost"
                       size="sm"
                       className="h-7 bg-blue-50 text-blue-600 hover:text-blue-700 border border-blue-200 gap-1 px-3"
-                      disabled={!canOpenBookingRoomSearch}
-                      onClick={() => setIsRoomSearchOpen(true)}
+                      disabled={!canOpenBookingRoomSearch || loadingBookingRooms}
+                      onClick={fetchBookingAvailableRooms}
                     >
                       <Search className="w-3.5 h-3.5" />
                       Tìm phòng
@@ -687,6 +788,30 @@ const StaffBookingsPage = () => {
                     placeholder="Chọn phòng khả dụng"
                     className="h-10 bg-gray-50 text-blue-700 font-semibold"
                   />
+                  <Select
+                    value={bookingForm.roomId}
+                    onValueChange={handleBookingRoomDropdownSelect}
+                    disabled={!canOpenBookingRoomSearch || loadingBookingRooms}
+                  >
+                    <SelectTrigger className="h-10 bg-white">
+                      <SelectValue placeholder="Chọn phòng khả dụng" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {bookingAvailableRooms.map((room) => (
+                        <SelectItem key={room.classroomId} value={String(room.classroomId)}>
+                          {formatRoomOption(room)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {!bookingRoomsError && bookingAvailableRooms.length > 0 && (
+                    <p className="text-xs text-gray-500">
+                      Đã tải {bookingAvailableRooms.length} phòng khả dụng.
+                    </p>
+                  )}
+                  {bookingRoomsError && (
+                    <p className="text-xs text-red-600">{bookingRoomsError}</p>
+                  )}
                   {errors.roomId && (
                     <p className="text-xs text-red-600">{errors.roomId}</p>
                   )}
@@ -1019,8 +1144,8 @@ const StaffBookingsPage = () => {
                       variant="ghost"
                       size="sm"
                       className="h-7 bg-orange-50 text-orange-600 hover:text-orange-700 border border-orange-200 gap-1 px-3"
-                      disabled={!canOpenChangeRoomSearch}
-                      onClick={() => setIsRoomSearchOpen(true)}
+                      disabled={!canOpenChangeRoomSearch || loadingChangeRooms}
+                      onClick={fetchChangeAvailableRooms}
                     >
                       <Search className="w-3.5 h-3.5" />
                       Tìm phòng
@@ -1032,6 +1157,30 @@ const StaffBookingsPage = () => {
                     placeholder="Chọn phòng mới khả dụng"
                     className="h-10 bg-gray-50 text-orange-700 font-semibold"
                   />
+                  <Select
+                    value={changeForm.roomId}
+                    onValueChange={handleChangeRoomDropdownSelect}
+                    disabled={!canOpenChangeRoomSearch || loadingChangeRooms}
+                  >
+                    <SelectTrigger className="h-10 bg-white">
+                      <SelectValue placeholder="Chọn phòng mới khả dụng" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {changeAvailableRooms.map((room) => (
+                        <SelectItem key={room.classroomId} value={String(room.classroomId)}>
+                          {formatRoomOption(room)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {!changeRoomsError && changeAvailableRooms.length > 0 && (
+                    <p className="text-xs text-gray-500">
+                      Đã tải {changeAvailableRooms.length} phòng khả dụng.
+                    </p>
+                  )}
+                  {changeRoomsError && (
+                    <p className="text-xs text-red-600">{changeRoomsError}</p>
+                  )}
                   {errors.roomId && (
                     <p className="text-xs text-red-600">{errors.roomId}</p>
                   )}
