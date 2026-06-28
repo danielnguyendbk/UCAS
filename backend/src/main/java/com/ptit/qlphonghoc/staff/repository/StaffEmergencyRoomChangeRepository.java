@@ -140,6 +140,7 @@ public interface StaffEmergencyRoomChangeRepository extends JpaRepository<ClassS
 
     @Query(value = SCHEDULE_SELECT + SCHEDULE_FROM + """
         WHERE cs.semester_id = :semesterId
+          AND sem.status = 'ACTIVE'
           AND cs.status = 'ACTIVE'
           AND sch.status = 'ASSIGNED'
         ORDER BY c.course_code, cs.section_code, ts_start.slot_no
@@ -150,6 +151,7 @@ public interface StaffEmergencyRoomChangeRepository extends JpaRepository<ClassS
         WHERE cs.semester_id = :semesterId
           AND l.user_id = :lecturerUserId
           AND l.is_deleted = FALSE
+          AND sem.status = 'ACTIVE'
           AND cs.status = 'ACTIVE'
           AND sch.status = 'ASSIGNED'
         ORDER BY c.course_code, cs.section_code, ts_start.slot_no
@@ -162,6 +164,7 @@ public interface StaffEmergencyRoomChangeRepository extends JpaRepository<ClassS
     @Query(value = SCHEDULE_SELECT + SCHEDULE_FROM + """
         WHERE sch.schedule_id = :scheduleId
           AND cs.semester_id = :semesterId
+          AND sem.status = 'ACTIVE'
           AND cs.status = 'ACTIVE'
           AND sch.status = 'ASSIGNED'
         """, nativeQuery = true)
@@ -175,6 +178,7 @@ public interface StaffEmergencyRoomChangeRepository extends JpaRepository<ClassS
           AND cs.semester_id = :semesterId
           AND l.user_id = :lecturerUserId
           AND l.is_deleted = FALSE
+          AND sem.status = 'ACTIVE'
           AND cs.status = 'ACTIVE'
           AND sch.status = 'ASSIGNED'
         """, nativeQuery = true)
@@ -192,6 +196,7 @@ public interface StaffEmergencyRoomChangeRepository extends JpaRepository<ClassS
           AND cr.is_deleted = FALSE
           AND cr.capacity >= :expectedAttendees
           AND cr.classroom_id <> :oldClassroomId
+          AND (:buildingId IS NULL OR cr.building_id = :buildingId)
           AND (:roomType IS NULL OR :roomType = '' OR cr.room_type = :roomType)
           AND NOT EXISTS (
               SELECT 1
@@ -205,6 +210,35 @@ public interface StaffEmergencyRoomChangeRepository extends JpaRepository<ClassS
                 AND sch.day_of_week = :dayOfWeek
                 AND sch.slot_start_id <= :slotEndId
                 AND sch.slot_end_id >= :slotStartId
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM exams e
+              JOIN time_slots request_start ON request_start.slot_id = :slotStartId
+              JOIN time_slots request_end ON request_end.slot_id = :slotEndId
+              WHERE e.classroom_id = cr.classroom_id
+                AND e.status NOT IN ('CANCELLED','COMPLETED')
+                AND e.exam_date IS NOT NULL
+                AND e.start_time IS NOT NULL
+                AND e.end_time IS NOT NULL
+                AND NOT (e.end_time <= request_start.start_time OR e.start_time >= request_end.end_time)
+                AND (
+                    (:scope = 'SESSION' AND e.exam_date = :targetDate)
+                    OR (
+                        :scope <> 'SESSION'
+                        AND CASE DAYOFWEEK(e.exam_date)
+                            WHEN 1 THEN 'SUN'
+                            WHEN 2 THEN 'MON'
+                            WHEN 3 THEN 'TUE'
+                            WHEN 4 THEN 'WED'
+                            WHEN 5 THEN 'THU'
+                            WHEN 6 THEN 'FRI'
+                            WHEN 7 THEN 'SAT'
+                        END = :dayOfWeek
+                        AND FLOOR(DATEDIFF(e.exam_date, (SELECT start_date FROM semesters WHERE semester_id = :semesterId)) / 7) + 1
+                            BETWEEN :fromWeek AND :toWeek
+                    )
+                )
           )
           AND NOT EXISTS (
               SELECT 1
@@ -270,6 +304,7 @@ public interface StaffEmergencyRoomChangeRepository extends JpaRepository<ClassS
             @Param("slotEndId") Integer slotEndId,
             @Param("classroomId") Integer classroomId,
             @Param("expectedAttendees") Integer expectedAttendees,
+            @Param("buildingId") Integer buildingId,
             @Param("roomType") String roomType,
             @Param("scope") String scope,
             @Param("targetDate") LocalDate targetDate,
@@ -281,6 +316,9 @@ public interface StaffEmergencyRoomChangeRepository extends JpaRepository<ClassS
     @Query(value = """
         SELECT
             cr.classroom_id AS classroomId,
+            b.building_id AS buildingId,
+            b.building_code AS buildingCode,
+            b.building_name AS buildingName,
             CONCAT(b.building_code, '-', cr.room_number) AS roomCode,
             cr.capacity AS capacity,
             cr.room_type AS roomType,
@@ -314,6 +352,7 @@ public interface StaffEmergencyRoomChangeRepository extends JpaRepository<ClassS
           AND cr.is_deleted = FALSE
           AND cr.capacity >= :expectedAttendees
           AND cr.classroom_id <> :oldClassroomId
+          AND (:buildingId IS NULL OR cr.building_id = :buildingId)
           AND (:roomType IS NULL OR :roomType = '' OR cr.room_type = :roomType)
           AND (
               :keyword IS NULL OR :keyword = ''
@@ -332,6 +371,35 @@ public interface StaffEmergencyRoomChangeRepository extends JpaRepository<ClassS
                 AND sch.day_of_week = :dayOfWeek
                 AND sch.slot_start_id <= :slotEndId
                 AND sch.slot_end_id >= :slotStartId
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM exams e
+              JOIN time_slots request_start ON request_start.slot_id = :slotStartId
+              JOIN time_slots request_end ON request_end.slot_id = :slotEndId
+              WHERE e.classroom_id = cr.classroom_id
+                AND e.status NOT IN ('CANCELLED','COMPLETED')
+                AND e.exam_date IS NOT NULL
+                AND e.start_time IS NOT NULL
+                AND e.end_time IS NOT NULL
+                AND NOT (e.end_time <= request_start.start_time OR e.start_time >= request_end.end_time)
+                AND (
+                    (:scope = 'SESSION' AND e.exam_date = :targetDate)
+                    OR (
+                        :scope <> 'SESSION'
+                        AND CASE DAYOFWEEK(e.exam_date)
+                            WHEN 1 THEN 'SUN'
+                            WHEN 2 THEN 'MON'
+                            WHEN 3 THEN 'TUE'
+                            WHEN 4 THEN 'WED'
+                            WHEN 5 THEN 'THU'
+                            WHEN 6 THEN 'FRI'
+                            WHEN 7 THEN 'SAT'
+                        END = :dayOfWeek
+                        AND FLOOR(DATEDIFF(e.exam_date, (SELECT start_date FROM semesters WHERE semester_id = :semesterId)) / 7) + 1
+                            BETWEEN :fromWeek AND :toWeek
+                    )
+                )
           )
           AND NOT EXISTS (
               SELECT 1
@@ -397,6 +465,7 @@ public interface StaffEmergencyRoomChangeRepository extends JpaRepository<ClassS
             @Param("slotStartId") Integer slotStartId,
             @Param("slotEndId") Integer slotEndId,
             @Param("expectedAttendees") Integer expectedAttendees,
+            @Param("buildingId") Integer buildingId,
             @Param("roomType") String roomType,
             @Param("keyword") String keyword,
             @Param("scope") String scope,
@@ -558,6 +627,38 @@ public interface StaffEmergencyRoomChangeRepository extends JpaRepository<ClassS
             @Param("rejectReason") String rejectReason
     );
 
+    @Modifying
+    @Query(value = """
+        UPDATE temporary_room_changes
+        SET status = 'CANCELLED',
+            reject_reason = 'Nguoi gui da huy yeu cau',
+            is_active = FALSE
+        WHERE room_change_id = :id
+          AND requested_by = :userId
+          AND status = 'PENDING'
+        """, nativeQuery = true)
+    int cancelPendingChangeByRequester(@Param("id") Integer id, @Param("userId") Integer userId);
+
+    @Query(value = """
+        SELECT COUNT(*)
+        FROM temporary_room_changes
+        WHERE requested_by = :userId
+          AND schedule_id = :scheduleId
+          AND change_scope = :scope
+          AND (target_date <=> :targetDate)
+          AND (from_week <=> :fromWeek)
+          AND (to_week <=> :toWeek)
+          AND status = 'PENDING'
+        """, nativeQuery = true)
+    int countDuplicatePendingChange(
+            @Param("userId") Integer userId,
+            @Param("scheduleId") Integer scheduleId,
+            @Param("scope") String scope,
+            @Param("targetDate") LocalDate targetDate,
+            @Param("fromWeek") Integer fromWeek,
+            @Param("toWeek") Integer toWeek
+    );
+
     @Query(value = """
         SELECT COUNT(*)
         FROM temporary_room_changes trc
@@ -642,6 +743,9 @@ public interface StaffEmergencyRoomChangeRepository extends JpaRepository<ClassS
 
     interface AvailableRoomProjection {
         Integer getClassroomId();
+        Integer getBuildingId();
+        String getBuildingCode();
+        String getBuildingName();
         String getRoomCode();
         Integer getCapacity();
         String getRoomType();

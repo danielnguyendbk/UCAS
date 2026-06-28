@@ -40,6 +40,8 @@ export default function RoomSearchModal({
   slotStartId,
   slotEndId,
   expectedAttendees,
+  buildingId = "",
+  initialRoomType = "all",
   isAllocationMode = false,
   dayOfWeek = "",
   isEmergencyChangeMode = false,
@@ -83,6 +85,12 @@ export default function RoomSearchModal({
 
   useEffect(() => {
     if (open) {
+      setRoomType(initialRoomType && initialRoomType !== "OTHER" ? initialRoomType : "all");
+    }
+  }, [open, initialRoomType]);
+
+  useEffect(() => {
+    if (open) {
       fetchAvailableRooms();
     } else {
       setRooms([]);
@@ -100,6 +108,8 @@ export default function RoomSearchModal({
     slotStartId,
     slotEndId,
     expectedAttendees,
+    buildingId,
+    initialRoomType,
     isAllocationMode,
     dayOfWeek,
     isEmergencyChangeMode,
@@ -111,6 +121,7 @@ export default function RoomSearchModal({
     targetDate,
     fromWeek,
     toWeek,
+    searchTerm,
   ]);
 
   useEffect(() => {
@@ -157,11 +168,19 @@ export default function RoomSearchModal({
 
     try {
       let endpoint = "/api/staff/emergency-room-bookings/available-rooms";
+      const effectiveRoomType =
+        roomType && roomType !== "all"
+          ? roomType
+          : initialRoomType && initialRoomType !== "OTHER"
+            ? initialRoomType
+            : "all";
       const params = {
         semesterId,
         slot,
         expectedAttendees,
-        roomType: roomType === "all" ? "" : roomType,
+        buildingId: buildingId || undefined,
+        roomType: effectiveRoomType === "all" ? "" : effectiveRoomType,
+        keyword: searchTerm.trim(),
       };
 
       if (isAllocationMode) {

@@ -79,6 +79,7 @@ public interface LecturerRoomBorrowRequestRepository extends JpaRepository<Lectu
         FROM semesters
         WHERE semester_id = :semesterId
           AND is_deleted = FALSE
+          AND status = 'ACTIVE'
           AND :bookingDate BETWEEN start_date AND end_date
         """, nativeQuery = true)
     int countValidSemesterDate(
@@ -93,10 +94,14 @@ public interface LecturerRoomBorrowRequestRepository extends JpaRepository<Lectu
           AND is_active = TRUE
           AND is_deleted = FALSE
           AND capacity >= :expectedAttendees
+          AND (:buildingId IS NULL OR building_id = :buildingId)
+          AND (:roomType IS NULL OR :roomType = '' OR room_type = :roomType)
         """, nativeQuery = true)
     int countUsableClassroom(
             @Param("classroomId") Integer classroomId,
-            @Param("expectedAttendees") Integer expectedAttendees
+            @Param("expectedAttendees") Integer expectedAttendees,
+            @Param("buildingId") Integer buildingId,
+            @Param("roomType") String roomType
     );
 
     @Query(value = """
@@ -162,6 +167,9 @@ public interface LecturerRoomBorrowRequestRepository extends JpaRepository<Lectu
     @Query(value = """
         SELECT
             cr.classroom_id AS classroomId,
+            b.building_id AS buildingId,
+            b.building_code AS buildingCode,
+            b.building_name AS buildingName,
             CONCAT(b.building_code, '-', cr.room_number) AS roomCode,
             cr.capacity AS capacity,
             cr.room_type AS roomType,
@@ -185,6 +193,7 @@ public interface LecturerRoomBorrowRequestRepository extends JpaRepository<Lectu
         WHERE cr.is_active = TRUE
           AND cr.is_deleted = FALSE
           AND cr.capacity >= :expectedAttendees
+          AND (:buildingId IS NULL OR cr.building_id = :buildingId)
           AND (:roomType IS NULL OR :roomType = '' OR cr.room_type = :roomType)
           AND (
               :keyword IS NULL OR :keyword = ''
@@ -212,6 +221,18 @@ public interface LecturerRoomBorrowRequestRepository extends JpaRepository<Lectu
                 AND rbr.slot_start_id <= :slotEndId
                 AND rbr.slot_end_id >= :slotStartId
           )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM exams e
+              JOIN time_slots request_start ON request_start.slot_id = :slotStartId
+              JOIN time_slots request_end ON request_end.slot_id = :slotEndId
+              WHERE e.classroom_id = cr.classroom_id
+                AND e.exam_date = :bookingDate
+                AND e.status NOT IN ('CANCELLED','COMPLETED')
+                AND e.start_time IS NOT NULL
+                AND e.end_time IS NOT NULL
+                AND NOT (e.end_time <= request_start.start_time OR e.start_time >= request_end.end_time)
+          )
         ORDER BY cr.capacity ASC, b.building_code, cr.room_number
         """, nativeQuery = true)
     List<AvailableRoomProjection> findAvailableRooms(
@@ -221,8 +242,82 @@ public interface LecturerRoomBorrowRequestRepository extends JpaRepository<Lectu
             @Param("slotStartId") Integer slotStartId,
             @Param("slotEndId") Integer slotEndId,
             @Param("expectedAttendees") Integer expectedAttendees,
+            @Param("buildingId") Integer buildingId,
             @Param("roomType") String roomType,
             @Param("keyword") String keyword
+    );
+
+    @Query(value = """
+        SELECT COUNT(*)
+        FROM classrooms cr
+        WHERE cr.classroom_id = :classroomId
+          AND cr.is_active = TRUE
+          AND cr.is_deleted = FALSE
+          AND cr.capacity >= :expectedAttendees
+          AND NOT EXISTS (
+              SELECT 1
+              FROM schedules sch
+              JOIN class_sections cs ON cs.section_id = sch.section_id
+              WHERE sch.classroom_id = cr.classroom_id
+                AND sch.status = 'ASSIGNED'
+                AND cs.status = 'ACTIVE'
+                AND cs.semester_id = :semesterId
+                AND sch.day_of_week = :dayOfWeek
+                AND sch.slot_start_id <= :slotEndId
+                AND sch.slot_end_id >= :slotStartId
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM room_borrow_requests rbr
+              WHERE rbr.approved_classroom_id = cr.classroom_id
+                AND rbr.status = 'APPROVED'
+                AND rbr.booking_date = :bookingDate
+                AND rbr.slot_start_id <= :slotEndId
+                AND rbr.slot_end_id >= :slotStartId
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM exams e
+              JOIN time_slots request_start ON request_start.slot_id = :slotStartId
+              JOIN time_slots request_end ON request_end.slot_id = :slotEndId
+              WHERE e.classroom_id = cr.classroom_id
+                AND e.exam_date = :bookingDate
+                AND e.status NOT IN ('CANCELLED','COMPLETED')
+                AND e.start_time IS NOT NULL
+                AND e.end_time IS NOT NULL
+                AND NOT (e.end_time <= request_start.start_time OR e.start_time >= request_end.end_time)
+          )
+        """, nativeQuery = true)
+    int countAvailableClassroom(
+            @Param("semesterId") Integer semesterId,
+            @Param("bookingDate") LocalDate bookingDate,
+            @Param("dayOfWeek") String dayOfWeek,
+            @Param("slotStartId") Integer slotStartId,
+            @Param("slotEndId") Integer slotEndId,
+            @Param("classroomId") Integer classroomId,
+            @Param("expectedAttendees") Integer expectedAttendees
+    );
+
+    @Query(value = """
+        SELECT COUNT(*)
+        FROM room_borrow_requests
+        WHERE requested_by = :userId
+          AND semester_id = :semesterId
+          AND booking_date = :bookingDate
+          AND slot_start_id = :slotStartId
+          AND slot_end_id = :slotEndId
+          AND preferred_classroom_id = :preferredClassroomId
+          AND (:sectionId IS NULL OR section_id = :sectionId)
+          AND status = 'PENDING'
+        """, nativeQuery = true)
+    int countDuplicatePendingBorrowRequest(
+            @Param("userId") Integer userId,
+            @Param("semesterId") Integer semesterId,
+            @Param("bookingDate") LocalDate bookingDate,
+            @Param("slotStartId") Integer slotStartId,
+            @Param("slotEndId") Integer slotEndId,
+            @Param("preferredClassroomId") Integer preferredClassroomId,
+            @Param("sectionId") Integer sectionId
     );
 
     @Modifying
@@ -304,6 +399,17 @@ public interface LecturerRoomBorrowRequestRepository extends JpaRepository<Lectu
         """, nativeQuery = true)
     Optional<BorrowRequestProjection> findBorrowRequestById(@Param("id") Integer id);
 
+    @Modifying
+    @Query(value = """
+        UPDATE room_borrow_requests
+        SET status = 'CANCELLED',
+            processing_note = 'Nguoi gui da huy yeu cau'
+        WHERE borrow_request_id = :id
+          AND requested_by = :userId
+          AND status = 'PENDING'
+        """, nativeQuery = true)
+    int cancelPendingBorrowRequest(@Param("id") Integer id, @Param("userId") Integer userId);
+
     @Query(value = BORROW_SELECT + """
         WHERE rbr.requested_by = :userId
         ORDER BY rbr.created_at DESC, rbr.borrow_request_id DESC
@@ -312,6 +418,12 @@ public interface LecturerRoomBorrowRequestRepository extends JpaRepository<Lectu
 
     interface AvailableRoomProjection {
         Integer getClassroomId();
+
+        Integer getBuildingId();
+
+        String getBuildingCode();
+
+        String getBuildingName();
 
         String getRoomCode();
 

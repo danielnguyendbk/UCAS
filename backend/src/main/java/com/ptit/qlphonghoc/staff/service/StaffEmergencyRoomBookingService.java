@@ -1,5 +1,6 @@
 package com.ptit.qlphonghoc.staff.service;
 
+import com.ptit.qlphonghoc.common.exception.BadRequestException;
 import com.ptit.qlphonghoc.staff.dto.datPhongKhanCap.AvailableRoomResponse;
 import com.ptit.qlphonghoc.staff.dto.datPhongKhanCap.CreateEmergencyRoomBookingRequest;
 import com.ptit.qlphonghoc.staff.dto.datPhongKhanCap.EmergencyRoomBookingResponse;
@@ -30,6 +31,7 @@ public class StaffEmergencyRoomBookingService {
             Integer slotStartId,
             Integer slotEndId,
             Integer expectedAttendees,
+            Integer buildingId,
             String roomType,
             String keyword
     ) {
@@ -46,6 +48,7 @@ public class StaffEmergencyRoomBookingService {
                         slotStartId,
                         slotEndId,
                         expectedAttendees,
+                        buildingId,
                         normalizedRoomType,
                         normalizedKeyword
                 )
@@ -73,8 +76,8 @@ public class StaffEmergencyRoomBookingService {
         );
 
         if (availableCount == 0) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+            throw new BadRequestException(
+                    "ROOM_TIME_CONFLICT",
                     "Phong khong kha dung: co the da trung lich, khong du suc chua hoac khong hoat dong."
             );
         }
@@ -127,7 +130,7 @@ public class StaffEmergencyRoomBookingService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "bookingDate is required.");
         }
         if (bookingDate.isBefore(LocalDate.now())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "bookingDate khong duoc la ngay trong qua khu.");
+            throw new BadRequestException("INVALID_TIME_RANGE", "bookingDate khong duoc la ngay trong qua khu.");
         }
         if (slotStartId == null || slotEndId == null) {
             throw new ResponseStatusException(
@@ -136,8 +139,8 @@ public class StaffEmergencyRoomBookingService {
             );
         }
         if (repository.countValidSlotRange(slotStartId, slotEndId) == 0) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+            throw new BadRequestException(
+                    "INVALID_TIME_RANGE",
                     "slotEndId must be greater than or equal to slotStartId."
             );
         }
@@ -192,10 +195,13 @@ public class StaffEmergencyRoomBookingService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "classroomId is required.");
         }
         if (request.getPurpose() == null || request.getPurpose().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "purpose is required.");
+            throw new BadRequestException("VALIDATION_FAILED", "purpose is required.");
         }
         if (request.getEmergencyReason() == null || request.getEmergencyReason().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "emergencyReason is required.");
+            throw new BadRequestException("VALIDATION_FAILED", "emergencyReason is required.");
+        }
+        if (request.getEmergencyReason().trim().length() < 10) {
+            throw new BadRequestException("VALIDATION_FAILED", "emergencyReason phai co it nhat 10 ky tu.");
         }
 
         int staffCount = repository.countActiveStaffOrAdminById(staffUserId);
@@ -211,8 +217,8 @@ public class StaffEmergencyRoomBookingService {
                 request.getExpectedAttendees()
         );
         if (classroomCount == 0) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+            throw new BadRequestException(
+                    "CLASSROOM_NOT_FOUND",
                     "Phong khong ton tai, khong hoat dong hoac khong du suc chua."
             );
         }
@@ -260,6 +266,9 @@ public class StaffEmergencyRoomBookingService {
     ) {
         AvailableRoomResponse response = new AvailableRoomResponse();
         response.setClassroomId(projection.getClassroomId());
+        response.setBuildingId(projection.getBuildingId());
+        response.setBuildingCode(projection.getBuildingCode());
+        response.setBuildingName(projection.getBuildingName());
         response.setRoomCode(projection.getRoomCode());
         response.setCapacity(projection.getCapacity());
         response.setRoomType(projection.getRoomType());

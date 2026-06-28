@@ -32,6 +32,7 @@ public class StaffEmergencyRoomBookingController {
             @RequestParam(required = false) Integer slotEndId,
             @RequestParam(required = false) Integer slot,
             @RequestParam Integer expectedAttendees,
+            @RequestParam(required = false) Integer buildingId,
             @RequestParam(required = false) String roomType,
             @RequestParam(required = false) String keyword
     ) {
@@ -45,6 +46,7 @@ public class StaffEmergencyRoomBookingController {
                         effectiveSlotStartId,
                         effectiveSlotEndId,
                         expectedAttendees,
+                        buildingId,
                         roomType,
                         keyword
                 )

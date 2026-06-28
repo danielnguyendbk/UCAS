@@ -1092,6 +1092,9 @@ const StaffBookingsPage = () => {
             ? bookingForm.attendees
             : selectedChangeSchedule?.maxCapacity
         }
+        initialRoomType={
+          mode === "change" ? selectedChangeSchedule?.requiredRoomType : "all"
+        }
         isEmergencyChangeMode={mode === "change"}
         scheduleId={selectedChangeSchedule?.scheduleId}
         changeScope={changeForm.scope}

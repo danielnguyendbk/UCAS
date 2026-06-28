@@ -660,6 +660,7 @@ const LecturerRoomChangeRequestPage = () => {
         onSelect={handleRoomSelect}
         semesterId={form.semesterId}
         expectedAttendees={selectedSchedule?.maxCapacity || ""}
+        initialRoomType={selectedSchedule?.requiredRoomType || "all"}
         isEmergencyChangeMode
         isLecturerChangeMode
         scheduleId={selectedSchedule?.scheduleId}

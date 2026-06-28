@@ -1,5 +1,7 @@
 package com.ptit.qlphonghoc.lecturer.service;
 
+import com.ptit.qlphonghoc.common.exception.BadRequestException;
+import com.ptit.qlphonghoc.common.exception.ResourceNotFoundException;
 import com.ptit.qlphonghoc.lecturer.dto.roomchange.CreateLecturerRoomChangeRequest;
 import com.ptit.qlphonghoc.lecturer.repository.LecturerRepository;
 import com.ptit.qlphonghoc.staff.dto.datPhongKhanCap.AvailableRoomResponse;
@@ -53,6 +55,7 @@ public class LecturerRoomChangeRequestService {
             Integer fromWeek,
             Integer toWeek,
             Integer expectedAttendees,
+            Integer buildingId,
             String roomType,
             String keyword,
             Integer lecturerUserId
@@ -75,6 +78,7 @@ public class LecturerRoomChangeRequestService {
                         schedule.getSlotStartId(),
                         schedule.getSlotEndId(),
                         attendees,
+                        buildingId,
                         normalizeBlank(roomType),
                         normalizeBlank(keyword),
                         window.scope(),
@@ -116,13 +120,31 @@ public class LecturerRoomChangeRequestService {
         );
 
         if (request.getNewClassroomId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "newClassroomId khong duoc de trong.");
+            throw new BadRequestException("CLASSROOM_NOT_FOUND", "newClassroomId khong duoc de trong.");
         }
         if (request.getNewClassroomId().equals(schedule.getCurrentClassroomId())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phong moi phai khac phong hien tai.");
+            throw new BadRequestException("ROOM_TIME_CONFLICT", "Phong moi phai khac phong hien tai.");
         }
         if (request.getReason() == null || request.getReason().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "reason khong duoc de trong.");
+            throw new BadRequestException("VALIDATION_FAILED", "reason khong duoc de trong.");
+        }
+        if (request.getReason().trim().length() < 10) {
+            throw new BadRequestException("VALIDATION_FAILED", "reason phai co it nhat 10 ky tu.");
+        }
+
+        int duplicateCount = repository.countDuplicatePendingChange(
+                lecturerUserId,
+                schedule.getScheduleId(),
+                window.scope(),
+                window.targetDate(),
+                window.fromWeek(),
+                window.toWeekForStorage()
+        );
+        if (duplicateCount > 0) {
+            throw new BadRequestException(
+                    "REQUEST_DUPLICATED",
+                    "Ban da co yeu cau doi phong dang cho cho cung lich hoc."
+            );
         }
 
         int availableCount = repository.countAvailableRoomForChange(
@@ -134,6 +156,7 @@ public class LecturerRoomChangeRequestService {
                 schedule.getSlotEndId(),
                 request.getNewClassroomId(),
                 schedule.getMaxCapacity(),
+                null,
                 "",
                 window.scope(),
                 window.targetDate(),
@@ -143,8 +166,8 @@ public class LecturerRoomChangeRequestService {
         );
 
         if (availableCount == 0) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+            throw new BadRequestException(
+                    "ROOM_TIME_CONFLICT",
                     "Phong moi khong kha dung trong pham vi doi phong da chon."
             );
         }
@@ -169,6 +192,24 @@ public class LecturerRoomChangeRequestService {
                         HttpStatus.INTERNAL_SERVER_ERROR,
                         "Tao yeu cau doi phong that bai."
                 ));
+    }
+
+    @Transactional
+    public EmergencyRoomChangeResponse cancel(Integer id, Integer lecturerUserId) {
+        ensureLecturerProfile(lecturerUserId);
+        StaffEmergencyRoomChangeRepository.ChangeProjection current = repository.findChangeById(id)
+                .filter(change -> lecturerUserId.equals(change.getRequestedBy()))
+                .orElseThrow(() -> new ResourceNotFoundException("REQUEST_NOT_FOUND", "Khong tim thay yeu cau doi phong."));
+        if (!"PENDING".equalsIgnoreCase(current.getStatus())) {
+            throw new BadRequestException("REQUEST_NOT_CANCELLABLE", "Chi co the huy yeu cau dang cho duyet.");
+        }
+        int updated = repository.cancelPendingChangeByRequester(id, lecturerUserId);
+        if (updated == 0) {
+            throw new BadRequestException("REQUEST_NOT_CANCELLABLE", "Huy yeu cau that bai.");
+        }
+        return repository.findChangeById(id)
+                .map(this::toChangeResponse)
+                .orElseThrow(() -> new ResourceNotFoundException("REQUEST_NOT_FOUND", "Khong tim thay yeu cau doi phong."));
     }
 
     private void ensureLecturerProfile(Integer lecturerUserId) {
@@ -322,6 +363,9 @@ public class LecturerRoomChangeRequestService {
     ) {
         AvailableRoomResponse response = new AvailableRoomResponse();
         response.setClassroomId(projection.getClassroomId());
+        response.setBuildingId(projection.getBuildingId());
+        response.setBuildingCode(projection.getBuildingCode());
+        response.setBuildingName(projection.getBuildingName());
         response.setRoomCode(projection.getRoomCode());
         response.setCapacity(projection.getCapacity());
         response.setRoomType(projection.getRoomType());

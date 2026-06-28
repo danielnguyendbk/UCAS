@@ -276,7 +276,9 @@ const RoomBookingRequestForm = ({
     form.bookingDate &&
     slotPreview.slotStartId &&
     slotPreview.slotEndId &&
-    Number(form.expectedAttendees) > 0;
+    Number(form.expectedAttendees) > 0 &&
+    form.buildingId &&
+    form.roomType;
 
   const updateForm = (patch) => {
     setForm((prev) => ({ ...prev, ...patch }));
@@ -403,7 +405,7 @@ const RoomBookingRequestForm = ({
           : buildStudentPayload(form, timeSlots);
 
       const res = await httpClient.post(submitEndpoint, payload);
-      setSubmittedRequest(res.data);
+      setSubmittedRequest(res.data?.data ?? res.data);
       setForm((prev) => ({
         ...createEmptyForm(role),
         semesterId: prev.semesterId,
@@ -927,6 +929,8 @@ const RoomBookingRequestForm = ({
         slotEndId={slotPreview.slotEndId ? String(slotPreview.slotEndId) : ""}
         semesterId={form.semesterId}
         expectedAttendees={form.expectedAttendees}
+        buildingId={form.buildingId}
+        initialRoomType={form.roomType}
         isStudentBorrowMode={role === "student"}
         isLecturerBorrowMode={role === "lecturer"}
       />
