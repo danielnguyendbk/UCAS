@@ -298,9 +298,18 @@ public interface StaffEmergencyRoomChangeRepository extends JpaRepository<ClassS
                 WHEN 'AUDITORIUM' THEN 'Micro, May chieu, May lanh'
                 ELSE 'Khong co'
             END AS mainEquipment,
-            'Kha dung cho pham vi doi phong da chon' AS statusText
+            ts_s.slot_no AS slotStartNo,
+            ts_e.slot_no AS slotEndNo,
+            TIME_FORMAT(ts_s.start_time, '%H:%i') AS startTime,
+            TIME_FORMAT(ts_e.end_time, '%H:%i') AS endTime,
+            CONCAT('Kha dung tiet ', ts_s.slot_no,
+                CASE WHEN ts_s.slot_no <> ts_e.slot_no THEN CONCAT('-', ts_e.slot_no) ELSE '' END,
+                ' (', TIME_FORMAT(ts_s.start_time, '%H:%i'), '-', TIME_FORMAT(ts_e.end_time, '%H:%i'), ')')
+            AS statusText
         FROM classrooms cr
         JOIN buildings b ON b.building_id = cr.building_id
+        JOIN time_slots ts_s ON ts_s.slot_id = :slotStartId
+        JOIN time_slots ts_e ON ts_e.slot_id = :slotEndId
         WHERE cr.is_active = TRUE
           AND cr.is_deleted = FALSE
           AND cr.capacity >= :expectedAttendees
@@ -549,6 +558,37 @@ public interface StaffEmergencyRoomChangeRepository extends JpaRepository<ClassS
             @Param("rejectReason") String rejectReason
     );
 
+    @Query(value = """
+        SELECT COUNT(*)
+        FROM temporary_room_changes trc
+        JOIN semesters sem ON sem.semester_id = trc.semester_id
+        WHERE trc.schedule_id = :scheduleId
+          AND trc.status = 'APPROVED'
+          AND trc.is_active = TRUE
+          AND (
+              (:scope = 'SESSION' AND (
+                  (trc.change_scope = 'SESSION' AND trc.target_date = :targetDate)
+                  OR (trc.change_scope IN ('WEEK_RANGE', 'REST_OF_SEMESTER')
+                      AND :targetWeek BETWEEN trc.from_week AND COALESCE(trc.to_week, 999))
+              ))
+              OR (:scope <> 'SESSION' AND (
+                  (trc.change_scope = 'SESSION'
+                      AND FLOOR(DATEDIFF(trc.target_date, sem.start_date) / 7) + 1 BETWEEN :fromWeek AND :toWeek)
+                  OR (trc.change_scope IN ('WEEK_RANGE', 'REST_OF_SEMESTER')
+                      AND trc.from_week <= :toWeek
+                      AND COALESCE(trc.to_week, 999) >= :fromWeek)
+              ))
+          )
+        """, nativeQuery = true)
+    int countOverlappingApprovedChangeForSchedule(
+            @Param("scheduleId") Integer scheduleId,
+            @Param("scope") String scope,
+            @Param("targetDate") LocalDate targetDate,
+            @Param("targetWeek") Integer targetWeek,
+            @Param("fromWeek") Integer fromWeek,
+            @Param("toWeek") Integer toWeek
+    );
+
     @Query(value = "SELECT LAST_INSERT_ID()", nativeQuery = true)
     Integer getLastInsertId();
 
@@ -608,6 +648,10 @@ public interface StaffEmergencyRoomChangeRepository extends JpaRepository<ClassS
         String getRoomTypeText();
         String getMainEquipment();
         String getStatusText();
+        Integer getSlotStartNo();
+        Integer getSlotEndNo();
+        String getStartTime();
+        String getEndTime();
     }
 
     interface ChangeProjection {

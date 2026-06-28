@@ -1,11 +1,13 @@
 package com.ptit.qlphonghoc.staff.controller;
 
+import com.ptit.qlphonghoc.auth.security.CustomUserDetails;
 import com.ptit.qlphonghoc.staff.dto.datPhongKhanCap.AvailableRoomResponse;
 import com.ptit.qlphonghoc.staff.dto.datPhongKhanCap.CreateEmergencyRoomBookingRequest;
 import com.ptit.qlphonghoc.staff.dto.datPhongKhanCap.EmergencyRoomBookingResponse;
 import com.ptit.qlphonghoc.staff.service.StaffEmergencyRoomBookingService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
@@ -51,9 +53,10 @@ public class StaffEmergencyRoomBookingController {
 
     @PostMapping
     public ResponseEntity<EmergencyRoomBookingResponse> create(
-            @Valid @RequestBody CreateEmergencyRoomBookingRequest request
+            @Valid @RequestBody CreateEmergencyRoomBookingRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
-        EmergencyRoomBookingResponse response = service.create(request);
+        EmergencyRoomBookingResponse response = service.create(request, userDetails.getUserId());
 
         return ResponseEntity
                 .created(URI.create("/api/staff/emergency-room-bookings/" + response.getId()))

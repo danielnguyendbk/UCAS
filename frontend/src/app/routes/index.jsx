@@ -44,6 +44,7 @@ import StaffMaintenanceListPage from "@/features/staff/pages/StaffMaintenanceLis
 import StaffAutoAssignmentPage from "@/features/staff/pages/StaffAutoAssignmentPage";
 import StaffExamAllocationPage from "@/features/staff/pages/StaffExamAllocationPage";
 import StaffExamsPage from "@/features/staff/pages/StaffExamsPage";
+import AdminAuditHistoryPage from "@/features/admin/pages/AdminAuditHistoryPage";
 
 import StudentSchedulePage from "@/features/student/pages/StudentSchedulePage";
 import StudentExamsPage from "@/features/student/pages/StudentExamsPage";
@@ -114,6 +115,7 @@ const appRouter = createBrowserRouter([
       { path: "admin/facility-staff", Component: AdminFacilityStaffPage },
       { path: "admin/facility-assignments", element: <Navigate to={APP_ROUTES.adminFacilityStaff} replace /> },
       { path: "admin/settings", Component: AdminSettingsPage },
+      { path: "admin/audit-logs", Component: AdminAuditHistoryPage },
 
       // STAFF routes
       { path: "staff/dashboard", Component: StaffDashboardPage },

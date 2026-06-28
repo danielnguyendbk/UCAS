@@ -58,17 +58,17 @@ public class AdminSectionSplitService {
         SplitContext context = repository.findContext(sectionId, request.scheduleId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "SCHEDULE_NOT_FOUND",
-                        "Khong tim thay lich thuoc lop hoc phan can tach."
+                        "Không tìm thấy lịch lớp học phần cần tách."
                 ));
         String workflowStatus = context.timetableStatus().toUpperCase(Locale.ROOT);
         if (!SPLITTABLE_STATUSES.contains(workflowStatus)) {
             throw new BadRequestException(
                     "TIMETABLE_NOT_EDITABLE",
-                    "Chi duoc tach lop khi thoi khoa bieu o trang thai DRAFT hoac CONFLICT."
+                    "Chỉ được tách lớp ở trạng thái NHÁP hoặc XUNG ĐỘT!"
             );
         }
         if (request.parts().size() != request.partCount()) {
-            throw new BadRequestException("INVALID_SPLIT_PARTS", "So nhom va danh sach nhom khong khop.");
+            throw new BadRequestException("INVALID_SPLIT_PARTS", "Số nhóm và danh sách nhóm không khớp.");
         }
 
         List<SuggestionInput> inputs = normalizeSuggestionInputs(context, request);
@@ -76,7 +76,7 @@ public class AdminSectionSplitService {
         if (totalStudents != context.enrolledCount()) {
             throw new BadRequestException(
                     "INVALID_SPLIT_TOTAL",
-                    "Tong si so cac nhom phai bang si so lop hoc phan goc: " + context.enrolledCount() + "."
+                    "Tổng sỉ số các nhóm phải bằng sĩ số học phần gốc: " + context.enrolledCount() + "."
             );
         }
 
@@ -90,7 +90,7 @@ public class AdminSectionSplitService {
         if (slotRanges.isEmpty()) {
             return new AdminSplitSuggestionResponse(
                     List.of(),
-                    List.of("Khong tim thay khoang tiet hop le co do dai " + slotSpan + " tiet."),
+                    List.of(" Không tìm thấy khoảng tiết hợp lệ có độ dài " + slotSpan + " tiet."),
                     true
             );
         }
@@ -119,7 +119,7 @@ public class AdminSectionSplitService {
         }
 
         List<String> reasons = rejectedReasons.isEmpty()
-                ? List.of("Khong tim thay to hop phong va thoi gian thoa tat ca rang buoc.")
+                ? List.of("Không tìm thấy ổ học phòng và thời gian thoả ràng buộc.")
                 : List.copyOf(rejectedReasons);
         return new AdminSplitSuggestionResponse(suggestions, suggestions.isEmpty() ? reasons : List.of(), true);
     }
@@ -174,7 +174,7 @@ public class AdminSectionSplitService {
                 first.slotEndId(),
                 first.classroomId(),
                 adminUserId,
-                "[SPLIT_PART] Tách từ " + context.courseCode() + ".L" + context.sectionCode()
+                "Tách từ " + context.courseCode() + ".L" + context.sectionCode()
         ) != 1) {
             throw new BadRequestException("SECTION_SPLIT_FAILED", "Không thể cập nhật nhóm đầu tiên sau tách.");
         }
@@ -198,7 +198,7 @@ public class AdminSectionSplitService {
                     part.slotEndId(),
                     part.classroomId(),
                     adminUserId,
-                    "[SPLIT_PART] Tách từ " + context.courseCode() + ".L" + context.sectionCode()
+                    "Tách từ " + context.courseCode() + ".L" + context.sectionCode()
             );
             createdSectionIds.add(createdSectionId);
             updatedScheduleIds.add(createdScheduleId);
@@ -284,12 +284,12 @@ public class AdminSectionSplitService {
         for (int index = 0; index < request.parts().size(); index++) {
             AdminSplitSuggestionRequest.SuggestionPart part = request.parts().get(index);
             if (!repository.lecturerExists(part.lecturerId())) {
-                throw new BadRequestException("LECTURER_NOT_FOUND", "Giang vien cua nhom tach khong ton tai.");
+                throw new BadRequestException("LECTURER_NOT_FOUND", "Giảng viên của nhóm tách không tồn tại.");
             }
             String sectionCode = normalizeSectionCode(context.courseCode(), part.sectionCode());
             String codeKey = sectionCode.toUpperCase(Locale.ROOT);
             if (!requestCodes.add(codeKey)) {
-                throw new BadRequestException("DUPLICATE_SECTION_CODE", "Ma nhom " + sectionCode + " bi trung.");
+                throw new BadRequestException("DUPLICATE_SECTION_CODE", "Mã nhóm " + sectionCode + " bị trùng.");
             }
             inputs.add(new SuggestionInput(
                     index,
@@ -307,17 +307,17 @@ public class AdminSectionSplitService {
         List<String> reasons = new ArrayList<>();
         WeekBoundsRef bounds = repository.findWeekBounds(context.semesterId());
         if (hasInvalidWeekRange(context.fromWeekNo(), context.toWeekNo(), bounds)) {
-            reasons.add("Khoang tuan cua lich goc khong hop le hoac nam ngoai hoc ky.");
+            reasons.add("Khoảng tuàn của lịch gốc không hợp lệ.");
         }
         if (context.requiredRoomType() == null || context.requiredRoomType().isBlank()) {
-            reasons.add("Hoc phan chua co loai phong yeu cau.");
+            reasons.add("Loại phòng học bắt buộc chưa được xác định.");
         }
         if (context.slotStartNo() == null || context.slotEndNo() == null || context.slotEndNo() < context.slotStartNo()) {
-            reasons.add("Khoang tiet cua lich goc khong hop le.");
+            reasons.add("Khoảng tiết của lịch gốc không hợp lệ.");
         }
         for (SuggestionInput input : inputs) {
             if (input.studentCount() == null || input.studentCount() <= 0) {
-                reasons.add("Si so nhom " + input.sectionCode() + " phai lon hon 0.");
+                reasons.add("Sĩ số nhóm  " + input.sectionCode() + " phải lớn hơn 0.");
             }
         }
         return reasons.stream().distinct().toList();
@@ -355,7 +355,7 @@ public class AdminSectionSplitService {
                         context.fromWeekNo(),
                         context.toWeekNo()
                 ) > 0) {
-                    rejectedReasons.add("Mot so khung gio bi chan boi lich hoc vu.");
+                    rejectedReasons.add("Một số khung giờ bị chặn bởi lịch học vụ");
                     continue;
                 }
                 if (repository.lecturerHasOverlap(
@@ -368,7 +368,7 @@ public class AdminSectionSplitService {
                         context.toWeekNo(),
                         originalScheduleId
                 ) || conflictsWithPlacedLecturer(input.lecturerId(), candidate, placed)) {
-                    rejectedReasons.add("Mot so khung gio bi trung lich giang vien.");
+                    rejectedReasons.add("Một số khung giờ bị trùng với lịch giảng viên của nhóm khác.");
                     continue;
                 }
 
@@ -386,7 +386,7 @@ public class AdminSectionSplitService {
                         3
                 );
                 if (rooms.isEmpty()) {
-                    rejectedReasons.add("Khong co phong dung loai, du suc chua va khong trung lich cho mot so nhom.");
+                    rejectedReasons.add("Không tìm thấy phòng học trống cho nhóm " + input.sectionCode() + " vào khung giờ " + dayLabel(candidate.dayOfWeek()) + " tiết " + candidate.slot().startNo() + "-" + candidate.slot().endNo() + ".");
                     continue;
                 }
                 RoomRef room = rooms.stream()
@@ -394,7 +394,7 @@ public class AdminSectionSplitService {
                         .findFirst()
                         .orElse(null);
                 if (room == null) {
-                    rejectedReasons.add("Mot so phong bi trung trong chinh phuong an tach lop.");
+                    rejectedReasons.add("Không tìm thấy phòng học trống cho nhóm " + input.sectionCode() + " vào khung giờ " + dayLabel(candidate.dayOfWeek()) + " tiết " + candidate.slot().startNo() + "-" + candidate.slot().endNo() + ".");
                     continue;
                 }
                 selected = new SplitPartSuggestion(
@@ -462,7 +462,7 @@ public class AdminSectionSplitService {
                 continue;
             }
             RoomRef room = repository.findRoom(part.classroomId())
-                    .orElseThrow(() -> new BadRequestException("CLASSROOM_NOT_FOUND", "Khong tim thay phong hoc da chon."));
+                    .orElseThrow(() -> new BadRequestException("CLASSROOM_NOT_FOUND", "Không tìm thấy phòng học " + part.classroomId() + "."));
             validateRoomForPart(context, part, room);
             if (repository.roomHasOverlap(
                     context.semesterId(),
@@ -476,7 +476,7 @@ public class AdminSectionSplitService {
             )) {
                 throw new BadRequestException(
                         "ROOM_TIME_CONFLICT",
-                        "Phong " + room.code() + " bi trung lich voi lop khac."
+                        "Phòng " + room.code() + " bị trùng bới các nhóm tách."
                 );
             }
             for (int otherIndex = index + 1; otherIndex < parts.size(); otherIndex++) {
@@ -487,7 +487,7 @@ public class AdminSectionSplitService {
                         && other.slotStartNo() <= part.slotEndNo()) {
                     throw new BadRequestException(
                             "ROOM_TIME_CONFLICT",
-                            "Phong " + room.code() + " bi trung giua cac nhom tach."
+                            "Phòng " + room.code() + " bị trùng gữa các nhóm tách."
                     );
                 }
             }
@@ -496,21 +496,21 @@ public class AdminSectionSplitService {
 
     private void validateRoomForPart(SplitContext context, NormalizedPart part, RoomRef room) {
         if (!Boolean.TRUE.equals(room.active()) || Boolean.TRUE.equals(room.deleted())) {
-            throw new BadRequestException("ROOM_INACTIVE_OR_DELETED", "Phong " + room.code() + " khong con hoat dong.");
+            throw new BadRequestException("ROOM_INACTIVE_OR_DELETED", "Phòng " + room.code() + " không còn hoạt động.");
         }
         if (context.requiredRoomType() != null
                 && !context.requiredRoomType().isBlank()
                 && !context.requiredRoomType().equalsIgnoreCase(room.roomType())) {
             throw new BadRequestException(
                     "ROOM_TYPE_MISMATCH",
-                    "Nhom " + part.sectionCode() + " yeu cau phong " + context.requiredRoomType()
-                            + " nhung phong " + room.code() + " la " + room.roomType() + "."
+                    "Nhóm " + part.sectionCode() + " yêu cầu " + context.requiredRoomType()
+                            + " những phòng " + room.code() + " là " + room.roomType() + "."
             );
         }
         if (room.capacity() == null || room.capacity() < part.studentCount()) {
             throw new BadRequestException(
                     "CAPACITY_EXCEEDED",
-                    "Phong " + room.code() + " khong du suc chua cho nhom " + part.sectionCode() + "."
+                    "Phòng " + room.code() + " không đủ sức chứa cho nhóm " + part.sectionCode() + "."
             );
         }
     }

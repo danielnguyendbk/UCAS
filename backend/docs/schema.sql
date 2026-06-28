@@ -62,6 +62,14 @@ CREATE TABLE semesters (
 	  'PUBLISHED',
 	  'LOCKED'
 	) NOT NULL DEFAULT 'DRAFT',
+    exam_workflow_status ENUM(
+      'DRAFT',
+      'VALIDATING',
+      'CONFLICT',
+      'READY_FOR_APPROVAL',
+      'PUBLISHED',
+      'LOCKED'
+    ) NOT NULL DEFAULT 'DRAFT',
     start_date         DATE NOT NULL,
     end_date           DATE NOT NULL,
     status             ENUM('UPCOMING','ACTIVE','COMPLETED') NOT NULL DEFAULT 'UPCOMING',
@@ -643,36 +651,111 @@ CREATE TABLE classroom_issue_reports (
 -- 10) LỊCH THI
 -- -----------------------------
 CREATE TABLE exams (
-    exam_id             BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    semester_id         BIGINT UNSIGNED NOT NULL,
-    section_id          BIGINT UNSIGNED NOT NULL,
-    classroom_id        BIGINT UNSIGNED NOT NULL,
-    proctor_lecturer_id BIGINT UNSIGNED NULL,
-    exam_type           ENUM('MIDTERM','FINAL','MAKEUP','OTHER') NOT NULL,
-    exam_method         ENUM('WRITTEN','ORAL','PRACTICAL','ONLINE') NULL,
-    exam_date           DATE NOT NULL,
-    start_time          TIME NOT NULL,
-    end_time            TIME NOT NULL,
-    student_count       INT NULL,
-    seat_range          VARCHAR(100) NULL,
-    status              ENUM('DRAFT','SCHEDULED','CANCELLED','COMPLETED') NOT NULL DEFAULT 'SCHEDULED',
-    note                VARCHAR(255),
-    created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                       exam_id             BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 
-    CONSTRAINT chk_exams_time CHECK (end_time > start_time),
+                       semester_id         BIGINT UNSIGNED NOT NULL,
+                       section_id          BIGINT UNSIGNED NOT NULL,
 
-    CONSTRAINT fk_exams_semester
-        FOREIGN KEY (semester_id) REFERENCES semesters(semester_id),
+    -- Cho NULL để Admin import kế hoạch thi trước,
+    -- Staff phân phòng sau.
+                       classroom_id        BIGINT UNSIGNED NULL,
 
-    CONSTRAINT fk_exams_section
-        FOREIGN KEY (section_id) REFERENCES class_sections(section_id),
+    -- Giám thị chính cấp ca thi.
+    -- Nếu sau này chia nhiều phòng/giám thị theo phòng thì tách tiếp bảng riêng.
+                       proctor_lecturer_id BIGINT UNSIGNED NULL,
 
-    CONSTRAINT fk_exams_classroom
-        FOREIGN KEY (classroom_id) REFERENCES classrooms(classroom_id),
+                       exam_type           ENUM('MIDTERM','FINAL','MAKEUP','OTHER') NOT NULL,
+                       exam_method         ENUM('WRITTEN','ORAL','PRACTICAL','ONLINE') NULL,
 
-    CONSTRAINT fk_exams_proctor
-        FOREIGN KEY (proctor_lecturer_id) REFERENCES lecturers(lecturer_id)
+                       exam_date           DATE NOT NULL,
+                       start_time          TIME NOT NULL,
+                       end_time            TIME NOT NULL,
+
+                       student_count       INT NULL,
+                       seat_range          VARCHAR(100) NULL,
+
+                       status              ENUM(
+        'DRAFT',
+        'NEEDS_ROOM',
+        'ROOM_ASSIGNED',
+        'CONFLICT',
+        'READY_FOR_APPROVAL',
+        'PUBLISHED',
+        'CANCELLED',
+        'COMPLETED'
+    ) NOT NULL DEFAULT 'DRAFT',
+
+                       validation_status   ENUM('NOT_CHECKED','VALID','CONFLICT') NOT NULL DEFAULT 'NOT_CHECKED',
+                       conflict_reason     VARCHAR(255) NULL,
+
+                       imported_by         BIGINT UNSIGNED NULL,
+                       imported_at         DATETIME NULL,
+
+                       assigned_by         BIGINT UNSIGNED NULL,
+                       assigned_at         DATETIME NULL,
+
+                       submitted_by        BIGINT UNSIGNED NULL,
+                       submitted_at        DATETIME NULL,
+
+                       approved_by         BIGINT UNSIGNED NULL,
+                       approved_at         DATETIME NULL,
+
+                       published_at        DATETIME NULL,
+
+                       cancelled_by        BIGINT UNSIGNED NULL,
+                       cancelled_at        DATETIME NULL,
+
+                       reopened_by         BIGINT UNSIGNED NULL,
+                       reopened_at         DATETIME NULL,
+
+                       note                VARCHAR(255),
+
+                       created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                       updated_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                       is_deleted          BOOLEAN NOT NULL DEFAULT FALSE,
+
+                       CONSTRAINT chk_exams_time CHECK (end_time > start_time),
+                       CONSTRAINT chk_exams_student_count CHECK (student_count IS NULL OR student_count > 0),
+
+                       CONSTRAINT chk_exams_room_required_when_published CHECK (
+                           status NOT IN ('ROOM_ASSIGNED','READY_FOR_APPROVAL','PUBLISHED','COMPLETED')
+                               OR classroom_id IS NOT NULL
+                           ),
+
+                       CONSTRAINT chk_exams_published_at CHECK (
+                           status <> 'PUBLISHED'
+                               OR published_at IS NOT NULL
+                           ),
+
+                       CONSTRAINT fk_exams_semester
+                           FOREIGN KEY (semester_id) REFERENCES semesters(semester_id),
+
+                       CONSTRAINT fk_exams_section
+                           FOREIGN KEY (section_id) REFERENCES class_sections(section_id),
+
+                       CONSTRAINT fk_exams_classroom
+                           FOREIGN KEY (classroom_id) REFERENCES classrooms(classroom_id),
+
+                       CONSTRAINT fk_exams_proctor
+                           FOREIGN KEY (proctor_lecturer_id) REFERENCES lecturers(lecturer_id),
+
+                       CONSTRAINT fk_exams_imported_by
+                           FOREIGN KEY (imported_by) REFERENCES users(user_id),
+
+                       CONSTRAINT fk_exams_assigned_by
+                           FOREIGN KEY (assigned_by) REFERENCES users(user_id),
+
+                       CONSTRAINT fk_exams_submitted_by
+                           FOREIGN KEY (submitted_by) REFERENCES users(user_id),
+
+                       CONSTRAINT fk_exams_approved_by
+                           FOREIGN KEY (approved_by) REFERENCES users(user_id),
+
+                       CONSTRAINT fk_exams_cancelled_by
+                           FOREIGN KEY (cancelled_by) REFERENCES users(user_id),
+
+                       CONSTRAINT fk_exams_reopened_by
+                           FOREIGN KEY (reopened_by) REFERENCES users(user_id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE exam_invigilators (

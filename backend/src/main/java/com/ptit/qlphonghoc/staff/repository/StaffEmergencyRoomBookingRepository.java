@@ -141,9 +141,18 @@ public interface StaffEmergencyRoomBookingRepository extends JpaRepository<Class
                 WHEN 'AUDITORIUM' THEN 'Micro, May chieu, May lanh'
                 ELSE 'Khong co'
             END AS mainEquipment,
-            'Kha dung theo du lieu hien tai' AS statusText
+            ts_s.slot_no AS slotStartNo,
+            ts_e.slot_no AS slotEndNo,
+            TIME_FORMAT(ts_s.start_time, '%H:%i') AS startTime,
+            TIME_FORMAT(ts_e.end_time, '%H:%i') AS endTime,
+            CONCAT('Kha dung tiet ', ts_s.slot_no,
+                CASE WHEN ts_s.slot_no <> ts_e.slot_no THEN CONCAT('-', ts_e.slot_no) ELSE '' END,
+                ' (', TIME_FORMAT(ts_s.start_time, '%H:%i'), '-', TIME_FORMAT(ts_e.end_time, '%H:%i'), ')')
+            AS statusText
         FROM classrooms cr
         JOIN buildings b ON b.building_id = cr.building_id
+        JOIN time_slots ts_s ON ts_s.slot_id = :slotStartId
+        JOIN time_slots ts_e ON ts_e.slot_id = :slotEndId
         WHERE cr.is_active = TRUE
           AND cr.is_deleted = FALSE
           AND cr.capacity >= :expectedAttendees
@@ -321,18 +330,16 @@ public interface StaffEmergencyRoomBookingRepository extends JpaRepository<Class
 
     interface AvailableRoomProjection {
         Integer getClassroomId();
-
         String getRoomCode();
-
         Integer getCapacity();
-
         String getRoomType();
-
         String getRoomTypeText();
-
         String getMainEquipment();
-
         String getStatusText();
+        Integer getSlotStartNo();
+        Integer getSlotEndNo();
+        String getStartTime();
+        String getEndTime();
     }
 
     interface EmergencyBookingProjection {

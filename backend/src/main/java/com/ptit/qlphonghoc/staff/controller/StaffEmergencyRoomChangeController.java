@@ -69,9 +69,10 @@ public class StaffEmergencyRoomChangeController {
 
     @PostMapping
     public ResponseEntity<EmergencyRoomChangeResponse> create(
-            @Valid @RequestBody CreateEmergencyRoomChangeRequest request
+            @Valid @RequestBody CreateEmergencyRoomChangeRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
-        EmergencyRoomChangeResponse response = service.create(request);
+        EmergencyRoomChangeResponse response = service.create(request, userDetails.getUserId());
         return ResponseEntity
                 .created(URI.create("/api/staff/emergency-room-changes/" + response.getId()))
                 .body(response);

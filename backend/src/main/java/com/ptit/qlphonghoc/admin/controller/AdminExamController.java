@@ -39,7 +39,8 @@ public class AdminExamController {
     @GetMapping
     public ApiResponse<List<Map<String, Object>>> getExams(
             @RequestParam(required = false) Integer semesterId,
-            @RequestParam(required = false) String status
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false, defaultValue = "false") boolean includeCancelled
     ) {
         String sql = """
             SELECT
@@ -64,6 +65,9 @@ public class AdminExamController {
                 e.student_count AS studentCount,
                 e.seat_range AS seatRange,
                 e.status,
+                e.validation_status AS validationStatus,
+                e.conflict_reason AS conflictReason,
+                e.published_at AS publishedAt,
                 e.note AS notes,
                 cr.classroom_id AS classroomId,
                 cr.classroom_code AS roomCode,
@@ -85,12 +89,14 @@ public class AdminExamController {
             LEFT JOIN lecturers l ON l.lecturer_id = e.proctor_lecturer_id AND l.is_deleted = FALSE
             WHERE (:semesterId IS NULL OR e.semester_id = :semesterId)
               AND (:status IS NULL OR :status = '' OR e.status = :status)
+              AND (:includeCancelled = TRUE OR :status = 'CANCELLED' OR e.status <> 'CANCELLED')
             ORDER BY e.exam_date ASC, e.start_time ASC, e.exam_id ASC
             """;
 
         Map<String, Object> params = new HashMap<>();
         params.put("semesterId", semesterId);
         params.put("status", normalize(status));
+        params.put("includeCancelled", includeCancelled);
 
         return ApiResponse.success("OK", jdbcTemplate.queryForList(sql, params));
     }
@@ -113,7 +119,7 @@ public class AdminExamController {
                     WHERE status NOT IN ('CANCELLED','COMPLETED','PUBLISHED')
                     """, Map.of());
         }
-        return ApiResponse.success("Da cong bo " + updated + " lich thi.", Map.of("approved", updated));
+        return ApiResponse.success("Đã công bố" + updated + " lịch thi.", Map.of("Đã duyệt!", updated));
     }
 
     @PostMapping("/{id}/approve")
@@ -152,7 +158,7 @@ public class AdminExamController {
                     updated_at = NOW()
                 WHERE exam_id = :id
                 """, Map.of("id", id));
-        return ApiResponse.success("Da mo lai lich thi.", null);
+        return ApiResponse.success("Đã mở lại lịch thi.", null);
     }
 
     @GetMapping("/{examId}/edit-options")
@@ -164,7 +170,7 @@ public class AdminExamController {
             @RequestParam(required = false) Integer minCapacity
     ) {
         return ApiResponse.success(
-                "Tai du lieu chinh sua lich thi thanh cong.",
+                "Tải dữ liệu chỉnh sửa ca thi thành công.",
                 service.getEditOptions(examId, examDate, startTime, endTime, minCapacity)
         );
     }
@@ -179,7 +185,7 @@ public class AdminExamController {
             @RequestParam(required = false) Long excludeExamId
     ) {
         return ApiResponse.success(
-                "Tai danh sach phong thi hop le thanh cong.",
+                "Tải danh sách phòng thi hợp lệ thành công.",
                 service.getAvailableRooms(semesterId, examDate, startTime, endTime, minCapacity, excludeExamId)
         );
     }
@@ -193,7 +199,7 @@ public class AdminExamController {
             @RequestParam(required = false) Long excludeExamId
     ) {
         return ApiResponse.success(
-                "Tai danh sach giam thi hop le thanh cong.",
+                "Tải danh sách giám thị hợp lệ thành công.",
                 service.getAvailableProctors(semesterId, examDate, startTime, endTime, excludeExamId)
         );
     }
@@ -206,7 +212,7 @@ public class AdminExamController {
         Map<String, Object> exam = findExamOrThrow(id);
         String status = (String) exam.get("status");
         if ("CANCELLED".equals(status) || "COMPLETED".equals(status)) {
-            throw new BadRequestException("INVALID_STATUS", "Khong the huy lich thi o trang thai: " + status);
+            throw new BadRequestException("INVALID_STATUS", "Không thể huỷ lịch thi ở trạng thái: " + status);
         }
         jdbcTemplate.update(
                 "UPDATE exams SET status = 'CANCELLED', updated_at = NOW() WHERE exam_id = :id",
@@ -220,7 +226,7 @@ public class AdminExamController {
             @PathVariable Long id,
             @RequestBody ExamUpdateRequest req
     ) {
-        return ApiResponse.success("Da cap nhat lich thi.", service.updateExam(id, req));
+        return ApiResponse.success("Đã cập nhật lịch thi.", service.updateExam(id, req));
     }
 
     private Map<String, Object> findExamOrThrow(Long id) {
@@ -229,7 +235,7 @@ public class AdminExamController {
                 Map.of("id", id)
         );
         if (rows.isEmpty()) {
-            throw new ResourceNotFoundException("EXAM_NOT_FOUND", "Khong tim thay lich thi #" + id);
+            throw new ResourceNotFoundException("EXAM_NOT_FOUND", "Không tìm thấy lịch thi #" + id);
         }
         return rows.get(0);
     }

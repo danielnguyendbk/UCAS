@@ -55,11 +55,11 @@ public class StaffEmergencyRoomBookingService {
     }
 
     @Transactional
-    public EmergencyRoomBookingResponse create(CreateEmergencyRoomBookingRequest request) {
+    public EmergencyRoomBookingResponse create(CreateEmergencyRoomBookingRequest request, Integer staffUserId) {
         Integer slotStartId = effectiveSlotStartId(request);
         Integer slotEndId = effectiveSlotEndId(request, slotStartId);
 
-        validateCreateInput(request, slotStartId, slotEndId);
+        validateCreateInput(request, staffUserId, slotStartId, slotEndId);
 
         String dayOfWeek = toDayCode(request.getBookingDate());
         int availableCount = repository.countAvailableClassroomForEmergency(
@@ -89,7 +89,7 @@ public class StaffEmergencyRoomBookingService {
                 request.getBookingDate(),
                 slotStartId,
                 slotEndId,
-                request.getStaffUserId(),
+                staffUserId,
                 request.getExpectedAttendees(),
                 request.getClassroomId(),
                 purposeNote,
@@ -126,6 +126,9 @@ public class StaffEmergencyRoomBookingService {
         if (bookingDate == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "bookingDate is required.");
         }
+        if (bookingDate.isBefore(LocalDate.now())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "bookingDate khong duoc la ngay trong qua khu.");
+        }
         if (slotStartId == null || slotEndId == null) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
@@ -153,6 +156,7 @@ public class StaffEmergencyRoomBookingService {
 
     private void validateCreateInput(
             CreateEmergencyRoomBookingRequest request,
+            Integer staffUserId,
             Integer slotStartId,
             Integer slotEndId
     ) {
@@ -193,15 +197,12 @@ public class StaffEmergencyRoomBookingService {
         if (request.getEmergencyReason() == null || request.getEmergencyReason().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "emergencyReason is required.");
         }
-        if (request.getStaffUserId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "staffUserId is required.");
-        }
 
-        int staffCount = repository.countActiveStaffOrAdminById(request.getStaffUserId());
+        int staffCount = repository.countActiveStaffOrAdminById(staffUserId);
         if (staffCount == 0) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "staffUserId khong hop le hoac khong phai STAFF/ADMIN dang hoat dong."
+                    "Nguoi dung khong hop le hoac khong phai STAFF/ADMIN dang hoat dong."
             );
         }
 
@@ -265,6 +266,10 @@ public class StaffEmergencyRoomBookingService {
         response.setRoomTypeText(projection.getRoomTypeText());
         response.setMainEquipment(projection.getMainEquipment());
         response.setStatusText(projection.getStatusText());
+        response.setSlotStartNo(projection.getSlotStartNo());
+        response.setSlotEndNo(projection.getSlotEndNo());
+        response.setStartTime(projection.getStartTime());
+        response.setEndTime(projection.getEndTime());
         return response;
     }
 

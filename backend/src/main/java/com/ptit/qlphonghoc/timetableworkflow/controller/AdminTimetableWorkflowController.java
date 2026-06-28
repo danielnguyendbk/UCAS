@@ -36,7 +36,7 @@ public class AdminTimetableWorkflowController {
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
         return ApiResponse.success(
-                "Timetable approved.",
+                "Duyệt thời khoá biểu thành công",
                 service.approve(semesterId, userDetails.getUserId())
         );
     }
@@ -47,7 +47,7 @@ public class AdminTimetableWorkflowController {
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
         return ApiResponse.success(
-                "Timetable validation completed.",
+                "Đã kiểm tra thời khoá biểu.",
                 service.validate(semesterId, userDetails.getUserId())
         );
     }
@@ -65,7 +65,7 @@ public class AdminTimetableWorkflowController {
                     summary
             );
         }
-        return ResponseEntity.ok(ApiResponse.success("Timetable published.", summary));
+        return ResponseEntity.ok(ApiResponse.success("Đã công bố thời khoá biểu.", summary));
     }
 
     @PostMapping("/lock")
@@ -74,7 +74,7 @@ public class AdminTimetableWorkflowController {
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
         return ApiResponse.success(
-                "Timetable locked.",
+                "Đã khoá thời khoá biểu.",
                 service.lock(semesterId, userDetails.getUserId())
         );
     }

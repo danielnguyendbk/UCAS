@@ -826,15 +826,6 @@ const RowActions = ({
       <>
         <Button
           type="button"
-          variant="outline"
-          size="sm"
-          className="h-8 text-xs"
-          onClick={onUpdate}
-        >
-          Cập nhật
-        </Button>
-        <Button
-          type="button"
           size="sm"
           className="h-8 text-xs bg-green-600 hover:bg-green-700"
           disabled={updating}

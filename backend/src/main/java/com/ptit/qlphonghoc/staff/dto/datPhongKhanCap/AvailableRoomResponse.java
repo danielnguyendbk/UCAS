@@ -9,6 +9,10 @@ public class AvailableRoomResponse {
     private String roomTypeText;
     private String mainEquipment;
     private String statusText;
+    private Integer slotStartNo;
+    private Integer slotEndNo;
+    private String startTime;
+    private String endTime;
 
     public AvailableRoomResponse() {
     }
@@ -67,5 +71,37 @@ public class AvailableRoomResponse {
 
     public void setStatusText(String statusText) {
         this.statusText = statusText;
+    }
+
+    public Integer getSlotStartNo() {
+        return slotStartNo;
+    }
+
+    public void setSlotStartNo(Integer slotStartNo) {
+        this.slotStartNo = slotStartNo;
+    }
+
+    public Integer getSlotEndNo() {
+        return slotEndNo;
+    }
+
+    public void setSlotEndNo(Integer slotEndNo) {
+        this.slotEndNo = slotEndNo;
+    }
+
+    public String getStartTime() {
+        return startTime;
+    }
+
+    public void setStartTime(String startTime) {
+        this.startTime = startTime;
+    }
+
+    public String getEndTime() {
+        return endTime;
+    }
+
+    public void setEndTime(String endTime) {
+        this.endTime = endTime;
     }
 }

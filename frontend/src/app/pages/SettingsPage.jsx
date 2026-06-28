@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, BookOpen, CalendarDays, Clock, Loader2, School, UserRound } from "lucide-react";
+import {
+  AlertCircle, BookOpen, CalendarDays, Clock, Loader2, School, UserRound,
+  Plus, Pencil, Check, ChevronDown, ChevronUp,
+} from "lucide-react";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Separator } from "../components/ui/separator";
 import { Switch } from "../components/ui/switch";
 import { httpClient } from "../../services/httpClient";
@@ -18,6 +25,35 @@ const getActiveSemester = (semesters) => (
   semesters.find((semester) => String(semester.status || "").toUpperCase() === "ACTIVE") || semesters[0]
 );
 
+const SEMESTER_TYPES = [
+  { value: "HK1", label: "Học kỳ 1" },
+  { value: "HK2", label: "Học kỳ 2" },
+  { value: "HKH", label: "Học kỳ hè" },
+];
+
+const SEMESTER_STATUSES = [
+  { value: "ACTIVE", label: "Đang hoạt động" },
+  { value: "INACTIVE", label: "Chưa kích hoạt" },
+  { value: "LOCKED", label: "Đã khoá" },
+];
+
+const statusBadgeClass = (status) => {
+  const s = String(status || "").toUpperCase();
+  if (s === "ACTIVE") return "bg-green-100 text-green-800";
+  if (s === "LOCKED") return "bg-red-100 text-red-800";
+  return "bg-gray-100 text-gray-600";
+};
+
+const EMPTY_FORM = {
+  name: "",
+  code: "",
+  year: new Date().getFullYear(),
+  type: "HK1",
+  startDate: "",
+  endDate: "",
+  status: "INACTIVE",
+};
+
 const SettingsPage = () => {
   const [semesters, setSemesters] = useState([]);
   const [timeSlots, setTimeSlots] = useState([]);
@@ -27,6 +63,23 @@ const SettingsPage = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // Semester management
+  const [semDialogOpen, setSemDialogOpen] = useState(false);
+  const [editingSem, setEditingSem] = useState(null);
+  const [semForm, setSemForm] = useState(EMPTY_FORM);
+  const [semSaving, setSemSaving] = useState(false);
+  const [semError, setSemError] = useState("");
+  const [expandedYears, setExpandedYears] = useState({});
+
+  const fetchSemesters = async () => {
+    try {
+      const res = await httpClient.get("/api/categories/semesters");
+      setSemesters(getResponseData(res));
+    } catch {
+      // ignore partial failure
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -63,15 +116,24 @@ const SettingsPage = () => {
     };
 
     loadSettings();
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, []);
 
   const activeSemester = useMemo(() => getActiveSemester(semesters), [semesters]);
   const sortedSlots = useMemo(() => (
     [...timeSlots].sort((a, b) => Number(a.slotNo || a.slotNumber || a.id || 0) - Number(b.slotNo || b.slotNumber || b.id || 0))
   ), [timeSlots]);
+
+  // Group semesters by academic year
+  const semestersByYear = useMemo(() => {
+    const groups = {};
+    for (const sem of semesters) {
+      const year = sem.academicYear || sem.semester_year || sem.year || "Không rõ năm học";
+      if (!groups[year]) groups[year] = [];
+      groups[year].push(sem);
+    }
+    return Object.entries(groups).sort(([a], [b]) => String(b).localeCompare(String(a)));
+  }, [semesters]);
 
   const stats = [
     { label: "Học kỳ", value: semesters.length, icon: CalendarDays, color: "bg-blue-500" },
@@ -81,6 +143,65 @@ const SettingsPage = () => {
     { label: "Giảng viên", value: lecturers.length, icon: UserRound, color: "bg-rose-500" },
     { label: "Tài khoản", value: users.length, icon: UserRound, color: "bg-slate-500" },
   ];
+
+  const openCreate = () => {
+    setEditingSem(null);
+    setSemForm({ ...EMPTY_FORM });
+    setSemError("");
+    setSemDialogOpen(true);
+  };
+
+  const openEdit = (sem) => {
+    setEditingSem(sem);
+    setSemForm({
+      name: sem.name || sem.semesterName || "",
+      code: sem.code || sem.semesterCode || "",
+      year: sem.year || sem.semesterYear || new Date().getFullYear(),
+      type: sem.type || sem.semesterType || "HK1",
+      startDate: sem.startDate || "",
+      endDate: sem.endDate || "",
+      status: sem.status || "INACTIVE",
+    });
+    setSemError("");
+    setSemDialogOpen(true);
+  };
+
+  const saveSemester = async () => {
+    if (!semForm.name.trim()) { setSemError("Tên học kỳ không được để trống."); return; }
+    if (!semForm.startDate || !semForm.endDate) { setSemError("Vui lòng chọn ngày bắt đầu và kết thúc."); return; }
+    if (semForm.startDate >= semForm.endDate) { setSemError("Ngày kết thúc phải sau ngày bắt đầu."); return; }
+
+    setSemSaving(true);
+    setSemError("");
+    try {
+      const payload = {
+        semester_name: semForm.name.trim(),
+        semester_code: semForm.code.trim() || undefined,
+        semester_year: Number(semForm.year),
+        semester_type: semForm.type,
+        start_date: semForm.startDate,
+        end_date: semForm.endDate,
+        status: semForm.status,
+      };
+
+      if (editingSem) {
+        await httpClient.put(`/api/semesters/${editingSem.id}`, payload);
+      } else {
+        await httpClient.post("/api/semesters", payload);
+      }
+
+      setSemDialogOpen(false);
+      await fetchSemesters();
+    } catch (err) {
+      setSemError(err?.response?.data?.message || "Lưu học kỳ thất bại.");
+    } finally {
+      setSemSaving(false);
+    }
+  };
+
+  const toggleYear = (year) => {
+    setExpandedYears((prev) => ({ ...prev, [year]: !prev[year] }));
+  };
 
   return (
     <div className="space-y-6 p-6">
@@ -124,43 +245,75 @@ const SettingsPage = () => {
             })}
           </div>
 
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Học kỳ đang áp dụng</CardTitle>
-                <CardDescription>Dữ liệu lấy từ danh mục học kỳ của backend.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {activeSemester ? (
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-lg font-bold text-gray-900">{activeSemester.name}</p>
-                        <p className="mt-1 text-sm text-gray-500">
-                          {activeSemester.startDate || "-"} đến {activeSemester.endDate || "-"}
-                        </p>
-                      </div>
-                      <Badge className="bg-green-100 text-green-800">
-                        {activeSemester.status || "ACTIVE"}
-                      </Badge>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="rounded-lg border border-dashed border-gray-300 p-8 text-center text-sm font-semibold text-gray-400">
-                    Chưa có học kỳ trong database.
-                  </div>
-                )}
-                <div className="space-y-2">
-                  {semesters.slice(0, 5).map((semester) => (
-                    <div key={semester.id} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2">
-                      <span className="text-sm font-medium text-gray-800">{semester.name}</span>
-                      <span className="text-xs text-gray-500">{semester.status || "-"}</span>
-                    </div>
-                  ))}
+          {/* Semester management */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Quản lý học kỳ theo năm học</CardTitle>
+                <CardDescription>
+                  Tạo và cập nhật học kỳ.
+                  {activeSemester && (
+                    <span className="ml-1">
+                      Học kỳ đang hoạt động: <strong>{activeSemester.name}</strong>
+                    </span>
+                  )}
+                </CardDescription>
+              </div>
+              <Button size="sm" onClick={openCreate} className="gap-1.5">
+                <Plus className="h-4 w-4" />
+                Thêm học kỳ
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {semestersByYear.length === 0 && (
+                <div className="rounded-lg border border-dashed border-gray-300 p-8 text-center text-sm font-semibold text-gray-400">
+                  Chưa có học kỳ trong database.
                 </div>
-              </CardContent>
-            </Card>
+              )}
+              {semestersByYear.map(([year, sems]) => {
+                const isOpen = expandedYears[year] !== false;
+                return (
+                  <div key={year} className="rounded-lg border border-gray-200 overflow-hidden">
+                    <button
+                      className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 text-left"
+                      onClick={() => toggleYear(year)}
+                    >
+                      <span className="font-semibold text-sm text-gray-800">Năm học {year}</span>
+                      <span className="flex items-center gap-2 text-xs text-gray-500">
+                        {sems.length} học kỳ
+                        {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      </span>
+                    </button>
+                    {isOpen && (
+                      <div className="divide-y divide-gray-100">
+                        {sems.map((sem) => (
+                          <div key={sem.id} className="flex items-center justify-between px-4 py-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-gray-900 truncate">{sem.name}</p>
+                              <p className="text-xs text-gray-500">
+                                {sem.startDate || "—"} → {sem.endDate || "—"}
+                                {sem.code ? <span className="ml-2 text-gray-400">({sem.code})</span> : null}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0 ml-3">
+                              <Badge className={statusBadgeClass(sem.status)}>
+                                {sem.status || "INACTIVE"}
+                              </Badge>
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(sem)}>
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
 
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <Card>
               <CardHeader>
                 <CardTitle>Khung tiết học</CardTitle>
@@ -243,13 +396,111 @@ const SettingsPage = () => {
               </CardContent>
             </Card>
           </div>
-
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" disabled>Khôi phục mặc định</Button>
-            <Button disabled className="bg-blue-600 hover:bg-blue-700">Lưu cài đặt</Button>
-          </div>
         </>
       )}
+
+      {/* Semester create/edit dialog */}
+      <Dialog open={semDialogOpen} onOpenChange={setSemDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{editingSem ? "Cập nhật học kỳ" : "Thêm học kỳ mới"}</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {semError && (
+              <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {semError}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2 space-y-1.5">
+                <Label>Tên học kỳ <span className="text-red-500">*</span></Label>
+                <Input
+                  placeholder="VD: Học kỳ 1 năm học 2025-2026"
+                  value={semForm.name}
+                  onChange={(e) => setSemForm((f) => ({ ...f, name: e.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Mã học kỳ</Label>
+                <Input
+                  placeholder="VD: HK1_2526"
+                  value={semForm.code}
+                  onChange={(e) => setSemForm((f) => ({ ...f, code: e.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Năm học</Label>
+                <Input
+                  type="number"
+                  placeholder="VD: 2025"
+                  value={semForm.year}
+                  onChange={(e) => setSemForm((f) => ({ ...f, year: e.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Loại học kỳ</Label>
+                <Select value={semForm.type} onValueChange={(v) => setSemForm((f) => ({ ...f, type: v }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SEMESTER_TYPES.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Trạng thái</Label>
+                <Select value={semForm.status} onValueChange={(v) => setSemForm((f) => ({ ...f, status: v }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SEMESTER_STATUSES.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Ngày bắt đầu <span className="text-red-500">*</span></Label>
+                <Input
+                  type="date"
+                  value={semForm.startDate}
+                  onChange={(e) => setSemForm((f) => ({ ...f, startDate: e.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Ngày kết thúc <span className="text-red-500">*</span></Label>
+                <Input
+                  type="date"
+                  value={semForm.endDate}
+                  onChange={(e) => setSemForm((f) => ({ ...f, endDate: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSemDialogOpen(false)} disabled={semSaving}>
+              Huỷ
+            </Button>
+            <Button onClick={saveSemester} disabled={semSaving} className="gap-1.5">
+              {semSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              {editingSem ? "Cập nhật" : "Tạo học kỳ"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

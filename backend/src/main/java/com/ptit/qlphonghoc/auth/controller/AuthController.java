@@ -34,19 +34,19 @@ public class AuthController {
     @PostMapping("/login")
     public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request,
                                             HttpServletRequest httpRequest) {
-        return ApiResponse.success("Login successful", authService.login(request, httpRequest));
+        return ApiResponse.success("Đăng nhập thành công", authService.login(request, httpRequest));
     }
 
     @GetMapping("/me")
     public ApiResponse<CurrentUserResponse> me(@AuthenticationPrincipal CustomUserDetails userDetails) {
-        return ApiResponse.success("Current user fetched successfully",
+        return ApiResponse.success("Người dùng hiện tại",
                 authService.getCurrentUser(userDetails.getUsername()));
     }
 
     @PutMapping("/me")
     public ApiResponse<UserSummaryResponse> updateMe(@AuthenticationPrincipal CustomUserDetails userDetails,
                                                      @RequestBody UpdateProfileRequest request) {
-        return ApiResponse.success("Profile updated successfully",
+        return ApiResponse.success("Cập nhật thông tin người dùng thành công",
                 authService.updateCurrentUser(userDetails.getUsername(), request));
     }
 
@@ -54,18 +54,18 @@ public class AuthController {
     public ApiResponse<Void> changePassword(@AuthenticationPrincipal CustomUserDetails userDetails,
                                             @RequestBody ChangePasswordRequest request) {
         authService.changePassword(userDetails.getUsername(), request);
-        return ApiResponse.success("Password changed successfully", null);
+        return ApiResponse.success("Đổi mật khẩu thành công.", null);
     }
 
     @PostMapping("/forgot-password")
     public ApiResponse<Void> forgotPassword(@RequestBody ForgotPasswordRequest request) {
         authService.forgotPassword(request);
-        return ApiResponse.success("If the email exists, a reset password link has been sent.", null);
+        return ApiResponse.success("Link cập nhật mật khẩu đã gửi đến email người dùng.", null);
     }
 
     @PostMapping("/reset-password")
     public ApiResponse<Void> resetPassword(@RequestBody ResetPasswordRequest request) {
         authService.resetPassword(request);
-        return ApiResponse.success("Password reset successfully", null);
+        return ApiResponse.success("Đổi mật khẩu thành công", null);
     }
 }
