@@ -15,12 +15,15 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Locale;
 
 @Service
 public class LecturerRoomChangeRequestService {
+
+    private static final int NOTE_MAX_LENGTH = 4000;
 
     private final LecturerRepository lecturerRepository;
     private final StaffEmergencyRoomChangeRepository repository;
@@ -70,6 +73,7 @@ public class LecturerRoomChangeRequestService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "So nguoi du kien phai > 0.");
         }
 
+        String effectiveRoomType = effectiveRequiredRoomType(schedule, roomType);
         return repository.findAvailableRoomsForChange(
                         schedule.getSemesterId(),
                         schedule.getScheduleId(),
@@ -79,7 +83,7 @@ public class LecturerRoomChangeRequestService {
                         schedule.getSlotEndId(),
                         attendees,
                         buildingId,
-                        normalizeBlank(roomType),
+                        effectiveRoomType,
                         normalizeBlank(keyword),
                         window.scope(),
                         window.targetDate(),
@@ -120,8 +124,10 @@ public class LecturerRoomChangeRequestService {
         );
 
         if (request.getNewClassroomId() == null) {
-            throw new BadRequestException("CLASSROOM_NOT_FOUND", "newClassroomId khong duoc de trong.");
+            throw new BadRequestException("ROOM_NOT_FOUND", "newClassroomId khong duoc de trong.");
         }
+        repository.lockClassroomById(request.getNewClassroomId())
+                .orElseThrow(() -> new BadRequestException("ROOM_NOT_FOUND", "Phong moi khong ton tai."));
         if (request.getNewClassroomId().equals(schedule.getCurrentClassroomId())) {
             throw new BadRequestException("ROOM_TIME_CONFLICT", "Phong moi phai khac phong hien tai.");
         }
@@ -131,6 +137,7 @@ public class LecturerRoomChangeRequestService {
         if (request.getReason().trim().length() < 10) {
             throw new BadRequestException("VALIDATION_FAILED", "reason phai co it nhat 10 ky tu.");
         }
+        validateLength(request.getReason(), "reason", NOTE_MAX_LENGTH);
 
         int duplicateCount = repository.countDuplicatePendingChange(
                 lecturerUserId,
@@ -157,7 +164,7 @@ public class LecturerRoomChangeRequestService {
                 request.getNewClassroomId(),
                 schedule.getMaxCapacity(),
                 null,
-                "",
+                effectiveRequiredRoomType(schedule, null),
                 window.scope(),
                 window.targetDate(),
                 window.targetWeek(),
@@ -267,6 +274,16 @@ public class LecturerRoomChangeRequestService {
                         "Ngay doi phong phai trung voi thu hoc cua lop hoc phan."
                 );
             }
+            if (targetDate.isBefore(LocalDate.now())) {
+                throw new BadRequestException("PAST_TIME_NOT_ALLOWED", "targetDate khong duoc la ngay trong qua khu.");
+            }
+            if (targetDate.isEqual(LocalDate.now()) && schedule.getScheduleEndTime() != null
+                    && !LocalTime.now().isBefore(schedule.getScheduleEndTime())) {
+                throw new BadRequestException(
+                        "PAST_TIME_NOT_ALLOWED",
+                        "Lich hoc da ket thuc, khong the gui yeu cau doi phong."
+                );
+            }
             int targetWeek = weekOfSemester(schedule.getSemesterStartDate(), targetDate);
             return new ScopeWindow(scope, targetDate, null, null, targetWeek, targetWeek);
         }
@@ -333,6 +350,25 @@ public class LecturerRoomChangeRequestService {
         return value == null ? "" : value.trim();
     }
 
+    private String effectiveRequiredRoomType(
+            StaffEmergencyRoomChangeRepository.ScheduleProjection schedule,
+            String requestedRoomType
+    ) {
+        if (schedule.getRequiredRoomType() != null && !schedule.getRequiredRoomType().isBlank()) {
+            return schedule.getRequiredRoomType().trim().toUpperCase(Locale.ROOT);
+        }
+        return normalizeBlank(requestedRoomType).toUpperCase(Locale.ROOT);
+    }
+
+    private void validateLength(String value, String fieldName, int maxLength) {
+        if (value != null && value.trim().length() > maxLength) {
+            throw new BadRequestException(
+                    "VALIDATION_FAILED",
+                    fieldName + " khong duoc vuot qua " + maxLength + " ky tu."
+            );
+        }
+    }
+
     private EmergencyRoomChangeScheduleResponse toScheduleResponse(
             StaffEmergencyRoomChangeRepository.ScheduleProjection projection
     ) {
@@ -386,6 +422,9 @@ public class LecturerRoomChangeRequestService {
         response.setCourseName(projection.getCourseName());
         response.setLecturerName(projection.getLecturerName());
         response.setDayOfWeek(projection.getDayOfWeek());
+        response.setDayCode(projection.getDayCode());
+        response.setFromWeekNo(projection.getFromWeekNo());
+        response.setToWeekNo(projection.getToWeekNo());
         response.setSlotStartId(projection.getSlotStartId());
         response.setSlotEndId(projection.getSlotEndId());
         response.setSlotStart(projection.getSlotStart());

@@ -18,7 +18,8 @@ public interface StaffAllocationRepository extends JpaRepository<ClassSection, I
             cs.section_id AS sectionId,
             cs.semester_id AS semesterId,
             cs.lecturer_id AS lecturerId,
-            CONCAT(c.course_code, '.L', cs.section_code) AS classCode,
+            c.course_code AS courseCode,
+            cs.section_code AS classCode,
             cs.section_code AS sectionCode,
             c.course_name AS courseName,
             l.full_name AS lecturerName,
@@ -422,6 +423,7 @@ public interface StaffAllocationRepository extends JpaRepository<ClassSection, I
         Integer getSemesterId();
         Integer getLecturerId();
         String getClassCode();
+        String getCourseCode();
         String getSectionCode();
         String getCourseName();
         String getLecturerName();

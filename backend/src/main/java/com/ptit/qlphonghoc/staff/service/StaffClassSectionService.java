@@ -276,6 +276,7 @@ public class StaffClassSectionService implements ClassSectionTableReader {
         response.setScheduleId(projection.getScheduleId());
         response.setSectionCode(projection.getSectionCode());
         response.setClassCode(projection.getClassCode());
+        response.setCourseCode(projection.getCourseCode());
         response.setCourseName(projection.getCourseName());
         response.setFacultyCode(projection.getFacultyCode());
         response.setDepartmentCode(projection.getDepartmentCode());

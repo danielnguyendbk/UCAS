@@ -70,7 +70,10 @@ const unwrapData = (response) => response?.data?.data ?? response?.data ?? null;
 
 const getErrorMessage = (error, fallback = "Thao tác thất bại.") =>
   error?.response?.data?.message ||
-  error?.response?.data?.error ||
+  error?.response?.data?.error?.message ||
+  (typeof error?.response?.data?.error === "string"
+    ? error.response.data.error
+    : null) ||
   error?.message ||
   fallback;
 
@@ -368,6 +371,9 @@ const RoomBookingRequestForm = ({
     }
     if (!form.requestType) nextErrors.requestType = "Vui lòng chọn mục đích.";
     if (!form.bookingDate) nextErrors.bookingDate = "Vui lòng chọn ngày sử dụng.";
+    if (form.bookingDate && form.bookingDate < new Date().toISOString().slice(0, 10)) {
+      nextErrors.bookingDate = "Không thể chọn ngày trong quá khứ.";
+    }
     if (!form.slotStartId) nextErrors.slotStartId = "Vui lòng chọn tiết bắt đầu.";
     if (!form.slotEndId) nextErrors.slotEndId = "Vui lòng chọn tiết kết thúc.";
     if (form.slotStartId && form.slotEndId && !slotRangeValid) {
@@ -388,6 +394,8 @@ const RoomBookingRequestForm = ({
         : "Vui lòng nhập thiết bị hoặc mô tả nhu cầu.";
     } else if (form.purposeNote.trim().length < 10) {
       nextErrors.purposeNote = "Mô tả nhu cầu phải có ít nhất 10 ký tự.";
+    } else if (form.purposeNote.trim().length > 4000) {
+      nextErrors.purposeNote = "Mô tả nhu cầu không được vượt quá 4000 ký tự.";
     }
 
     return nextErrors;

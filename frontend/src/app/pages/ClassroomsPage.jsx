@@ -164,6 +164,31 @@ export const ClassroomsPage = () => {
 
   const [viewClassroom, setViewClassroom] = useState(null);
   const [deleteClassroom, setDeleteClassroom] = useState(null);
+  const [deleteErrorMessage, setDeleteErrorMessage] = useState("");
+
+
+  const getDeleteClassroomErrorMessage = (error) => {
+    const backendMessage =
+      error?.response?.data?.message ||
+      error?.response?.data?.error ||
+      error?.response?.data?.data ||
+      "";
+
+    const rawMessage = String(backendMessage || error?.message || "").toLowerCase();
+
+    if (
+      error?.response?.status === 409 ||
+      rawMessage.includes("foreign key") ||
+      rawMessage.includes("constraint") ||
+      rawMessage.includes("cannot delete") ||
+      rawMessage.includes("đang được sử dụng") ||
+      rawMessage.includes("dang duoc su dung")
+    ) {
+      return "Không thể xóa phòng học này vì phòng đang được sử dụng trong lịch học, lịch thi, yêu cầu mượn phòng hoặc dữ liệu liên quan. Bạn có thể chuyển phòng sang trạng thái tạm ngưng thay vì xóa.";
+    }
+
+    return backendMessage || "Không xóa được phòng học. Vui lòng thử lại.";
+  };
 
   const handleSearchChange = (event) => {
     setCurrentPage(1);
@@ -400,6 +425,7 @@ export const ClassroomsPage = () => {
 
     setSaving(true);
     setErrorMessage("");
+    setDeleteErrorMessage("");
 
     try {
       await httpClient.delete(`/api/classrooms/${deleteClassroom.id}`);
@@ -407,10 +433,11 @@ export const ClassroomsPage = () => {
       await loadData();
     } catch (error) {
       console.error("Không xóa được phòng học:", error);
-      setErrorMessage(
-        error?.response?.data?.message ||
-          "Không xóa được phòng học. Phòng có thể đang được sử dụng trong lịch học.",
-      );
+
+      const message = getDeleteClassroomErrorMessage(error);
+
+      setDeleteErrorMessage(message);
+      setErrorMessage(message);
     } finally {
       setSaving(false);
     }
@@ -652,7 +679,10 @@ export const ClassroomsPage = () => {
                       variant="outline"
                       size="sm"
                       className="text-red-600 hover:text-red-700"
-                      onClick={() => setDeleteClassroom(room)}
+                      onClick={() => {
+                        setDeleteErrorMessage("");
+                        setDeleteClassroom(room);
+                      }}
                     >
                       <Trash2 className="mr-1 h-4 w-4" />
                       Xóa
@@ -942,7 +972,12 @@ export const ClassroomsPage = () => {
 
       <Dialog
         open={Boolean(deleteClassroom)}
-        onOpenChange={() => setDeleteClassroom(null)}
+        onOpenChange={(open) => {
+          if (!open && !saving) {
+            setDeleteClassroom(null);
+            setDeleteErrorMessage("");
+          }
+        }}
       >
         <DialogContent>
           <DialogHeader>
@@ -952,15 +987,9 @@ export const ClassroomsPage = () => {
             </DialogDescription>
           </DialogHeader>
 
-          {deleteClassroom && (
-            <div className="rounded-lg bg-gray-50 p-4 text-sm">
-              <p className="font-semibold text-gray-900">
-                {getRoomDisplayName(deleteClassroom)}
-              </p>
-              <p className="mt-1 text-gray-500">
-                Tòa nhà: {deleteClassroom.building_name || "Chưa có"} · Sức chứa:{" "}
-                {deleteClassroom.capacity}
-              </p>
+          {deleteErrorMessage && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {deleteErrorMessage}
             </div>
           )}
 

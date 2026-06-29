@@ -3,6 +3,7 @@ package com.ptit.qlphonghoc.staff.dto.allocation;
 public class AllocationResponse {
     private Integer sectionId;
     private String classCode;
+    private String courseCode;
     private String sectionCode;
     private String courseName;
     private String lecturerName;
@@ -30,6 +31,8 @@ public class AllocationResponse {
     public void setSectionId(Integer sectionId) { this.sectionId = sectionId; }
     public String getClassCode() { return classCode; }
     public void setClassCode(String classCode) { this.classCode = classCode; }
+    public String getCourseCode() { return courseCode; }
+    public void setCourseCode(String courseCode) { this.courseCode = courseCode; }
     public String getSectionCode() { return sectionCode; }
     public void setSectionCode(String sectionCode) { this.sectionCode = sectionCode; }
     public String getCourseName() { return courseName; }

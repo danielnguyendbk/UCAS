@@ -360,6 +360,7 @@ public class StaffAllocationService implements AllocationValidationService {
         AllocationResponse response = new AllocationResponse();
         response.setSectionId(projection.getSectionId());
         response.setClassCode(projection.getClassCode());
+        response.setCourseCode(projection.getCourseCode());
         response.setSectionCode(projection.getSectionCode());
         response.setCourseName(projection.getCourseName());
         response.setLecturerName(projection.getLecturerName());
@@ -485,11 +486,11 @@ public class StaffAllocationService implements AllocationValidationService {
     ) {
         forEachOverlappingPair(group, bounds, (left, right) -> {
             conflicts.add(conflict(left, "ROOM_TIME_CONFLICT", "HIGH",
-                    "Room " + left.getAssignedRoom() + " overlaps with " + right.getClassCode() + ".",
-                    right.getClassCode()));
+                    "Room " + left.getAssignedRoom() + " overlaps with " + displaySectionRef(right) + ".",
+                    displaySectionRef(right)));
             conflicts.add(conflict(right, "ROOM_TIME_CONFLICT", "HIGH",
-                    "Room " + right.getAssignedRoom() + " overlaps with " + left.getClassCode() + ".",
-                    left.getClassCode()));
+                    "Room " + right.getAssignedRoom() + " overlaps with " + displaySectionRef(left) + ".",
+                    displaySectionRef(left)));
         });
     }
 
@@ -500,11 +501,11 @@ public class StaffAllocationService implements AllocationValidationService {
     ) {
         forEachOverlappingPair(group, bounds, (left, right) -> {
             conflicts.add(conflict(left, "LECTURER_TIME_CONFLICT", "HIGH",
-                    "Lecturer " + left.getLecturerName() + " also teaches " + right.getClassCode() + ".",
-                    right.getClassCode()));
+                    "Lecturer " + left.getLecturerName() + " also teaches " + displaySectionRef(right) + ".",
+                    displaySectionRef(right)));
             conflicts.add(conflict(right, "LECTURER_TIME_CONFLICT", "HIGH",
-                    "Lecturer " + right.getLecturerName() + " also teaches " + left.getClassCode() + ".",
-                    left.getClassCode()));
+                    "Lecturer " + right.getLecturerName() + " also teaches " + displaySectionRef(left) + ".",
+                    displaySectionRef(left)));
         });
     }
 
@@ -524,6 +525,13 @@ public class StaffAllocationService implements AllocationValidationService {
         }
     }
 
+    private String displaySectionRef(StaffAllocationRepository.AllocationProjection schedule) {
+        if (isBlank(schedule.getCourseCode())) {
+            return schedule.getSectionCode();
+        }
+        return schedule.getCourseCode() + " · " + schedule.getSectionCode();
+    }
+
     private ConflictResponse conflict(
             StaffAllocationRepository.AllocationProjection schedule,
             String type,
@@ -539,6 +547,7 @@ public class StaffAllocationService implements AllocationValidationService {
         response.setSlotNumber(schedule.getSlotNumber());
         response.setRoomCode(schedule.getAssignedRoom());
         response.setClassCode(schedule.getClassCode());
+        response.setCourseCode(schedule.getCourseCode());
         response.setSectionCode(schedule.getSectionCode());
         response.setCourseName(schedule.getCourseName());
         response.setLecturerName(schedule.getLecturerName());
@@ -728,6 +737,7 @@ public class StaffAllocationService implements AllocationValidationService {
     private boolean matchesAllocationSearch(AllocationResponse allocation, String search) {
         return isBlank(search)
                 || containsIgnoreCase(allocation.getClassCode(), search)
+                || containsIgnoreCase(allocation.getCourseCode(), search)
                 || containsIgnoreCase(allocation.getSectionCode(), search)
                 || containsIgnoreCase(allocation.getCourseName(), search)
                 || containsIgnoreCase(allocation.getAssignedRoom(), search);
@@ -736,6 +746,7 @@ public class StaffAllocationService implements AllocationValidationService {
     private boolean matchesConflictSearch(ConflictResponse conflict, String search) {
         return isBlank(search)
                 || containsIgnoreCase(conflict.getClassCode(), search)
+                || containsIgnoreCase(conflict.getCourseCode(), search)
                 || containsIgnoreCase(conflict.getSectionCode(), search)
                 || containsIgnoreCase(conflict.getCourseName(), search)
                 || containsIgnoreCase(conflict.getRoomCode(), search)

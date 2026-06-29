@@ -265,9 +265,7 @@ export const LecturersPage = () => {
   };
 
   const validateForm = () => {
-    if (!lecturerForm.user_id) {
-      return "Vui lòng chọn tài khoản người dùng cho giảng viên.";
-    }
+
 
     if (!lecturerForm.department_id) {
       return "Vui lòng chọn bộ môn/khoa.";
@@ -526,22 +524,7 @@ export const LecturersPage = () => {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="user-id">Tài khoản liên kết</Label>
-                <select
-                  id="user-id"
-                  value={lecturerForm.user_id}
-                  onChange={(event) => handleSelectUser(event.target.value)}
-                  className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                >
-                  <option value="">Chọn tài khoản</option>
-                  {lecturerUserOptions.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.username} - {user.full_name || user.email}
-                    </option>
-                  ))}
-                </select>
-              </div>
+
             </div>
 
             <div className="space-y-2">

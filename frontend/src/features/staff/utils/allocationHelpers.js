@@ -1,3 +1,5 @@
+import { getDisplayCourseCode } from "@/utils/sectionDisplay";
+
 const DAY_LABELS = {
   MON: "Thứ 2",
   TUE: "Thứ 3",
@@ -55,8 +57,7 @@ export const extractBuilding = (roomCode) => {
   return parts.length > 1 ? parts[0] : "—";
 };
 
-export const getCourseCode = (row) =>
-  row.classCode || row.sectionCode?.split(".")?.[0] || "—";
+export const getCourseCode = (row) => getDisplayCourseCode(row);
 
 export const CONFLICT_TYPE_LABELS = {
   UNASSIGNED: "Không có phòng phù hợp",

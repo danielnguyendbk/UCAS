@@ -47,6 +47,7 @@ import {
 } from "@/app/components/ui/table";
 import { Textarea } from "@/app/components/ui/textarea";
 import { httpClient } from "@/services/httpClient";
+import { getDisplayClassCodes, getDisplayCourseCode, getDisplaySectionCode } from "@/utils/sectionDisplay";
 
 const PAGE_SIZE = 10;
 
@@ -148,10 +149,10 @@ const getSemesterName = (semester) =>
   semester?.semesterName ?? semester?.semester_name ?? semester?.name ?? semester?.semesterCode ?? semester?.semester_code ?? "—";
 const getSemesterStatus = (semester) => String(semester?.status ?? "").toUpperCase();
 
-const getCourseCode = (exam) => exam?.courseCode ?? exam?.course_code ?? "—";
+const getCourseCode = (exam) => getDisplayCourseCode(exam);
 const getCourseName = (exam) => exam?.courseName ?? exam?.course_name ?? "—";
-const getSectionCode = (exam) => exam?.sectionCode ?? exam?.section_code ?? exam?.classCode ?? exam?.class_code ?? "—";
-const getClassCodes = (exam) => exam?.classCodes ?? exam?.class_codes ?? exam?.classCode ?? exam?.class_code ?? getSectionCode(exam);
+const getSectionCode = (exam) => getDisplaySectionCode(exam);
+const getClassCodes = (exam) => getDisplayClassCodes(exam, getSectionCode(exam));
 const getRoomCode = (exam) => exam?.roomCode ?? exam?.classroomCode ?? exam?.classroom_code ?? exam?.roomName ?? exam?.room_name ?? "";
 const getBuildingCode = (exam) => exam?.buildingCode ?? exam?.building_code ?? "—";
 const getProctorName = (exam) =>
@@ -382,7 +383,7 @@ const AdminExamApprovalPage = () => {
       const matchesDepartment = selectedDepartment === "all" || getDepartmentCode(exam) === selectedDepartment || String(exam.departmentId ?? exam.department_id ?? "") === selectedDepartment;
       const matchesClass =
         selectedClass === "all" ||
-        String(exam.classCodes ?? exam.class_codes ?? exam.classCode ?? exam.class_code ?? "").includes(selectedClass);
+        getClassCodes(exam).includes(selectedClass);
       const searchable = [
         getCourseCode(exam),
         getCourseName(exam),

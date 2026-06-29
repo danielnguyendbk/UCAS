@@ -277,15 +277,22 @@ public class GlobalExceptionHandler {
             case "ALLOCATION_CONFLICT" -> "Lịch phân phòng đang có xung đột";
             case "CAPACITY_EXCEEDED" -> "Sức chứa phòng không đủ cho lớp học";
             case "ROOM_TIME_CONFLICT" -> "Phòng đã có lớp khác trong cùng thời gian";
+            case "EXAM_ROOM_CONFLICT" -> "Phòng đã có lịch thi trong cùng thời gian";
+            case "MAINTENANCE_BLOCK_CONFLICT" -> "Phòng đang có sự cố hoặc bảo trì chưa xử lý";
             case "LECTURER_TIME_CONFLICT" -> "Giảng viên bị trùng lịch dạy";
             case "ROOM_TYPE_MISMATCH" -> "Loại phòng không phù hợp với yêu cầu lớp học";
             case "ROOM_INACTIVE_OR_DELETED" -> "Phòng học không hoạt động hoặc đã bị xóa";
+            case "ROOM_NOT_FOUND" -> "Không tìm thấy phòng học";
             case "CALENDAR_BLOCK_CONFLICT" -> "Lịch học trùng với ngày nghỉ hoặc lịch khóa";
             case "INVALID_WEEK_RANGE" -> "Khoảng tuần học không hợp lệ";
             case "INVALID_TIME_RANGE" -> "Khoảng tiết học không hợp lệ";
+            case "PAST_TIME_NOT_ALLOWED" -> "Không thể thao tác với thời gian trong quá khứ";
+            case "INVALID_REQUEST_STATUS" -> "Trạng thái yêu cầu không hợp lệ cho thao tác này";
+            case "FORBIDDEN_OPERATION" -> "Bạn không có quyền thực hiện thao tác này";
 
             case "SCHEDULE_NOT_FOUND" -> "Không tìm thấy lịch học";
             case "CLASSROOM_NOT_FOUND" -> "Không tìm thấy phòng học";
+            case "REQUEST_NOT_FOUND" -> "Không tìm thấy yêu cầu";
             case "SEMESTER_NOT_FOUND" -> "Không tìm thấy học kỳ";
             case "USER_NOT_FOUND" -> "Không tìm thấy người dùng";
             case "COURSE_NOT_FOUND" -> "Không tìm thấy học phần";

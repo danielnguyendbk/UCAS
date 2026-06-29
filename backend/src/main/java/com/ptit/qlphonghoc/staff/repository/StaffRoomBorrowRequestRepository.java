@@ -163,6 +163,106 @@ public interface StaffRoomBorrowRequestRepository extends JpaRepository<ClassSec
         """, nativeQuery = true)
     Optional<RequestProjection> findRequestById(@Param("id") Integer id);
 
+    @Query(value = """
+        SELECT preferred_classroom_id
+        FROM room_borrow_requests
+        WHERE borrow_request_id = :id
+          AND preferred_classroom_id IS NOT NULL
+        FOR UPDATE
+        """, nativeQuery = true)
+    Optional<Integer> lockPreferredClassroomForRequest(@Param("id") Integer id);
+
+    @Query(value = """
+        SELECT COUNT(*)
+        FROM room_borrow_requests rbr
+        JOIN classrooms cr ON cr.classroom_id = rbr.preferred_classroom_id
+        WHERE rbr.borrow_request_id = :id
+          AND rbr.status = 'PENDING'
+          AND cr.is_active = TRUE
+          AND cr.is_deleted = FALSE
+          AND cr.capacity >= rbr.expected_attendees
+          AND NOT EXISTS (
+              SELECT 1
+              FROM schedules sch
+              JOIN class_sections cs ON cs.section_id = sch.section_id
+              WHERE sch.classroom_id = cr.classroom_id
+                AND sch.status = 'ASSIGNED'
+                AND cs.status = 'ACTIVE'
+                AND cs.semester_id = rbr.semester_id
+                AND sch.slot_start_id <= rbr.slot_end_id
+                AND sch.slot_end_id >= rbr.slot_start_id
+                AND sch.day_of_week = CASE DAYOFWEEK(rbr.booking_date)
+                    WHEN 1 THEN 'SUN'
+                    WHEN 2 THEN 'MON'
+                    WHEN 3 THEN 'TUE'
+                    WHEN 4 THEN 'WED'
+                    WHEN 5 THEN 'THU'
+                    WHEN 6 THEN 'FRI'
+                    WHEN 7 THEN 'SAT'
+                END
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM exams e
+              JOIN time_slots request_start ON request_start.slot_id = rbr.slot_start_id
+              JOIN time_slots request_end ON request_end.slot_id = rbr.slot_end_id
+              WHERE e.classroom_id = cr.classroom_id
+                AND e.exam_date = rbr.booking_date
+                AND e.status NOT IN ('CANCELLED','COMPLETED')
+                AND e.start_time IS NOT NULL
+                AND e.end_time IS NOT NULL
+                AND NOT (e.end_time <= request_start.start_time OR e.start_time >= request_end.end_time)
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM room_borrow_requests other_request
+              WHERE other_request.borrow_request_id <> rbr.borrow_request_id
+                AND other_request.approved_classroom_id = cr.classroom_id
+                AND other_request.booking_date = rbr.booking_date
+                AND other_request.slot_start_id <= rbr.slot_end_id
+                AND other_request.slot_end_id >= rbr.slot_start_id
+                AND other_request.status = 'APPROVED'
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM temporary_room_changes trc
+              JOIN schedules sch ON sch.schedule_id = trc.schedule_id
+              JOIN semesters sem2 ON sem2.semester_id = trc.semester_id
+              WHERE trc.new_classroom_id = cr.classroom_id
+                AND trc.status = 'APPROVED'
+                AND trc.is_active = TRUE
+                AND trc.semester_id = rbr.semester_id
+                AND sch.slot_start_id <= rbr.slot_end_id
+                AND sch.slot_end_id >= rbr.slot_start_id
+                AND sch.day_of_week = CASE DAYOFWEEK(rbr.booking_date)
+                    WHEN 1 THEN 'SUN'
+                    WHEN 2 THEN 'MON'
+                    WHEN 3 THEN 'TUE'
+                    WHEN 4 THEN 'WED'
+                    WHEN 5 THEN 'THU'
+                    WHEN 6 THEN 'FRI'
+                    WHEN 7 THEN 'SAT'
+                END
+                AND (
+                    (trc.change_scope = 'SESSION' AND trc.target_date = rbr.booking_date)
+                    OR (
+                        trc.change_scope IN ('WEEK_RANGE','REST_OF_SEMESTER')
+                        AND FLOOR(DATEDIFF(rbr.booking_date, sem2.start_date) / 7) + 1
+                            BETWEEN trc.from_week AND COALESCE(trc.to_week, 999)
+                    )
+                )
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM classroom_issue_reports cir
+              WHERE cir.classroom_id = cr.classroom_id
+                AND cir.is_deleted = FALSE
+                AND cir.status IN ('PENDING','IN_PROGRESS')
+                AND cir.severity_level IN ('HIGH','URGENT')
+          )
+        """, nativeQuery = true)
+    int countPreferredClassroomAvailableForApproval(@Param("id") Integer id);
+
     @Modifying
     @Query(value = """
         UPDATE room_borrow_requests

@@ -45,6 +45,15 @@ const dayCodeToJsDay = {
 const normalizeText = (value) =>
   (value || "").toString().trim().toLowerCase();
 
+const getErrorMessage = (error, fallback) =>
+  error?.response?.data?.message ||
+  error?.response?.data?.error?.message ||
+  (typeof error?.response?.data?.error === "string"
+    ? error.response.data.error
+    : null) ||
+  error?.message ||
+  fallback;
+
 const toDateInputValue = (date) => {
   const localDate = new Date(
     date.getTime() - date.getTimezoneOffset() * 60 * 1000,
@@ -391,6 +400,9 @@ const StaffBookingsPage = () => {
     const nextErrors = {};
     if (!bookingForm.semesterId) nextErrors.semesterId = "Vui lòng chọn học kỳ";
     if (!bookingForm.date) nextErrors.date = "Vui lòng chọn ngày";
+    if (bookingForm.date && bookingForm.date < new Date().toISOString().slice(0, 10)) {
+      nextErrors.date = "Không thể chọn ngày trong quá khứ.";
+    }
     if (!bookingForm.slotStartId) nextErrors.slotStartId = "Vui lòng chọn tiết bắt đầu";
     if (!bookingForm.slotEndId) {
       nextErrors.slotEndId = "Vui lòng chọn tiết kết thúc";
@@ -408,9 +420,15 @@ const StaffBookingsPage = () => {
     }
     if (!bookingForm.purpose.trim()) {
       nextErrors.purpose = "Vui lòng nhập mục đích sử dụng";
+    } else if (bookingForm.purpose.trim().length > 4000) {
+      nextErrors.purpose = "Mục đích không được vượt quá 4000 ký tự.";
     }
     if (!bookingForm.emergencyReason.trim()) {
       nextErrors.emergencyReason = "Vui lòng nhập lý do khẩn cấp";
+    } else if (bookingForm.emergencyReason.trim().length < 10) {
+      nextErrors.emergencyReason = "Lý do khẩn cấp phải có ít nhất 10 ký tự.";
+    } else if (bookingForm.emergencyReason.trim().length > 4000) {
+      nextErrors.emergencyReason = "Lý do khẩn cấp không được vượt quá 4000 ký tự.";
     }
     return nextErrors;
   };
@@ -428,6 +446,12 @@ const StaffBookingsPage = () => {
     }
     if (changeForm.scope === "SESSION" && !changeForm.targetDate) {
       nextErrors.targetDate = "Vui lòng chọn ngày đổi phòng";
+    } else if (
+      changeForm.scope === "SESSION" &&
+      changeForm.targetDate &&
+      changeForm.targetDate < new Date().toISOString().slice(0, 10)
+    ) {
+      nextErrors.targetDate = "Không thể chọn ngày trong quá khứ.";
     } else if (
       changeForm.scope === "SESSION" &&
       selectedChangeSchedule &&
@@ -453,7 +477,13 @@ const StaffBookingsPage = () => {
       nextErrors.fromWeek = "Vui lòng chọn tuần bắt đầu";
     }
     if (!changeForm.roomId) nextErrors.roomId = "Vui lòng chọn phòng mới";
-    if (!changeForm.reason.trim()) nextErrors.reason = "Vui lòng nhập lý do đổi phòng";
+    if (!changeForm.reason.trim()) {
+      nextErrors.reason = "Vui lòng nhập lý do đổi phòng";
+    } else if (changeForm.reason.trim().length < 10) {
+      nextErrors.reason = "Lý do đổi phòng phải có ít nhất 10 ký tự.";
+    } else if (changeForm.reason.trim().length > 4000) {
+      nextErrors.reason = "Lý do đổi phòng không được vượt quá 4000 ký tự.";
+    }
     return nextErrors;
   };
 
@@ -489,7 +519,7 @@ const StaffBookingsPage = () => {
       });
       setErrors({});
     } catch (error) {
-      toast.error(error.response?.data?.message || "Có lỗi xảy ra khi đặt phòng khẩn cấp.");
+      toast.error(getErrorMessage(error, "Có lỗi xảy ra khi đặt phòng khẩn cấp."));
     } finally {
       setSubmitting(false);
     }
@@ -525,7 +555,7 @@ const StaffBookingsPage = () => {
       });
       setErrors({});
     } catch (error) {
-      toast.error(error.response?.data?.message || "Có lỗi xảy ra khi đổi phòng khẩn cấp.");
+      toast.error(getErrorMessage(error, "Có lỗi xảy ra khi đổi phòng khẩn cấp."));
     } finally {
       setSubmitting(false);
     }
@@ -635,7 +665,7 @@ const StaffBookingsPage = () => {
     } catch (error) {
       setBookingAvailableRooms([]);
       setBookingRoomsError(
-        error.response?.data?.message || "Không tải được danh sách phòng khả dụng.",
+        getErrorMessage(error, "Không tải được danh sách phòng khả dụng."),
       );
     } finally {
       setLoadingBookingRooms(false);
@@ -671,7 +701,7 @@ const StaffBookingsPage = () => {
     } catch (error) {
       setChangeAvailableRooms([]);
       setChangeRoomsError(
-        error.response?.data?.message || "Không tải được danh sách phòng khả dụng.",
+        getErrorMessage(error, "Không tải được danh sách phòng khả dụng."),
       );
     } finally {
       setLoadingChangeRooms(false);

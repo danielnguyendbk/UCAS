@@ -12,6 +12,9 @@ public class EmergencyRoomChangeResponse {
     private String courseName;
     private String lecturerName;
     private String dayOfWeek;
+    private String dayCode;
+    private Integer fromWeekNo;
+    private Integer toWeekNo;
     private Integer slotStartId;
     private Integer slotEndId;
     private Integer slotStart;
@@ -95,6 +98,30 @@ public class EmergencyRoomChangeResponse {
 
     public void setDayOfWeek(String dayOfWeek) {
         this.dayOfWeek = dayOfWeek;
+    }
+
+    public String getDayCode() {
+        return dayCode;
+    }
+
+    public void setDayCode(String dayCode) {
+        this.dayCode = dayCode;
+    }
+
+    public Integer getFromWeekNo() {
+        return fromWeekNo;
+    }
+
+    public void setFromWeekNo(Integer fromWeekNo) {
+        this.fromWeekNo = fromWeekNo;
+    }
+
+    public Integer getToWeekNo() {
+        return toWeekNo;
+    }
+
+    public void setToWeekNo(Integer toWeekNo) {
+        this.toWeekNo = toWeekNo;
     }
 
     public Integer getSlotStartId() {
@@ -320,4 +347,5 @@ public class EmergencyRoomChangeResponse {
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
     }
+
 }

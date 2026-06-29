@@ -21,7 +21,8 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
             cs.course_id AS courseId,
             cs.lecturer_id AS lecturerId,
             cs.max_capacity AS maxCapacity,
-            CONCAT(c.course_code, '.L', cs.section_code) AS classCode,
+            c.course_code AS courseCode,
+            cs.section_code AS classCode,
             c.course_name AS courseName,
             NULL AS facultyCode,
             d.department_code AS departmentCode,
@@ -277,6 +278,7 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
         Integer getScheduleId();
         String getSectionCode();
         String getClassCode();
+        String getCourseCode();
         String getCourseName();
         String getFacultyCode();
         String getDepartmentCode();

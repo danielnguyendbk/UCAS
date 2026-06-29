@@ -1,5 +1,6 @@
 import { CheckCircle, XCircle } from "lucide-react";
 import { Badge } from "@/app/components/ui/badge";
+import { getDisplaySectionCode } from "@/utils/sectionDisplay";
 import {
   Table,
   TableBody,
@@ -58,7 +59,7 @@ export const AllocationTable = ({ items, isLoading, onOpenRoomSearch }) => {
                   className={`hover:bg-gray-50 border-b border-gray-100 ${row.status === "CONFLICT" ? "bg-red-50/40" : ""}`}
                 >
                   <TableCell className="font-mono text-xs font-bold text-blue-700">
-                    {row.classCode ?? row.sectionCode}
+                    {getDisplaySectionCode(row)}
                   </TableCell>
                   <TableCell className="text-xs font-medium text-gray-800">
                     {row.courseName}

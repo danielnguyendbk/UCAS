@@ -3,7 +3,12 @@ export const getApiError = (error, fallbackMessage) => {
 
   return {
     errorCode: payload?.errorCode || null,
-    message: payload?.message || fallbackMessage || error?.message,
+    message:
+      payload?.message ||
+      payload?.error?.message ||
+      (typeof payload?.error === "string" ? payload.error : null) ||
+      fallbackMessage ||
+      error?.message,
     details: payload?.details ?? payload?.errors ?? null,
   };
 };

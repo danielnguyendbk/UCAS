@@ -32,13 +32,15 @@ public class StaffRoomBorrowRequestService {
     public StaffRoomBorrowRequestResponse approve(Integer id, Integer staffUserId) {
         StaffRoomBorrowRequestRepository.RequestProjection current = findRequest(id);
         if (!"PENDING".equals(current.getStatus())) {
-            throw new BadRequestException("Only pending requests can be approved.");
+            throw new BadRequestException("INVALID_REQUEST_STATUS", "Only pending requests can be approved.");
         }
         if (current.getPreferredClassroomId() == null) {
-            throw new BadRequestException("This request does not have a preferred classroom to approve.");
+            throw new BadRequestException("ROOM_NOT_FOUND", "This request does not have a preferred classroom to approve.");
         }
-        if (!"AVAILABLE".equals(current.getAvailabilityStatus())) {
-            throw new BadRequestException("The preferred classroom is no longer available.");
+        repository.lockPreferredClassroomForRequest(id)
+                .orElseThrow(() -> new BadRequestException("ROOM_NOT_FOUND", "Preferred classroom not found."));
+        if (repository.countPreferredClassroomAvailableForApproval(id) == 0) {
+            throw new BadRequestException("ROOM_TIME_CONFLICT", "The preferred classroom is no longer available.");
         }
 
         try {
@@ -51,7 +53,10 @@ public class StaffRoomBorrowRequestService {
                 throw new BadRequestException("Request could not be approved.");
             }
         } catch (DataIntegrityViolationException exception) {
-            throw new BadRequestException(rootMessage(exception));
+            throw new BadRequestException(
+                    "DATA_CONSTRAINT_VIOLATION",
+                    "Request validation failed because related data changed. Please reload and try again."
+            );
         }
 
         return toResponse(findRequest(id));
@@ -61,10 +66,13 @@ public class StaffRoomBorrowRequestService {
     public StaffRoomBorrowRequestResponse reject(Integer id, String rejectReason) {
         StaffRoomBorrowRequestRepository.RequestProjection current = findRequest(id);
         if (!"PENDING".equals(current.getStatus())) {
-            throw new BadRequestException("Only pending requests can be rejected.");
+            throw new BadRequestException("INVALID_REQUEST_STATUS", "Only pending requests can be rejected.");
         }
         if (rejectReason == null || rejectReason.isBlank()) {
-            throw new BadRequestException("Reject reason is required.");
+            throw new BadRequestException("VALIDATION_FAILED", "Reject reason is required.");
+        }
+        if (rejectReason.trim().length() > 4000) {
+            throw new BadRequestException("VALIDATION_FAILED", "Reject reason must not exceed 4000 characters.");
         }
 
         int updated = repository.rejectPendingRequest(id, rejectReason.trim());

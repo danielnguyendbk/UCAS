@@ -56,7 +56,7 @@ public class ExamImportService {
 
     private static final Set<String> EXAM_TYPES = Set.of("MIDTERM", "FINAL", "MAKEUP", "OTHER");
     private static final Set<String> EXAM_METHODS = Set.of("WRITTEN", "ORAL", "PRACTICAL", "ONLINE");
-    private static final Set<String> OVERWRITABLE_STATUSES = Set.of("DRAFT", "NEEDS_ROOM", "ROOM_ASSIGNED");
+    private static final Set<String> OVERWRITABLE_STATUSES = Set.of("DRAFT", "NEEDS_ROOM", "ROOM_ASSIGNED", "CONFLICT");
     private static final Set<String> READ_ONLY_WORKFLOW_STATUSES = Set.of("PUBLISHED", "LOCKED");
 
     private final NamedParameterJdbcTemplate jdbc;
@@ -500,7 +500,7 @@ public class ExamImportService {
         List<String> messages = new ArrayList<>();
 
         if ("UPDATE".equals(operation)) {
-            messages.add("Sẽ cập nhật lịch thi hiện có");
+            messages.add("Sẽ cập nhật/ghi đè lịch thi hiện có");
         }
 
         if (missingRoom) {

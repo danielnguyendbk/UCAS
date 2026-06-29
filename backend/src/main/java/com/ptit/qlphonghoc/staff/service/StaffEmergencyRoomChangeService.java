@@ -13,6 +13,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Locale;
@@ -21,6 +22,7 @@ import java.util.Locale;
 public class StaffEmergencyRoomChangeService {
 
     private static final int OPEN_ENDED_WEEK = 999;
+    private static final int NOTE_MAX_LENGTH = 4000;
 
     private final StaffEmergencyRoomChangeRepository repository;
 
@@ -70,6 +72,7 @@ public class StaffEmergencyRoomChangeService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "So nguoi du kien phai > 0.");
         }
 
+        String effectiveRoomType = effectiveRequiredRoomType(schedule, roomType);
         return repository.findAvailableRoomsForChange(
                         schedule.getSemesterId(),
                         schedule.getScheduleId(),
@@ -79,7 +82,7 @@ public class StaffEmergencyRoomChangeService {
                         schedule.getSlotEndId(),
                         attendees,
                         buildingId,
-                        normalizeBlank(roomType),
+                        effectiveRoomType,
                         normalizeBlank(keyword),
                         window.scope(),
                         window.targetDate(),
@@ -107,8 +110,10 @@ public class StaffEmergencyRoomChangeService {
         );
 
         if (request.getNewClassroomId() == null) {
-            throw new BadRequestException("CLASSROOM_NOT_FOUND", "newClassroomId khong duoc de trong.");
+            throw new BadRequestException("ROOM_NOT_FOUND", "newClassroomId khong duoc de trong.");
         }
+        repository.lockClassroomById(request.getNewClassroomId())
+                .orElseThrow(() -> new BadRequestException("ROOM_NOT_FOUND", "Phong moi khong ton tai."));
 
         if (request.getNewClassroomId().equals(schedule.getCurrentClassroomId())) {
             throw new BadRequestException("ROOM_TIME_CONFLICT", "Phong moi phai khac phong hien tai.");
@@ -120,6 +125,7 @@ public class StaffEmergencyRoomChangeService {
         if (request.getReason().trim().length() < 10) {
             throw new BadRequestException("VALIDATION_FAILED", "reason phai co it nhat 10 ky tu.");
         }
+        validateLength(request.getReason(), "reason", NOTE_MAX_LENGTH);
 
         int overlappingCount = repository.countOverlappingApprovedChangeForSchedule(
                 schedule.getScheduleId(),
@@ -142,12 +148,12 @@ public class StaffEmergencyRoomChangeService {
                 schedule.getCurrentClassroomId(),
                 schedule.getDayOfWeekCode(),
                 schedule.getSlotStartId(),
-                        schedule.getSlotEndId(),
-                        request.getNewClassroomId(),
-                        schedule.getMaxCapacity(),
-                        null,
-                        "",
-                        window.scope(),
+                schedule.getSlotEndId(),
+                request.getNewClassroomId(),
+                schedule.getMaxCapacity(),
+                null,
+                effectiveRequiredRoomType(schedule, null),
+                window.scope(),
                 window.targetDate(),
                 window.targetWeek(),
                 window.fromWeek(),
@@ -191,11 +197,13 @@ public class StaffEmergencyRoomChangeService {
 
         StaffEmergencyRoomChangeRepository.ChangeProjection change = findChange(id);
         if (!"PENDING".equals(change.getStatus())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chi duoc duyet don dang cho.");
+            throw new BadRequestException("INVALID_REQUEST_STATUS", "Chi duoc duyet don dang cho.");
         }
         if (change.getRequestedClassroomId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Don chua co phong de xuat.");
+            throw new BadRequestException("ROOM_NOT_FOUND", "Don chua co phong de xuat.");
         }
+        repository.lockClassroomById(change.getRequestedClassroomId())
+                .orElseThrow(() -> new BadRequestException("ROOM_NOT_FOUND", "Phong de xuat khong ton tai."));
 
         StaffEmergencyRoomChangeRepository.ScheduleProjection schedule =
                 findAndValidateSchedule(change.getSemesterId(), change.getSectionScheduleId());
@@ -213,12 +221,12 @@ public class StaffEmergencyRoomChangeService {
                 schedule.getCurrentClassroomId(),
                 schedule.getDayOfWeekCode(),
                 schedule.getSlotStartId(),
-                        schedule.getSlotEndId(),
-                        change.getRequestedClassroomId(),
-                        schedule.getMaxCapacity(),
-                        null,
-                        "",
-                        window.scope(),
+                schedule.getSlotEndId(),
+                change.getRequestedClassroomId(),
+                schedule.getMaxCapacity(),
+                null,
+                effectiveRequiredRoomType(schedule, null),
+                window.scope(),
                 window.targetDate(),
                 window.targetWeek(),
                 window.fromWeek(),
@@ -250,11 +258,12 @@ public class StaffEmergencyRoomChangeService {
 
         StaffEmergencyRoomChangeRepository.ChangeProjection change = findChange(id);
         if (!"PENDING".equals(change.getStatus())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chi duoc tu choi don dang cho.");
+            throw new BadRequestException("INVALID_REQUEST_STATUS", "Chi duoc tu choi don dang cho.");
         }
         if (rejectReason == null || rejectReason.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "rejectReason khong duoc de trong.");
+            throw new BadRequestException("VALIDATION_FAILED", "rejectReason khong duoc de trong.");
         }
+        validateLength(rejectReason, "rejectReason", NOTE_MAX_LENGTH);
 
         int updated = repository.rejectPendingChange(id, staffUserId, rejectReason.trim());
         if (updated == 0) {
@@ -277,28 +286,28 @@ public class StaffEmergencyRoomChangeService {
             Integer scheduleId
     ) {
         if (semesterId == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "semesterId khong duoc de trong.");
+            throw new BadRequestException("SEMESTER_NOT_FOUND", "semesterId khong duoc de trong.");
         }
         if (scheduleId == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "sectionScheduleId khong duoc de trong.");
+            throw new BadRequestException("SCHEDULE_NOT_FOUND", "sectionScheduleId khong duoc de trong.");
         }
 
         return repository.findScheduleDetail(semesterId, scheduleId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
+                .orElseThrow(() -> new BadRequestException(
+                        "SCHEDULE_NOT_FOUND",
                         "Khong tim thay lich hoc da phan phong trong hoc ky da chon."
                 ));
     }
 
     private void validateStaff(Integer staffUserId) {
         if (staffUserId == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "staffUserId khong duoc de trong.");
+            throw new BadRequestException("FORBIDDEN_OPERATION", "staffUserId khong duoc de trong.");
         }
 
         int staffCount = repository.countActiveStaffOrAdminById(staffUserId);
         if (staffCount == 0) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+            throw new BadRequestException(
+                    "FORBIDDEN_OPERATION",
                     "staffUserId khong hop le hoac khong phai STAFF/ADMIN dang hoat dong."
             );
         }
@@ -328,9 +337,16 @@ public class StaffEmergencyRoomChangeService {
                 );
             }
             if (targetDate.isBefore(today)) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
+                throw new BadRequestException(
+                        "PAST_TIME_NOT_ALLOWED",
                         "targetDate khong duoc la ngay trong qua khu."
+                );
+            }
+            if (targetDate.isEqual(today) && schedule.getScheduleEndTime() != null
+                    && !LocalTime.now().isBefore(schedule.getScheduleEndTime())) {
+                throw new BadRequestException(
+                        "PAST_TIME_NOT_ALLOWED",
+                        "Lich hoc da ket thuc, khong the doi phong khan cap."
                 );
             }
             if (!schedule.getDayOfWeekCode().equals(toDayCode(targetDate))) {
@@ -381,13 +397,13 @@ public class StaffEmergencyRoomChangeService {
 
     private String normalizeScope(String rawScope) {
         if (rawScope == null || rawScope.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "changeScope khong duoc de trong.");
+            throw new BadRequestException("VALIDATION_FAILED", "changeScope khong duoc de trong.");
         }
 
         String scope = rawScope.trim().toUpperCase(Locale.ROOT);
         if (!scope.equals("SESSION") && !scope.equals("WEEK_RANGE") && !scope.equals("REST_OF_SEMESTER")) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+            throw new BadRequestException(
+                    "VALIDATION_FAILED",
                     "changeScope chi nhan SESSION, WEEK_RANGE hoac REST_OF_SEMESTER."
             );
         }
@@ -419,6 +435,25 @@ public class StaffEmergencyRoomChangeService {
 
     private String normalizeBlank(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private String effectiveRequiredRoomType(
+            StaffEmergencyRoomChangeRepository.ScheduleProjection schedule,
+            String requestedRoomType
+    ) {
+        if (schedule.getRequiredRoomType() != null && !schedule.getRequiredRoomType().isBlank()) {
+            return schedule.getRequiredRoomType().trim().toUpperCase(Locale.ROOT);
+        }
+        return normalizeBlank(requestedRoomType).toUpperCase(Locale.ROOT);
+    }
+
+    private void validateLength(String value, String fieldName, int maxLength) {
+        if (value != null && value.trim().length() > maxLength) {
+            throw new BadRequestException(
+                    "VALIDATION_FAILED",
+                    fieldName + " khong duoc vuot qua " + maxLength + " ky tu."
+            );
+        }
     }
 
     private String normalizeStatus(String status) {
@@ -485,6 +520,9 @@ public class StaffEmergencyRoomChangeService {
         response.setCourseName(projection.getCourseName());
         response.setLecturerName(projection.getLecturerName());
         response.setDayOfWeek(projection.getDayOfWeek());
+        response.setDayCode(projection.getDayCode());
+        response.setFromWeekNo(projection.getFromWeekNo());
+        response.setToWeekNo(projection.getToWeekNo());
         response.setSlotStartId(projection.getSlotStartId());
         response.setSlotEndId(projection.getSlotEndId());
         response.setSlotStart(projection.getSlotStart());

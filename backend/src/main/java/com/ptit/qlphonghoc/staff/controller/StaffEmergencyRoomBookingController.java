@@ -6,6 +6,7 @@ import com.ptit.qlphonghoc.staff.dto.datPhongKhanCap.CreateEmergencyRoomBookingR
 import com.ptit.qlphonghoc.staff.dto.datPhongKhanCap.EmergencyRoomBookingResponse;
 import com.ptit.qlphonghoc.staff.service.StaffEmergencyRoomBookingService;
 import jakarta.validation.Valid;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -13,6 +14,12 @@ import org.springframework.web.bind.annotation.*;
 import java.net.URI;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
+
+
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 
 @RestController
 @RequestMapping("/api/staff/emergency-room-bookings")
@@ -63,5 +70,14 @@ public class StaffEmergencyRoomBookingController {
         return ResponseEntity
                 .created(URI.create("/api/staff/emergency-room-bookings/" + response.getId()))
                 .body(response);
+    }
+
+    @GetMapping("/timetable-blocks")
+    public ResponseEntity<List<Map<String, Object>>> getTimetableBlocks(
+            @RequestParam Integer semesterId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate weekStart,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate weekEnd
+    ) {
+        return ResponseEntity.ok(service.getTimetableBlocks(semesterId, weekStart, weekEnd));
     }
 }

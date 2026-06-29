@@ -246,6 +246,35 @@ public interface LecturerRoomBorrowRequestRepository extends JpaRepository<Lectu
                 AND e.end_time IS NOT NULL
                 AND NOT (e.end_time <= request_start.start_time OR e.start_time >= request_end.end_time)
           )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM temporary_room_changes trc
+              JOIN schedules sch ON sch.schedule_id = trc.schedule_id
+              JOIN semesters sem ON sem.semester_id = trc.semester_id
+              WHERE trc.new_classroom_id = cr.classroom_id
+                AND trc.status = 'APPROVED'
+                AND trc.is_active = TRUE
+                AND trc.semester_id = :semesterId
+                AND sch.day_of_week = :dayOfWeek
+                AND sch.slot_start_id <= :slotEndId
+                AND sch.slot_end_id >= :slotStartId
+                AND (
+                    (trc.change_scope = 'SESSION' AND trc.target_date = :bookingDate)
+                    OR (
+                        trc.change_scope IN ('WEEK_RANGE','REST_OF_SEMESTER')
+                        AND FLOOR(DATEDIFF(:bookingDate, sem.start_date) / 7) + 1
+                            BETWEEN trc.from_week AND COALESCE(trc.to_week, 999)
+                    )
+                )
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM classroom_issue_reports cir
+              WHERE cir.classroom_id = cr.classroom_id
+                AND cir.is_deleted = FALSE
+                AND cir.status IN ('PENDING','IN_PROGRESS')
+                AND cir.severity_level IN ('HIGH','URGENT')
+          )
         ORDER BY cr.capacity ASC, b.building_code, cr.room_number
         """, nativeQuery = true)
     List<AvailableRoomProjection> findAvailableRooms(
@@ -299,6 +328,35 @@ public interface LecturerRoomBorrowRequestRepository extends JpaRepository<Lectu
                 AND e.start_time IS NOT NULL
                 AND e.end_time IS NOT NULL
                 AND NOT (e.end_time <= request_start.start_time OR e.start_time >= request_end.end_time)
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM temporary_room_changes trc
+              JOIN schedules sch ON sch.schedule_id = trc.schedule_id
+              JOIN semesters sem ON sem.semester_id = trc.semester_id
+              WHERE trc.new_classroom_id = cr.classroom_id
+                AND trc.status = 'APPROVED'
+                AND trc.is_active = TRUE
+                AND trc.semester_id = :semesterId
+                AND sch.day_of_week = :dayOfWeek
+                AND sch.slot_start_id <= :slotEndId
+                AND sch.slot_end_id >= :slotStartId
+                AND (
+                    (trc.change_scope = 'SESSION' AND trc.target_date = :bookingDate)
+                    OR (
+                        trc.change_scope IN ('WEEK_RANGE','REST_OF_SEMESTER')
+                        AND FLOOR(DATEDIFF(:bookingDate, sem.start_date) / 7) + 1
+                            BETWEEN trc.from_week AND COALESCE(trc.to_week, 999)
+                    )
+                )
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM classroom_issue_reports cir
+              WHERE cir.classroom_id = cr.classroom_id
+                AND cir.is_deleted = FALSE
+                AND cir.status IN ('PENDING','IN_PROGRESS')
+                AND cir.severity_level IN ('HIGH','URGENT')
           )
         """, nativeQuery = true)
     int countAvailableClassroom(

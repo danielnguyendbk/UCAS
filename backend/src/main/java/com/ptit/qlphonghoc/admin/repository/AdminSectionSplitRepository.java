@@ -1,5 +1,8 @@
 package com.ptit.qlphonghoc.admin.repository;
 
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -130,4 +133,57 @@ public interface AdminSectionSplitRepository {
 
     record WeekBoundsRef(Integer minWeekNo, Integer maxWeekNo) {
     }
+
+    record LecturerRef(
+            Integer lecturerId,
+            String lecturerCode,
+            String fullName,
+            Integer departmentId
+    ) {
+        public Integer getLecturerId() {
+            return lecturerId;
+        }
+
+        public String getLecturerCode() {
+            return lecturerCode;
+        }
+
+        public String getFullName() {
+            return fullName;
+        }
+
+        public Integer getDepartmentId() {
+            return departmentId;
+        }
+    }
+
+    @Query(value = """
+    SELECT 
+        l.lecturer_id AS lecturerId,
+        l.lecturer_code AS lecturerCode,
+        l.full_name AS fullName,
+        l.department_id AS departmentId
+    FROM lecturers l
+    JOIN courses c ON c.department_id = l.department_id
+    WHERE c.course_id = :courseId
+      AND l.is_deleted = FALSE
+    ORDER BY l.lecturer_code
+    """, nativeQuery = true)
+    List<LecturerRef> findEligibleLecturersByCourse(@Param("courseId") Integer courseId);
+
+
+    @Query(value = """
+    SELECT COUNT(*)
+    FROM lecturers l
+    JOIN courses c ON c.department_id = l.department_id
+    WHERE l.lecturer_id = :lecturerId
+      AND c.course_id = :courseId
+      AND l.is_deleted = FALSE
+    """, nativeQuery = true)
+    int countLecturerEligibleForCourse(
+            @Param("lecturerId") Integer lecturerId,
+            @Param("courseId") Integer courseId
+    );
+
+
 }

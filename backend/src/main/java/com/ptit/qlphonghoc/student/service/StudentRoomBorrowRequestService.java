@@ -1,5 +1,6 @@
 package com.ptit.qlphonghoc.student.service;
 
+import com.ptit.qlphonghoc.common.exception.BadRequestException;
 import com.ptit.qlphonghoc.student.dto.roomborrow.CreateStudentRoomBorrowRequest;
 import com.ptit.qlphonghoc.student.dto.roomborrow.StudentAvailableRoomResponse;
 import com.ptit.qlphonghoc.student.dto.roomborrow.StudentRoomBorrowRequestResponse;
@@ -19,6 +20,8 @@ import java.util.Set;
 
 @Service
 public class StudentRoomBorrowRequestService {
+
+    private static final int NOTE_MAX_LENGTH = 4000;
 
     private static final Set<String> REQUEST_TYPES = Set.of(
             "MEETING",
@@ -95,17 +98,32 @@ public class StudentRoomBorrowRequestService {
         String bookingScope = "PERSONAL";
 
         Integer preferredClassroomId = request.getPreferredClassroomId();
-        if (preferredClassroomId != null) {
-            int classroomCount = repository.countUsableClassroom(
-                    preferredClassroomId,
-                    request.getExpectedAttendees()
+        int classroomCount = repository.countUsableClassroom(
+                preferredClassroomId,
+                request.getExpectedAttendees()
+        );
+        if (classroomCount == 0) {
+            throw new BadRequestException(
+                    "ROOM_INACTIVE_OR_DELETED",
+                    "Preferred classroom is inactive, deleted or does not have enough capacity."
             );
-            if (classroomCount == 0) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Preferred classroom is inactive or does not have enough capacity."
-                );
-            }
+        }
+
+        int availableCount = repository.countAvailableClassroom(
+                request.getSemesterId(),
+                request.getBookingDate(),
+                toDayCode(request.getBookingDate()),
+                request.getSlotStartId(),
+                request.getSlotEndId(),
+                preferredClassroomId,
+                request.getExpectedAttendees(),
+                normalizeRoomType(request.getRequestedRoomType())
+        );
+        if (availableCount == 0) {
+            throw new BadRequestException(
+                    "ROOM_TIME_CONFLICT",
+                    "Phong da co lich, lich thi, doi phong tam thoi hoac bao tri trong khung thoi gian da chon."
+            );
         }
 
         String title = buildRequestTitle(requestType, request.getPurposeNote());
@@ -148,12 +166,18 @@ public class StudentRoomBorrowRequestService {
         if (bookingDate == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "bookingDate is required.");
         }
+        if (bookingDate.isBefore(LocalDate.now())) {
+            throw new BadRequestException(
+                    "PAST_TIME_NOT_ALLOWED",
+                    "Khong the tao yeu cau cho ngay trong qua khu."
+            );
+        }
         if (slotStartId == null || slotEndId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "slotStartId and slotEndId are required.");
         }
         if (repository.countValidSlotRange(slotStartId, slotEndId) == 0) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+            throw new BadRequestException(
+                    "INVALID_TIME_RANGE",
                     "slotEndId must be greater than or equal to slotStartId."
             );
         }
@@ -184,6 +208,15 @@ public class StudentRoomBorrowRequestService {
 
         if (request.getPurposeNote() == null || request.getPurposeNote().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "purposeNote is required.");
+        }
+        if (request.getPreferredClassroomId() == null) {
+            throw new BadRequestException("ROOM_NOT_FOUND", "preferredClassroomId is required.");
+        }
+        if (request.getPurposeNote().trim().length() < 10 || request.getPurposeNote().trim().length() > NOTE_MAX_LENGTH) {
+            throw new BadRequestException(
+                    "VALIDATION_FAILED",
+                    "purposeNote phai tu 10 den " + NOTE_MAX_LENGTH + " ky tu."
+            );
         }
     }
 

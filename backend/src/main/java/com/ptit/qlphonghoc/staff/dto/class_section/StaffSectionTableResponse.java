@@ -8,6 +8,7 @@ public class StaffSectionTableResponse {
     private Integer scheduleId;
     private String sectionCode;
     private String classCode;
+    private String courseCode;
     private String courseName;
     private String facultyCode;
     private String departmentCode;
@@ -60,6 +61,9 @@ public class StaffSectionTableResponse {
 
     public String getClassCode() { return classCode; }
     public void setClassCode(String classCode) { this.classCode = classCode; }
+
+    public String getCourseCode() { return courseCode; }
+    public void setCourseCode(String courseCode) { this.courseCode = courseCode; }
 
     public String getCourseName() { return courseName; }
     public void setCourseName(String courseName) { this.courseName = courseName; }

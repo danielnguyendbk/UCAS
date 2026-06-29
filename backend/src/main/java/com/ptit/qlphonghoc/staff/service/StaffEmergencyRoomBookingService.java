@@ -9,14 +9,18 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-
+import java.util.Map;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
 
+
 @Service
 public class StaffEmergencyRoomBookingService {
+
+    private static final int TITLE_MAX_LENGTH = 200;
+    private static final int NOTE_MAX_LENGTH = 4000;
 
     private final StaffEmergencyRoomBookingRepository repository;
 
@@ -57,12 +61,31 @@ public class StaffEmergencyRoomBookingService {
                 .toList();
     }
 
+    //
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getTimetableBlocks(
+            Integer semesterId,
+            LocalDate weekStart,
+            LocalDate weekEnd
+    ) {
+        if (semesterId == null) {
+            throw new BadRequestException("SEMESTER_NOT_FOUND", "semesterId is required.");
+        }
+        if (weekStart == null || weekEnd == null || weekEnd.isBefore(weekStart)) {
+            throw new BadRequestException("INVALID_TIME_RANGE", "weekStart/weekEnd khong hop le.");
+        }
+
+        return repository.findTimetableBlocks(semesterId, weekStart, weekEnd);
+    }
+
     @Transactional
     public EmergencyRoomBookingResponse create(CreateEmergencyRoomBookingRequest request, Integer staffUserId) {
         Integer slotStartId = effectiveSlotStartId(request);
         Integer slotEndId = effectiveSlotEndId(request, slotStartId);
 
         validateCreateInput(request, staffUserId, slotStartId, slotEndId);
+        repository.lockClassroomById(request.getClassroomId())
+                .orElseThrow(() -> new BadRequestException("ROOM_NOT_FOUND", "classroom khong ton tai."));
 
         String dayOfWeek = toDayCode(request.getBookingDate());
         int availableCount = repository.countAvailableClassroomForEmergency(
@@ -78,11 +101,11 @@ public class StaffEmergencyRoomBookingService {
         if (availableCount == 0) {
             throw new BadRequestException(
                     "ROOM_TIME_CONFLICT",
-                    "Phong khong kha dung: co the da trung lich, khong du suc chua hoac khong hoat dong."
+                    "Phong khong kha dung: co the da trung lich, khong du suc chua, dang bao tri hoac khong hoat dong."
             );
         }
 
-        String requestTitle = "Dat phong khan cap - " + request.getRecipientName();
+        String requestTitle = buildRequestTitle(request);
         String purposeNote = buildPurposeNote(request);
         String processingNote = buildProcessingNote(request);
 
@@ -124,19 +147,16 @@ public class StaffEmergencyRoomBookingService {
             Integer expectedAttendees
     ) {
         if (semesterId == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "semesterId is required.");
+            throw new BadRequestException("SEMESTER_NOT_FOUND", "semesterId is required.");
         }
         if (bookingDate == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "bookingDate is required.");
+            throw new BadRequestException("INVALID_TIME_RANGE", "bookingDate is required.");
         }
         if (bookingDate.isBefore(LocalDate.now())) {
-            throw new BadRequestException("INVALID_TIME_RANGE", "bookingDate khong duoc la ngay trong qua khu.");
+            throw new BadRequestException("PAST_TIME_NOT_ALLOWED", "bookingDate khong duoc la ngay trong qua khu.");
         }
         if (slotStartId == null || slotEndId == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "slotStartId and slotEndId are required."
-            );
+            throw new BadRequestException("INVALID_TIME_RANGE", "slotStartId and slotEndId are required.");
         }
         if (repository.countValidSlotRange(slotStartId, slotEndId) == 0) {
             throw new BadRequestException(
@@ -145,15 +165,12 @@ public class StaffEmergencyRoomBookingService {
             );
         }
         if (expectedAttendees == null || expectedAttendees <= 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "expectedAttendees must be greater than 0.");
+            throw new BadRequestException("VALIDATION_FAILED", "expectedAttendees must be greater than 0.");
         }
 
         int validSemesterDate = repository.countValidSemesterDate(semesterId, bookingDate);
         if (validSemesterDate == 0) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Ngay su dung khong nam trong hoc ky da chon."
-            );
+            throw new BadRequestException("INVALID_TIME_RANGE", "Ngay su dung khong nam trong hoc ky da chon.");
         }
     }
 
@@ -172,7 +189,7 @@ public class StaffEmergencyRoomBookingService {
         );
 
         if (request.getTargetType() == null || request.getTargetType().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "targetType is required.");
+            throw new BadRequestException("VALIDATION_FAILED", "targetType is required.");
         }
 
         String targetType = request.getTargetType().trim().toUpperCase(Locale.ROOT);
@@ -182,17 +199,17 @@ public class StaffEmergencyRoomBookingService {
                 && !targetType.equals("DEPARTMENT")
                 && !targetType.equals("CLUB")
                 && !targetType.equals("OTHER")) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+            throw new BadRequestException(
+                    "VALIDATION_FAILED",
                     "targetType only accepts STUDENT, LECTURER, CLASS, DEPARTMENT, CLUB or OTHER."
             );
         }
 
         if (request.getRecipientName() == null || request.getRecipientName().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "recipientName is required.");
+            throw new BadRequestException("VALIDATION_FAILED", "recipientName is required.");
         }
         if (request.getClassroomId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "classroomId is required.");
+            throw new BadRequestException("ROOM_NOT_FOUND", "classroomId is required.");
         }
         if (request.getPurpose() == null || request.getPurpose().isBlank()) {
             throw new BadRequestException("VALIDATION_FAILED", "purpose is required.");
@@ -203,11 +220,16 @@ public class StaffEmergencyRoomBookingService {
         if (request.getEmergencyReason().trim().length() < 10) {
             throw new BadRequestException("VALIDATION_FAILED", "emergencyReason phai co it nhat 10 ky tu.");
         }
+        if (request.getRecipientName().trim().length() > 120) {
+            throw new BadRequestException("VALIDATION_FAILED", "recipientName khong duoc vuot qua 120 ky tu.");
+        }
+        validateLength(request.getPurpose(), "purpose", NOTE_MAX_LENGTH);
+        validateLength(request.getEmergencyReason(), "emergencyReason", NOTE_MAX_LENGTH);
 
         int staffCount = repository.countActiveStaffOrAdminById(staffUserId);
         if (staffCount == 0) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+            throw new BadRequestException(
+                    "FORBIDDEN_OPERATION",
                     "Nguoi dung khong hop le hoac khong phai STAFF/ADMIN dang hoat dong."
             );
         }
@@ -218,8 +240,17 @@ public class StaffEmergencyRoomBookingService {
         );
         if (classroomCount == 0) {
             throw new BadRequestException(
-                    "CLASSROOM_NOT_FOUND",
+                    "ROOM_INACTIVE_OR_DELETED",
                     "Phong khong ton tai, khong hoat dong hoac khong du suc chua."
+            );
+        }
+    }
+
+    private void validateLength(String value, String fieldName, int maxLength) {
+        if (value != null && value.trim().length() > maxLength) {
+            throw new BadRequestException(
+                    "VALIDATION_FAILED",
+                    fieldName + " khong duoc vuot qua " + maxLength + " ky tu."
             );
         }
     }
@@ -308,5 +339,10 @@ public class StaffEmergencyRoomBookingService {
         response.setStatus(projection.getStatus());
         response.setApprovedBy(projection.getApprovedBy());
         return response;
+    }
+
+    private String buildRequestTitle(CreateEmergencyRoomBookingRequest request) {
+        String title = "Dat phong khan cap - " + request.getRecipientName().trim();
+        return title.length() <= TITLE_MAX_LENGTH ? title : title.substring(0, TITLE_MAX_LENGTH);
     }
 }

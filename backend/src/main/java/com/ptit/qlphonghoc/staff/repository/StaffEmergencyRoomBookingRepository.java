@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 public interface StaffEmergencyRoomBookingRepository extends JpaRepository<ClassSection, Integer> {
@@ -58,6 +59,14 @@ public interface StaffEmergencyRoomBookingRepository extends JpaRepository<Class
             @Param("classroomId") Integer classroomId,
             @Param("expectedAttendees") Integer expectedAttendees
     );
+
+    @Query(value = """
+        SELECT classroom_id
+        FROM classrooms
+        WHERE classroom_id = :classroomId
+        FOR UPDATE
+        """, nativeQuery = true)
+    Optional<Integer> lockClassroomById(@Param("classroomId") Integer classroomId);
 
     @Query(value = """
         SELECT COUNT(*)
@@ -123,6 +132,14 @@ public interface StaffEmergencyRoomBookingRepository extends JpaRepository<Class
                             BETWEEN trc.from_week AND COALESCE(trc.to_week, 999)
                     )
                 )
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM classroom_issue_reports cir
+              WHERE cir.classroom_id = cr.classroom_id
+                AND cir.is_deleted = FALSE
+                AND cir.status IN ('PENDING','IN_PROGRESS')
+                AND cir.severity_level IN ('HIGH','URGENT')
           )
         """, nativeQuery = true)
     int countAvailableClassroomForEmergency(
@@ -245,6 +262,14 @@ public interface StaffEmergencyRoomBookingRepository extends JpaRepository<Class
                     )
                 )
           )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM classroom_issue_reports cir
+              WHERE cir.classroom_id = cr.classroom_id
+                AND cir.is_deleted = FALSE
+                AND cir.status IN ('PENDING','IN_PROGRESS')
+                AND cir.severity_level IN ('HIGH','URGENT')
+          )
         ORDER BY b.building_code, cr.room_number
         """, nativeQuery = true)
     List<AvailableRoomProjection> findAvailableRooms(
@@ -261,56 +286,57 @@ public interface StaffEmergencyRoomBookingRepository extends JpaRepository<Class
 
     @Modifying
     @Query(value = """
-        INSERT INTO room_borrow_requests (
-            request_title,
-            request_type,
-            booking_scope,
-            semester_id,
-            booking_date,
-            slot_start_id,
-            slot_end_id,
-            start_time,
-            end_time,
-            requested_by,
-            expected_attendees,
-            preferred_building_id,
-            preferred_classroom_id,
-            requested_room_type,
-            purpose_note,
-            status,
-            approved_classroom_id,
-            approved_by,
-            approved_at,
-            processing_note,
-            reject_reason
-        )
-        SELECT
-            :requestTitle,
-            'OTHER',
-            'PERSONAL',
-            :semesterId,
-            :bookingDate,
-            :slotStartId,
-            :slotEndId,
-            start_slot.start_time,
-            end_slot.end_time,
-            :staffUserId,
-            NULL,
-            :expectedAttendees,
-            NULL,
-            :classroomId,
-            NULL,
-            :purposeNote,
-            'APPROVED',
-            :classroomId,
-            :staffUserId,
-            CURRENT_TIMESTAMP,
-            :processingNote,
-            NULL
-        FROM time_slots start_slot
-        JOIN time_slots end_slot ON end_slot.slot_id = :slotEndId
-        WHERE start_slot.slot_id = :slotStartId
-        """, nativeQuery = true)
+    INSERT INTO room_borrow_requests (
+        request_title,
+        request_type,
+        booking_scope,
+        semester_id,
+        section_id,
+        booking_date,
+        slot_start_id,
+        slot_end_id,
+        start_time,
+        end_time,
+        requested_by,
+        expected_attendees,
+        preferred_building_id,
+        preferred_classroom_id,
+        requested_room_type,
+        purpose_note,
+        status,
+        approved_classroom_id,
+        approved_by,
+        approved_at,
+        processing_note,
+        reject_reason
+    )
+    SELECT
+        :requestTitle,
+        'OTHER',
+        'PERSONAL',
+        :semesterId,
+        NULL,
+        :bookingDate,
+        :slotStartId,
+        :slotEndId,
+        start_slot.start_time,
+        end_slot.end_time,
+        :staffUserId,
+        :expectedAttendees,
+        NULL,
+        :classroomId,
+        NULL,
+        :purposeNote,
+        'APPROVED',
+        :classroomId,
+        :staffUserId,
+        CURRENT_TIMESTAMP,
+        :processingNote,
+        NULL
+    FROM time_slots start_slot
+    JOIN time_slots end_slot ON end_slot.slot_id = :slotEndId
+    WHERE start_slot.slot_id = :slotStartId
+    """, nativeQuery = true)
     void insertEmergencyBooking(
             @Param("requestTitle") String requestTitle,
             @Param("semesterId") Integer semesterId,
@@ -357,6 +383,57 @@ public interface StaffEmergencyRoomBookingRepository extends JpaRepository<Class
         WHERE rbr.borrow_request_id = :id
         """, nativeQuery = true)
     Optional<EmergencyBookingProjection> findEmergencyBookingById(@Param("id") Integer id);
+
+
+    @Query(value = """
+    SELECT
+        CONCAT('booking-', r.borrow_request_id) AS id,
+        'BOOKING' AS sourceType,
+        r.borrow_request_id AS sourceId,
+        r.request_title AS courseName,
+        'Đặt phòng' AS courseCode,
+        'Đặt phòng' AS sectionGroup,
+        r.purpose_note AS classCodes,
+        u.username AS lecturerName,
+        CONCAT(b.building_code, '-', cr.room_number) AS room,
+        b.building_code AS buildingCode,
+        CASE DAYOFWEEK(r.booking_date)
+            WHEN 1 THEN 'SUN'
+            WHEN 2 THEN 'MON'
+            WHEN 3 THEN 'TUE'
+            WHEN 4 THEN 'WED'
+            WHEN 5 THEN 'THU'
+            WHEN 6 THEN 'FRI'
+            WHEN 7 THEN 'SAT'
+        END AS dayCode,
+        start_slot.slot_no AS slotStart,
+        end_slot.slot_no AS slotEnd,
+        r.semester_id AS semesterId,
+        sw.week_no AS fromWeekNo,
+        sw.week_no AS toWeekNo,
+        r.start_time AS startTime,
+        r.end_time AS endTime,
+        r.status AS status
+    FROM room_borrow_requests r
+    JOIN classrooms cr ON cr.classroom_id = r.approved_classroom_id
+    JOIN buildings b ON b.building_id = cr.building_id
+    JOIN users u ON u.user_id = r.requested_by
+    JOIN time_slots start_slot ON start_slot.slot_id = r.slot_start_id
+    JOIN time_slots end_slot ON end_slot.slot_id = r.slot_end_id
+    JOIN semester_weeks sw
+      ON sw.semester_id = r.semester_id
+     AND r.booking_date BETWEEN sw.start_date AND sw.end_date
+    WHERE r.status = 'APPROVED'
+      AND r.approved_classroom_id IS NOT NULL
+      AND r.semester_id = :semesterId
+      AND r.booking_date BETWEEN :weekStart AND :weekEnd
+    ORDER BY r.booking_date, r.start_time
+    """, nativeQuery = true)
+    List<Map<String, Object>> findTimetableBlocks(
+            @Param("semesterId") Integer semesterId,
+            @Param("weekStart") LocalDate weekStart,
+            @Param("weekEnd") LocalDate weekEnd
+    );
 
     interface AvailableRoomProjection {
         Integer getClassroomId();

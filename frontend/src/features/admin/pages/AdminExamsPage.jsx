@@ -41,6 +41,7 @@ import {
 } from "@/app/components/ui/table";
 import { Textarea } from "@/app/components/ui/textarea";
 import { httpClient } from "@/services/httpClient";
+import { getDisplayClassCodes, getDisplayCourseCode, getDisplaySectionCode } from "@/utils/sectionDisplay";
 
 const PAGE_SIZE = 10;
 const NONE_SELECT_VALUE = "__NONE__";
@@ -133,18 +134,12 @@ const getExamId = (exam) => exam?.id ?? exam?.examId ?? exam?.exam_id;
 const getExamStatus = (exam) =>
   String(exam?.status ?? exam?.examStatus ?? exam?.exam_status ?? "DRAFT").toUpperCase();
 
-const getCourseCode = (exam) => exam?.courseCode ?? exam?.course_code ?? "—";
+const getCourseCode = (exam) => getDisplayCourseCode(exam);
 const getCourseName = (exam) => exam?.courseName ?? exam?.course_name ?? "—";
 
-const getSectionCode = (exam) =>
-  exam?.sectionCode ?? exam?.section_code ?? exam?.classCode ?? exam?.class_code ?? "—";
+const getSectionCode = (exam) => getDisplaySectionCode(exam);
 
-const getClassCodes = (exam) =>
-  exam?.classCodes ??
-  exam?.class_codes ??
-  exam?.classCode ??
-  exam?.class_code ??
-  getSectionCode(exam);
+const getClassCodes = (exam) => getDisplayClassCodes(exam, getSectionCode(exam));
 
 const getRoomCode = (exam) =>
   exam?.roomCode ??
@@ -369,13 +364,7 @@ export default function AdminExamsPage() {
 
       const matchesClass =
         selectedClass === "all" ||
-        String(
-          exam.classCodes ??
-            exam.class_codes ??
-            exam.classCode ??
-            exam.class_code ??
-            "",
-        ).includes(selectedClass);
+        getClassCodes(exam).includes(selectedClass);
 
       const searchable = [
         getCourseCode(exam),
@@ -533,16 +522,7 @@ export default function AdminExamsPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button onClick={openCreateForm} className="bg-blue-700 hover:bg-blue-800">
-            <Plus className="mr-2 h-4 w-4" />
-            Thêm lịch thi
-          </Button>
 
-          <Button variant="ghost" disabled={loading} onClick={refreshData} title="Tải lại dữ liệu">
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          </Button>
-        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">

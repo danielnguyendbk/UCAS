@@ -45,6 +45,7 @@ import {
 import { Textarea } from "../components/ui/textarea";
 import { httpClient } from "@/services/httpClient";
 import { getApiError } from "@/utils/apiError";
+import { getDisplayClassCodes, getDisplayCourseCode, getDisplaySectionCode } from "@/utils/sectionDisplay";
 
 const PAGE_SIZE = 10;
 const DAY_OPTIONS = [
@@ -98,10 +99,7 @@ const getStatus = (section) => {
   return "ASSIGNED";
 };
 
-const getCourseCode = (section) => {
-  const value = section.classCode || "";
-  return value.includes(".L") ? value.split(".L")[0] : value;
-};
+const getCourseCode = (section) => getDisplayCourseCode(section, "");
 
 const roomLabel = (room) => {
   if (room.buildingCode && room.roomNumber) return `${room.buildingCode}-${room.roomNumber}`;
@@ -117,17 +115,13 @@ const isCapacityConflict = (section) =>
 const isSplitCandidate = (section) =>
   Boolean(section?.scheduleId && (isCapacityConflict(section) || hasSplitSuggestion(section) || getStatus(section) === "UNASSIGNED"));
 
-const getRawSectionCode = (section) => {
-  if (section?.sectionCode) return section.sectionCode;
-  const classCode = String(section?.classCode || "");
-  return classCode.includes(".L") ? classCode.split(".L").slice(1).join(".L") : classCode;
-};
+const getRawSectionCode = (section) => getDisplaySectionCode(section, "");
 
 const detailRows = (section) => [
   ["Mã môn", getCourseCode(section)],
   ["Mã nhóm", section.sectionCode || getRawSectionCode(section) || "—"],
   ["Tên môn", section.courseName || "—"],
-  ["Lớp", section.classCodes || section.classNames || "—"],
+  ["Lớp", getDisplayClassCodes(section)],
   ["Giảng viên", section.lecturerName || "—"],
   ["Thứ / tiết", `${section.day || "—"} / ${section.slotStart ?? "—"}-${section.slotEnd ?? "—"}`],
   ["Tuần học", `${section.fromWeekNo ?? "—"}-${section.toWeekNo ?? "—"}`],
@@ -146,13 +140,47 @@ const normalizeSplitPartCount = (value) => {
   return Math.min(5, Math.max(2, parsed));
 };
 
+
+const getSplitSectionCodeBase = (section) => {
+  const courseCode = getCourseCode(section);
+  const rawSectionCode = getRawSectionCode(section);
+  const base = courseCode || rawSectionCode || "SECTION";
+  return String(base).trim().replace(/\s+/g, "").toUpperCase();
+};
+
+const createSectionCode = (base, index) => {
+  const suffix = String.fromCharCode(65 + index); // A, B, C...
+  const normalizedBase = String(base || "SECTION")
+    .trim()
+    .replace(/\s+/g, "")
+    .toUpperCase();
+
+  return `${normalizedBase.slice(0, Math.max(1, 20 - suffix.length - 1))}-${suffix}`;
+};
+
+
+
+const getSplitErrorMessage = (requestError) => {
+  const apiError = getApiError(requestError, "Không thể tách lớp học phần.");
+  const message = apiError.message || "";
+  const isDuplicate =
+    apiError.errorCode === "DUPLICATE_SECTION_CODE" ||
+    /duplicate entry|duplicate key|unique/i.test(message);
+
+  if (isDuplicate) {
+    return "Mã nhóm sau tách đã tồn tại trong học kỳ và môn học này. Vui lòng đổi mã nhóm theo mã lớp gốc, ví dụ thêm hậu tố A/B/C khác.";
+  }
+
+  return message;
+};
+
 const createSplitParts = (section, count) => {
   const total = Number(section?.studentCount || 0);
   const base = Math.floor(total / count);
   const remainder = total % count;
-  const rawCode = getRawSectionCode(section);
+  const codeBase = getSplitSectionCodeBase(section);
   return Array.from({ length: count }, (_, index) => ({
-    sectionCode: `${rawCode}-${index + 1}`,
+    sectionCode: createSectionCode(codeBase, index),
     studentCount: String(base + (index < remainder ? 1 : 0)),
     lecturerId: section?.lecturerId ? String(section.lecturerId) : "",
     dayOfWeek: section?.dayCode || "MON",
@@ -180,6 +208,7 @@ const SplitSectionDialog = ({
     error: "",
   });
   const [selectedSuggestionId, setSelectedSuggestionId] = useState("");
+  const splitCodeBase = section ? getSplitSectionCodeBase(section) : "SECTION";
 
   useEffect(() => {
     if (!open || !section) return;
@@ -213,6 +242,21 @@ const SplitSectionDialog = ({
   const totalStudents = parts.reduce((sum, part) => sum + Number(part.studentCount || 0), 0);
   const expectedStudents = Number(section?.studentCount || 0);
   const totalMatches = totalStudents === expectedStudents;
+  const getSlotNo = (slotId) => {
+    const slot = timeSlots.find((item) => String(item.slotId) === String(slotId));
+    return Number(slot?.slotNo || 0);
+  };
+  const hasLecturerConflict = parts.some((a, i) =>
+    parts.some((b, j) =>
+      i < j &&
+      a.lecturerId &&
+      b.lecturerId &&
+      String(a.lecturerId) === String(b.lecturerId) &&
+      a.dayOfWeek === b.dayOfWeek &&
+      getSlotNo(a.slotStartId) <= getSlotNo(b.slotEndId) &&
+      getSlotNo(b.slotStartId) <= getSlotNo(a.slotEndId)
+    )
+  );
   const updatePart = (index, field, value) => {
     setParts((current) => current.map((part, partIndex) => (
       partIndex === index
@@ -243,7 +287,7 @@ const SplitSectionDialog = ({
       setSuggestionState((current) => ({ ...current, loading: false, suggestions: [], failureReasons: [] }));
       return;
     }
-    if (parts.some((part) => !part.sectionCode.trim() || !part.lecturerId || Number(part.studentCount || 0) <= 0)) {
+    if (parts.some((part) => !part.sectionCode.trim() || Number(part.studentCount || 0) <= 0)) {
       setSuggestionState((current) => ({ ...current, loading: false, suggestions: [], failureReasons: [] }));
       return;
     }
@@ -260,7 +304,7 @@ const SplitSectionDialog = ({
             parts: parts.map((part) => ({
               sectionCode: part.sectionCode.trim(),
               studentCount: Number(part.studentCount),
-              lecturerId: Number(part.lecturerId),
+              lecturerId: part.lecturerId ? Number(part.lecturerId) : null,
             })),
           },
         );
@@ -296,6 +340,9 @@ const SplitSectionDialog = ({
       if (!proposed) return part;
       return {
         ...part,
+        lecturerId: proposed.lecturerId ? String(proposed.lecturerId) : part.lecturerId,
+        lecturerCode: proposed.lecturerCode || "",
+        lecturerName: proposed.lecturerName || "",
         dayOfWeek: proposed.dayOfWeek,
         slotStartId: String(proposed.slotStartId),
         slotEndId: String(proposed.slotEndId),
@@ -320,7 +367,7 @@ const SplitSectionDialog = ({
         {section && (
           <>
             <div className="grid gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm sm:grid-cols-4">
-              <div><p className="text-xs text-gray-500">Học phần</p><p className="mt-1 font-semibold">{section.classCode}</p></div>
+              <div><p className="text-xs text-gray-500">Học phần</p><p className="mt-1 font-semibold">{getCourseCode(section) || "—"}</p></div>
               <div><p className="text-xs text-gray-500">Sĩ số gốc</p><p className="mt-1 font-semibold">{section.studentCount ?? 0} sinh viên</p></div>
               <div><p className="text-xs text-gray-500">Phòng hiện tại</p><p className="mt-1 font-semibold">{section.classroomCode || "Chưa phân"} · {section.roomCapacity ?? "—"} chỗ</p></div>
               <div><p className="text-xs text-gray-500">Loại phòng yêu cầu</p><p className="mt-1 font-semibold">{section.requiredRoomType || "—"}</p></div>
@@ -397,6 +444,7 @@ const SplitSectionDialog = ({
                           <TableHeader>
                             <TableRow>
                               <TableHead className="text-xs">Nhóm</TableHead>
+                              <TableHead className="text-xs">Giảng viên</TableHead>
                               <TableHead className="text-xs">Thời gian</TableHead>
                               <TableHead className="text-xs">Phòng</TableHead>
                               <TableHead className="text-xs">Sức chứa</TableHead>
@@ -407,6 +455,9 @@ const SplitSectionDialog = ({
                             {suggestion.parts.map((item) => (
                               <TableRow key={`${suggestion.suggestionId}-${item.partIndex}`}>
                                 <TableCell className="text-xs font-medium">{item.sectionCode}</TableCell>
+                                <TableCell className="text-xs">
+                                  {item.lecturerName || item.lecturerCode || "—"}
+                                </TableCell>
                                 <TableCell className="text-xs">
                                   {item.dayLabel || item.dayOfWeek}, tiết {item.slotStartNo}-{item.slotEndNo}
                                 </TableCell>
@@ -440,7 +491,7 @@ const SplitSectionDialog = ({
                 <div key={index} className="rounded-xl border border-gray-200 p-4">
                   <div className="mb-3 flex items-center justify-between"><p className="font-semibold text-gray-900">Nhóm {index + 1}</p><Badge className="border-0 bg-slate-100 text-slate-700">{part.studentCount || 0} SV</Badge></div>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                    <div className="space-y-1.5 lg:col-span-2"><Label>Mã nhóm</Label><Input value={part.sectionCode} maxLength={20} placeholder={`${getRawSectionCode(section)}-${index + 1}`} onChange={(event) => updatePart(index, "sectionCode", event.target.value)} /></div>
+                    <div className="space-y-1.5 lg:col-span-2"><Label>Mã nhóm</Label><Input value={part.sectionCode} maxLength={20} placeholder={createSectionCode(splitCodeBase, index)} onChange={(event) => updatePart(index, "sectionCode", event.target.value)} /></div>
                     <div className="space-y-1.5"><Label>Sĩ số</Label><Input type="number" min="1" value={part.studentCount} onChange={(event) => updatePart(index, "studentCount", event.target.value)} /></div>
                     <div className="space-y-1.5 lg:col-span-2"><Label>Giảng viên</Label><Select value={part.lecturerId} onValueChange={(value) => updatePart(index, "lecturerId", value)}><SelectTrigger><SelectValue placeholder="Chọn giảng viên" /></SelectTrigger><SelectContent>{lecturers.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.name || item.staffCode}</SelectItem>)}</SelectContent></Select></div>
                     <div className="space-y-1.5"><Label>Thu</Label><Select value={part.dayOfWeek} onValueChange={(value) => updatePart(index, "dayOfWeek", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{DAY_OPTIONS.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
@@ -459,9 +510,20 @@ const SplitSectionDialog = ({
               ))}
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              <span className="inline-flex items-center gap-2"><AlertTriangle className="h-4 w-4" />Nếu giữ cùng giảng viên và cùng thời gian, hệ thống có thể phát sinh conflict giảng viên.</span>
-              <span className={totalMatches ? "font-semibold text-emerald-700" : "font-semibold text-red-700"}>Tổng: {totalStudents}/{expectedStudents} SV</span>
+            <div className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3 text-sm ${
+              hasLecturerConflict
+                ? "border-amber-200 bg-amber-50 text-amber-900"
+                : "border-gray-200 bg-gray-50 text-gray-700"
+            }`}>
+              {hasLecturerConflict && (
+                <span className="inline-flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  Có nhóm tách đang dùng cùng giảng viên trong cùng khung thời gian.
+                </span>
+              )}
+              <span className={totalMatches ? "font-semibold text-emerald-700" : "font-semibold text-red-700"}>
+                Tổng: {totalStudents}/{expectedStudents} SV
+              </span>
             </div>
           </>
         )}
@@ -577,11 +639,13 @@ const AdminTimetableApprovalPage = () => {
     return sections.filter((section) => {
       const matchesStatus = selectedStatus === "all" || getStatus(section) === selectedStatus;
       const matchesDepartment = selectedDepartment === "all" || section.departmentCode === selectedDepartment;
-      const matchesClass = selectedClass === "all" || String(section.classCodes || section.classNames || "").includes(selectedClass);
+      const classCodes = getDisplayClassCodes(section, "");
+      const matchesClass = selectedClass === "all" || classCodes.includes(selectedClass);
       const searchable = [
-        section.classCode,
+        getCourseCode(section),
+        getRawSectionCode(section),
         section.courseName,
-        section.classCodes,
+        classCodes,
         section.classNames,
         section.lecturerName,
         section.day,
@@ -802,7 +866,7 @@ const AdminTimetableApprovalPage = () => {
     } catch (requestError) {
       setActionMessage({
         tone: "error",
-        text: getApiError(requestError, "Không thể tách lớp học phần.").message,
+        text: getSplitErrorMessage(requestError),
       });
     } finally {
       setIsActionRunning(false);
@@ -959,7 +1023,7 @@ const AdminTimetableApprovalPage = () => {
                   return <TableRow key={`${section.id}-${section.scheduleId || "none"}`}>
                     <TableCell className="text-xs font-semibold">{getCourseCode(section)}</TableCell>
                     <TableCell className="text-xs">{section.courseName || "—"}</TableCell>
-                    <TableCell className="text-xs">{section.classCodes || section.classNames || "—"}</TableCell>
+                    <TableCell className="text-xs">{getDisplayClassCodes(section)}</TableCell>
                     <TableCell className="text-xs">{section.lecturerName || "—"}</TableCell>
                     <TableCell className="text-xs">{section.day || "—"}</TableCell>
                     <TableCell className="text-xs">{section.slotStart && section.slotEnd ? `${section.slotStart}-${section.slotEnd}` : "—"}</TableCell>
@@ -1029,8 +1093,8 @@ const AdminTimetableApprovalPage = () => {
           </DialogHeader>
           {deleteSection && (
             <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              <p className="font-semibold">{deleteSection.classCode || getCourseCode(deleteSection)}</p>
-              <p className="mt-1">{deleteSection.courseName || "Khong co ten mon"} - {deleteSection.classCodes || deleteSection.classNames || "Khong co lop"}</p>
+              <p className="font-semibold">{[getCourseCode(deleteSection), getRawSectionCode(deleteSection)].filter(Boolean).join(" · ") || "—"}</p>
+              <p className="mt-1">{deleteSection.courseName || "Khong co ten mon"} - {getDisplayClassCodes(deleteSection, "Khong co lop")}</p>
             </div>
           )}
           <DialogFooter>

@@ -20,6 +20,8 @@ public record AdminSplitSuggestionResponse(
             String sectionCode,
             Integer studentCount,
             Integer lecturerId,
+            String lecturerCode,
+            String lecturerName,
             String dayOfWeek,
             String dayLabel,
             Integer slotStartId,

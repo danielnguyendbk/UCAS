@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Repository
@@ -129,6 +130,7 @@ public class JdbcAdminSectionSplitRepository implements AdminSectionSplitReposit
                   AND course_id = :courseId
                   AND UPPER(section_code) = UPPER(:sectionCode)
                   AND section_id <> :excludedSectionId
+                  AND status <> 'CANCELLED'
                 """,
                 new MapSqlParameterSource()
                         .addValue("semesterId", semesterId)
@@ -482,6 +484,58 @@ public class JdbcAdminSectionSplitRepository implements AdminSectionSplitReposit
             Integer studentCount,
             Integer lecturerId
     ) {
+        List<Integer> cancelledSectionIds = jdbc.query(
+                """
+                SELECT section_id
+                FROM class_sections
+                WHERE semester_id = :semesterId
+                  AND course_id = :courseId
+                  AND UPPER(section_code) = UPPER(:sectionCode)
+                  AND status = 'CANCELLED'
+                LIMIT 1
+                """,
+                new MapSqlParameterSource()
+                        .addValue("semesterId", context.semesterId())
+                        .addValue("courseId", context.courseId())
+                        .addValue("sectionCode", sectionCode),
+                (rs, rowNum) -> rs.getInt("section_id")
+        );
+
+        if (!cancelledSectionIds.isEmpty()) {
+            Integer sectionId = cancelledSectionIds.get(0);
+
+            jdbc.update(
+                    """
+                    UPDATE class_sections
+                    SET lecturer_id = :lecturerId,
+                        class_name = :className,
+                        enrolled_count = :studentCount,
+                        max_capacity = :studentCount,
+                        import_source = 'ADMIN_SPLIT',
+                        status = 'ACTIVE'
+                    WHERE section_id = :sectionId
+                    """,
+                    new MapSqlParameterSource()
+                            .addValue("sectionId", sectionId)
+                            .addValue("lecturerId", lecturerId)
+                            .addValue("className", context.className())
+                            .addValue("studentCount", studentCount)
+            );
+
+            jdbc.update(
+                    """
+                    UPDATE schedules
+                    SET status = 'CANCELLED',
+                        validation_status = 'NOT_CHECKED',
+                        conflict_reason = NULL
+                    WHERE section_id = :sectionId
+                    """,
+                    new MapSqlParameterSource("sectionId", sectionId)
+            );
+
+            return sectionId;
+        }
+
         KeyHolder keys = new GeneratedKeyHolder();
         jdbc.update(
                 """
@@ -503,7 +557,11 @@ public class JdbcAdminSectionSplitRepository implements AdminSectionSplitReposit
                 keys,
                 new String[]{"section_id"}
         );
-        if (keys.getKey() == null) throw new IllegalStateException("Database did not return section_id");
+
+        if (keys.getKey() == null) {
+            throw new IllegalStateException("Database did not return section_id");
+        }
+
         return keys.getKey().intValue();
     }
 
@@ -564,6 +622,49 @@ public class JdbcAdminSectionSplitRepository implements AdminSectionSplitReposit
         return jdbc.update(
                 "UPDATE semesters SET timetable_status = 'DRAFT' WHERE semester_id = :semesterId",
                 new MapSqlParameterSource("semesterId", semesterId)
+        );
+    }
+
+    @Override
+    public int countLecturerEligibleForCourse(Integer lecturerId, Integer courseId) {
+        Integer count = jdbc.queryForObject("""
+            SELECT COUNT(*)
+            FROM lecturers l
+            JOIN courses c ON c.department_id = l.department_id
+            WHERE l.lecturer_id = :lecturerId
+              AND c.course_id = :courseId
+              AND l.is_deleted = FALSE
+            """,
+                Map.of(
+                        "lecturerId", lecturerId,
+                        "courseId", courseId
+                ),
+                Integer.class
+        );
+        return count == null ? 0 : count;
+    }
+
+    @Override
+    public List<LecturerRef> findEligibleLecturersByCourse(Integer courseId) {
+        return jdbc.query("""
+            SELECT
+                l.lecturer_id AS lecturerId,
+                l.lecturer_code AS lecturerCode,
+                l.full_name AS fullName,
+                l.department_id AS departmentId
+            FROM lecturers l
+            JOIN courses c ON c.department_id = l.department_id
+            WHERE c.course_id = :courseId
+              AND l.is_deleted = FALSE
+            ORDER BY l.lecturer_code
+            """,
+                Map.of("courseId", courseId),
+                (rs, rowNum) -> new LecturerRef(
+                        rs.getInt("lecturerId"),
+                        rs.getString("lecturerCode"),
+                        rs.getString("fullName"),
+                        rs.getInt("departmentId")
+                )
         );
     }
 }

@@ -54,10 +54,13 @@ public class ClassroomsController {
                     ORDER BY c.classroom_id DESC
                     """;
 
+            List<Map<String, Object>> rooms = jdbcTemplate.queryForList(sql);
+            rooms.forEach(this::enrichClassroomUsageStatus);
+
             return ResponseEntity.ok(
                     ApiResponse.ok(
                             "Fetch classrooms successfully",
-                            jdbcTemplate.queryForList(sql)));
+                            rooms));
         } catch (DataAccessException e) {
             throw e;
         } catch (Exception e) {

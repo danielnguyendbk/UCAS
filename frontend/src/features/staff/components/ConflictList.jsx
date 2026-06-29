@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/app/components/ui/badge";
 import { Card, CardContent } from "@/app/components/ui/card";
+import { formatCourseSection, getDisplayCourseCode, getDisplaySectionCode } from "@/utils/sectionDisplay";
 
 const severityConfig = {
   HIGH: {
@@ -212,23 +213,13 @@ const getExistingNote = (conflict, localNotes, noteKey) =>
   );
 
 const buildAdminNoteTemplate = (conflict) => {
-  const courseCode = valueOf(
-    conflict?.courseCode,
-    conflict?.subjectCode,
-    conflict?.courseId,
-    "—",
-  );
+  const courseCode = getDisplayCourseCode(conflict);
   const courseName = valueOf(
     conflict?.courseName,
     conflict?.subjectName,
     "—",
   );
-  const sectionCode = valueOf(
-    conflict?.sectionCode,
-    conflict?.classCode,
-    conflict?.className,
-    "—",
-  );
+  const sectionCode = getDisplaySectionCode(conflict);
   const lecturerName = valueOf(
     conflict?.lecturerName,
     conflict?.teacherName,
@@ -438,11 +429,7 @@ export const ConflictList = ({ conflicts = [], isLoading, onSaveAdminNote }) => 
                           <span className="font-semibold text-gray-800">
                             Lớp bị ảnh hưởng:
                           </span>{" "}
-                          {valueOf(
-                            conflict?.sectionCode,
-                            conflict?.classCode,
-                            "—",
-                          )}{" "}
+                          {formatCourseSection(conflict)}{" "}
                           -{" "}
                           {valueOf(
                             conflict?.courseName,
@@ -526,11 +513,11 @@ export const ConflictList = ({ conflicts = [], isLoading, onSaveAdminNote }) => 
             {selectedConflict && (
               <div className="mb-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm text-gray-700">
                 <p className="font-semibold text-gray-900">
-                  {valueOf(selectedConflict?.courseCode, "—")} ·{" "}
+                  {getDisplayCourseCode(selectedConflict)} ·{" "}
                   {valueOf(selectedConflict?.courseName, "—")}
                 </p>
                 <p className="mt-1 text-xs text-gray-500">
-                  {valueOf(selectedConflict?.sectionCode, "—")} ·{" "}
+                  {getDisplaySectionCode(selectedConflict)} ·{" "}
                   {getConflictTypeLabel(selectedConflict)}
                 </p>
               </div>

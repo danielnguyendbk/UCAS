@@ -65,6 +65,18 @@ const STATUS_META = {
     block: "border-gray-200 bg-gray-100 text-gray-600 hover:bg-gray-200",
     accent: "border-l-gray-400",
   },
+  ROOM_BORROW: {
+    label: "Mượn phòng",
+    dot: "bg-violet-500",
+    block: "border-violet-200 bg-violet-50 text-violet-950 hover:bg-violet-100",
+    accent: "border-l-violet-500",
+  },
+  ROOM_CHANGE: {
+    label: "Đổi phòng",
+    dot: "bg-orange-500",
+    block: "border-orange-200 bg-orange-50 text-orange-950 hover:bg-orange-100",
+    accent: "border-l-orange-500",
+  },
 };
 
 const VIEW_MODES = [
@@ -79,6 +91,10 @@ const unwrapList = (response) => {
   const payload = response?.data ?? response;
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.content)) return payload.content;
+  if (Array.isArray(payload?.data?.items)) return payload.data.items;
+  if (Array.isArray(payload?.data?.content)) return payload.data.content;
   return [];
 };
 
@@ -113,6 +129,33 @@ const toDate = (value) => {
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
+const dateToDayCode = (value) => {
+  const date = toDate(value);
+  if (!date) return "";
+  return DAY_CODES[(date.getDay() + 6) % 7];
+};
+
+const toIsoDateLocal = (value) => {
+  const date = toDate(value);
+  if (!date) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const isDateInRange = (value, start, end) => {
+  const date = toDate(value);
+  const startDate = toDate(start);
+  const endDate = toDate(end);
+  if (!date || !startDate || !endDate) return true;
+
+  date.setHours(0, 0, 0, 0);
+  startDate.setHours(0, 0, 0, 0);
+  endDate.setHours(0, 0, 0, 0);
+  return date >= startDate && date <= endDate;
+};
+
 const getSemesterLabel = (semester) => {
   if (!semester) return DEFAULT_SEMESTER_LABEL;
   const name = semester.name || semester.semesterName || DEFAULT_SEMESTER_LABEL;
@@ -141,6 +184,223 @@ const buildWeekOptions = (semester) => {
       label: `Tuần ${weekNo} (${formatDate(weekStart)} - ${formatDate(weekEnd)})`,
     };
   });
+};
+
+const getRequestStatus = (item) =>
+  normalize(item.status || item.requestStatus || item.approvalStatus || item.request_status || item.approval_status);
+
+const isApprovedRequest = (item) => {
+  const status = getRequestStatus(item);
+  return status === "APPROVED" || status === "ACCEPTED";
+};
+
+const isEmergencyRequest = (item) => {
+  const type = normalize(item.requestType || item.request_type || item.bookingType || item.booking_type);
+  const scope = normalize(item.bookingScope || item.booking_scope);
+  const text = normalize(
+    [
+      item.requestTitle,
+      item.request_title,
+      item.purpose,
+      item.purposeNote,
+      item.purpose_note,
+      item.processingNote,
+      item.processing_note,
+      item.note,
+    ]
+      .filter(Boolean)
+      .join(" "),
+  );
+
+  return (
+    type === "EMERGENCY" ||
+    scope === "EMERGENCY" ||
+    text.includes("KHAN CAP") ||
+    text.includes("KHẨN CẤP") ||
+    text.includes("DAT PHONG KHAN CAP") ||
+    text.includes("ĐẶT PHÒNG KHẨN CẤP")
+  );
+};
+
+const mapRoomBorrowItem = (item, fallbackWeekNo, fallbackSemesterId) => {
+  const room =
+    item.approvedRoomCode ||
+    item.approved_room_code ||
+    item.roomCode ||
+    item.room_code ||
+    item.room ||
+    "";
+
+  const slotStart = Number(
+    item.slotStartId ??
+      item.slotStart ??
+      item.slotStartNo ??
+      item.slot_start_id ??
+      item.slot_start ??
+      item.slot ??
+      0,
+  );
+  const slotEnd = Number(
+    item.slotEndId ??
+      item.slotEnd ??
+      item.slotEndNo ??
+      item.slot_end_id ??
+      item.slot_end ??
+      item.slot ??
+      slotStart,
+  );
+  const bookingDate = item.bookingDate || item.booking_date || item.date || item.borrowDate || item.borrow_date;
+  const weekNo = item.weekNo ?? item.week_no ?? fallbackWeekNo ?? null;
+
+  return {
+    id: `borrow-${item.id ?? item.borrowRequestId ?? item.borrow_request_id}`,
+    sourceType: "ROOM_BORROW",
+    courseCode: "Mượn phòng",
+    sectionGroup: "Mượn phòng",
+    courseName: item.requestTitle || item.request_title || "Mượn phòng",
+    classCode: "ROOM_BORROW",
+    classCodes: item.purpose || item.purposeNote || item.purpose_note || "",
+    lecturer: item.requestedByName || item.requestedBy || item.requested_by_name || "Người mượn",
+    room,
+    roomLabel: cleanRoomName(room),
+    building: item.buildingCode || item.building_code || getBuildingFromRoom(room),
+    dayCode: item.dayCode || item.day_code || dateToDayCode(bookingDate),
+    slotStart,
+    slotEnd: Math.max(slotEnd, slotStart),
+    semesterId: item.semesterId ?? item.semester_id ?? fallbackSemesterId,
+    status: "ROOM_BORROW",
+    fromWeekNo: weekNo,
+    toWeekNo: weekNo,
+    startTime: item.startTime || item.start_time || null,
+    endTime: item.endTime || item.end_time || null,
+    bookingDate,
+  };
+};
+
+const mapRoomChangeItem = (item, fallbackWeekNo, fallbackSemesterId) => {
+  const newRoom =
+    item.newRoomCode ||
+    item.new_room_code ||
+    item.approvedRoomCode ||
+    item.approved_room_code ||
+    item.roomCode ||
+    item.room_code ||
+    item.room ||
+    "";
+
+  const oldRoom =
+    item.oldRoomCode ||
+    item.old_room_code ||
+    item.originalRoomCode ||
+    item.original_room_code ||
+    item.currentRoomCode ||
+    item.current_room_code ||
+    "";
+
+  const slotStart = Number(
+    item.slotStartId ??
+      item.slotStart ??
+      item.slotStartNo ??
+      item.slot_start_id ??
+      item.slot_start ??
+      item.slot ??
+      0,
+  );
+  const slotEnd = Number(
+    item.slotEndId ??
+      item.slotEnd ??
+      item.slotEndNo ??
+      item.slot_end_id ??
+      item.slot_end ??
+      item.slot ??
+      slotStart,
+  );
+  const targetDate = item.targetDate || item.target_date || item.changeDate || item.change_date || item.date;
+  const fromWeek = item.fromWeekNo ?? item.from_week_no ?? item.fromWeek ?? item.from_week ?? item.weekNo ?? item.week_no ?? fallbackWeekNo ?? null;
+  const toWeek = item.toWeekNo ?? item.to_week_no ?? item.toWeek ?? item.to_week ?? fromWeek;
+  const scheduleId = item.scheduleId ?? item.schedule_id ?? item.sectionScheduleId ?? item.section_schedule_id ?? null;
+
+  return {
+    id: `room-change-${item.id ?? item.roomChangeId ?? item.room_change_id}`,
+    scheduleId,
+    sourceType: "ROOM_CHANGE",
+    courseCode: item.courseCode || item.course_code || "Đổi phòng",
+    sectionGroup: item.sectionCode || item.section_code || "Đổi phòng",
+    courseName: item.courseName || item.course_name || item.requestTitle || item.request_title || "Đổi phòng",
+    classCode: item.classCode || item.class_code || item.sectionCode || item.section_code || "ROOM_CHANGE",
+    classCodes: item.reason || item.changeReason || item.change_reason || item.note || "",
+    lecturer: item.lecturerName || item.lecturer_name || "Giảng viên",
+    room: newRoom,
+    roomLabel: cleanRoomName(newRoom),
+    originalRoom: oldRoom,
+    building: item.buildingCode || item.building_code || getBuildingFromRoom(newRoom),
+    dayCode: item.dayCode || item.day_code || dateToDayCode(targetDate),
+    slotStart,
+    slotEnd: Math.max(slotEnd, slotStart),
+    semesterId: item.semesterId ?? item.semester_id ?? fallbackSemesterId,
+    status: "ROOM_CHANGE",
+    fromWeekNo: fromWeek,
+    toWeekNo: toWeek,
+    startTime: item.startTime || item.start_time || null,
+    endTime: item.endTime || item.end_time || null,
+    targetDate,
+  };
+};
+
+const weekRangesOverlap = (left, right) => {
+  const leftFrom = Number(left.fromWeekNo || 1);
+  const leftTo = Number(left.toWeekNo || leftFrom || 999);
+  const rightFrom = Number(right.fromWeekNo || 1);
+  const rightTo = Number(right.toWeekNo || rightFrom || 999);
+  return leftFrom <= rightTo && rightFrom <= leftTo;
+};
+
+const isSameScheduleTarget = (schedule, change) => {
+  if (change.scheduleId && String(schedule.scheduleId || schedule.id) === String(change.scheduleId)) {
+    return true;
+  }
+
+  return (
+    normalize(schedule.dayCode) === normalize(change.dayCode) &&
+    Number(schedule.slotStart) === Number(change.slotStart) &&
+    Number(schedule.slotEnd) === Number(change.slotEnd) &&
+    String(schedule.semesterId || "") === String(change.semesterId || "") &&
+    weekRangesOverlap(schedule, change) &&
+    (
+      normalize(schedule.classCode) === normalize(change.classCode) ||
+      normalize(schedule.courseCode) === normalize(change.courseCode)
+    )
+  );
+};
+
+const mergeRoomChangesIntoSchedules = (schedules, roomChanges) => {
+  const usedChangeIndexes = new Set();
+
+  const mergedSchedules = schedules.map((schedule) => {
+    const changeIndex = roomChanges.findIndex((change, index) => {
+      if (usedChangeIndexes.has(index)) return false;
+      return isSameScheduleTarget(schedule, change);
+    });
+
+    if (changeIndex < 0) return schedule;
+
+    const change = roomChanges[changeIndex];
+    usedChangeIndexes.add(changeIndex);
+
+    return {
+      ...schedule,
+      sourceType: "ROOM_CHANGE",
+      status: "ROOM_CHANGE",
+      room: change.room || schedule.room,
+      roomLabel: change.roomLabel || cleanRoomName(change.room || schedule.room),
+      building: change.building || getBuildingFromRoom(change.room || schedule.room),
+      originalRoom: schedule.room || change.originalRoom,
+      roomChangeNote: change.classCodes,
+    };
+  });
+
+  const orphanRoomChanges = roomChanges.filter((_, index) => !usedChangeIndexes.has(index));
+  return [...mergedSchedules, ...orphanRoomChanges];
 };
 
 const resolveCurrentWeek = (weekOptions) => {
@@ -203,6 +463,8 @@ const mapScheduleItem = (item) => {
 
   return {
     id: item.id ?? item.scheduleId ?? item.schedule_id,
+    scheduleId: item.scheduleId ?? item.schedule_id ?? item.id ?? null,
+    sourceType: "CLASS",
     courseCode,
     sectionGroup,
     courseName: item.courseName || item.course_name || item.name || "Chưa có tên môn",
@@ -232,6 +494,17 @@ const getSectionsEndpoint = (backendRole) => {
   return "/api/staff/class-sections";
 };
 
+const getRoomBorrowEndpoint = (backendRole) => {
+  if (backendRole === "STUDENT") return "/api/student/room-borrow-requests";
+  if (backendRole === "LECTURER") return "/api/lecturer/room-borrow-requests";
+  return null;
+};
+
+const getRoomChangeEndpoint = (backendRole) => {
+  if (backendRole === "LECTURER") return "/api/lecturer/room-change-requests";
+  return null;
+};
+
 const isInSelectedWeek = (item, selectedWeek) => {
   const weekNo = Number(selectedWeek);
   if (!Number.isFinite(weekNo)) return true;
@@ -255,7 +528,7 @@ const LoadingSkeleton = () => (
   </div>
 );
 
-const LessonBlock = ({ item }) => {
+const LessonBlock = ({ item, hideLecturer = false }) => {
   const isHolidayBlocked = Boolean(item.calendarBlock);
   const status = isHolidayBlocked
     ? {
@@ -267,18 +540,40 @@ const LessonBlock = ({ item }) => {
     : STATUS_META[item.status] || STATUS_META.ASSIGNED;
   const blockLabel = item.calendarBlock?.title || item.calendarBlock?.notes || "";
   const rowSpan = Math.max(1, item.slotEnd - item.slotStart + 1);
+  const titleText = [
+    item.courseName,
+    hideLecturer ? null : item.lecturer,
+    isHolidayBlocked ? blockLabel || "Lịch nghỉ" : null,
+  ].filter(Boolean).join(" - ");
 
   return (
     <div
       className={`m-1 overflow-hidden rounded-md border border-l-4 p-2 text-[11px] leading-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${status.block} ${status.accent}`}
       style={{ minHeight: `${rowSpan * 38}px` }}
-      title={isHolidayBlocked ? `${item.courseName} - ${item.lecturer} - ${blockLabel || "Lịch nghỉ"}` : `${item.courseName} - ${item.lecturer}`}
+      title={titleText}
     >
       <div className="line-clamp-2 font-bold">{item.courseName}</div>
       <div className="mt-0.5 font-semibold">({item.courseCode})</div>
       <div>Nhóm: {item.sectionGroup}</div>
-      <div className="truncate">GV: {item.lecturer}</div>
+      {!hideLecturer && <div className="truncate">GV: {item.lecturer}</div>}
       <div>Phòng: {item.roomLabel}</div>
+      {item.sourceType === "ROOM_BORROW" && (
+        <div className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-white/70 px-1.5 py-0.5 text-[8px] font-semibold leading-none text-violet-700">
+          <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
+          Mượn phòng
+        </div>
+      )}
+      {item.sourceType === "ROOM_CHANGE" && (
+        <div className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-white/70 px-1.5 py-0.5 text-[8px] font-semibold leading-none text-orange-700">
+          <span className="h-1.5 w-1.5 rounded-full bg-orange-500" />
+          Đổi phòng
+        </div>
+      )}
+      {item.sourceType === "ROOM_CHANGE" && item.originalRoom && (
+        <div className="truncate text-[10px] text-orange-700">
+          Từ: {cleanRoomName(item.originalRoom)}
+        </div>
+      )}
       {isHolidayBlocked && blockLabel && (
         <div className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-white/70 px-1.5 py-0.5 text-[8px] font-semibold leading-none text-red-700">
           <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
@@ -310,7 +605,7 @@ const DayHeader = ({ code, selectedWeek }) => {
   );
 };
 
-const TimetableGrid = ({ title, subtitle, items = [], selectedWeek, compact, onPrevWeek, onNextWeek, hasPrev, hasNext }) => {
+const TimetableGrid = ({ title, subtitle, items = [], selectedWeek, compact, onPrevWeek, onNextWeek, hasPrev, hasNext, hideLecturer = false }) => {
   const itemsByDay = useMemo(() => {
     return items.reduce((accumulator, item) => {
       const dayKey = normalize(item.dayCode);
@@ -423,7 +718,7 @@ const TimetableGrid = ({ title, subtitle, items = [], selectedWeek, compact, onP
                   )}`,
                 }}
               >
-                <LessonBlock item={item} />
+                <LessonBlock item={item} hideLecturer={hideLecturer} />
               </div>
             ))
           )}
@@ -588,18 +883,73 @@ const WeeklySchedulePage = () => {
     setSelectedWeek(resolveCurrentWeek(weekOptions));
   }, [weekOptions]);
 
+  const selectedWeekData = useMemo(
+    () => weekOptions.find((week) => week.value === selectedWeek) || weekOptions[0],
+    [selectedWeek, weekOptions],
+  );
+
   useEffect(() => {
     if (!selectedSemester) return;
+
     let mounted = true;
+
+    const fetchOptionalList = async (endpoint, params) => {
+      if (!endpoint) return [];
+      try {
+        const response = await httpClient.get(endpoint, { params });
+        return unwrapList(response);
+      } catch (loadError) {
+        console.warn(`Khong tai duoc du lieu bo sung tu ${endpoint}:`, loadError);
+        return [];
+      }
+    };
+
     const loadRows = async () => {
       setLoadingRows(true);
       setError("");
+
       try {
-        const response = await httpClient.get(getSectionsEndpoint(backendRole), {
-          params: { semesterId: selectedSemester },
-        });
+        const weekStart = toIsoDateLocal(selectedWeekData?.start);
+        const weekEnd = toIsoDateLocal(selectedWeekData?.end);
+        const currentWeekNo = Number(selectedWeek);
+        const borrowEndpoint = getRoomBorrowEndpoint(backendRole);
+        const changeEndpoint = getRoomChangeEndpoint(backendRole);
+
+        const [scheduleResponse, borrowRawItems, changeRawItems] = await Promise.all([
+          httpClient.get(getSectionsEndpoint(backendRole), {
+            params: { semesterId: selectedSemester },
+          }),
+          fetchOptionalList(borrowEndpoint, {
+            semesterId: selectedSemester,
+            weekStart,
+            weekEnd,
+          }),
+          fetchOptionalList(changeEndpoint, {
+            semesterId: selectedSemester,
+            weekStart,
+            weekEnd,
+          }),
+        ]);
+
         if (mounted) {
-          setRows(unwrapList(response).map(mapScheduleItem));
+          const schedules = unwrapList(scheduleResponse).map(mapScheduleItem);
+
+          const borrows = borrowRawItems
+            .filter((item) => isApprovedRequest(item))
+            .filter((item) => !isEmergencyRequest(item))
+            .filter((item) => isDateInRange(item.bookingDate || item.booking_date || item.date, selectedWeekData?.start, selectedWeekData?.end))
+            .map((item) => mapRoomBorrowItem(item, currentWeekNo, selectedSemester));
+
+          const roomChanges = changeRawItems
+            .filter((item) => isApprovedRequest(item))
+            .filter((item) => isDateInRange(
+              item.targetDate || item.target_date || item.changeDate || item.change_date || item.date,
+              selectedWeekData?.start,
+              selectedWeekData?.end,
+            ))
+            .map((item) => mapRoomChangeItem(item, currentWeekNo, selectedSemester));
+
+          setRows([...mergeRoomChangesIntoSchedules(schedules, roomChanges), ...borrows]);
         }
       } catch {
         if (mounted) {
@@ -615,7 +965,13 @@ const WeeklySchedulePage = () => {
     return () => {
       mounted = false;
     };
-  }, [backendRole, selectedSemester]);
+  }, [
+    backendRole,
+    selectedSemester,
+    selectedWeek,
+    selectedWeekData?.start,
+    selectedWeekData?.end,
+  ]);
 
   const buildingOptions = useMemo(() => {
     const mapped = buildings
@@ -658,11 +1014,6 @@ const WeeklySchedulePage = () => {
     }
   }, [roomOptions]);
 
-  const selectedWeekData = useMemo(
-    () => weekOptions.find((week) => week.value === selectedWeek) || weekOptions[0],
-    [selectedWeek, weekOptions],
-  );
-
   const filteredRows = useMemo(() => {
     return rows.filter((row) => {
       if (!row.dayCode || row.slotStart <= 0) return false;
@@ -672,7 +1023,15 @@ const WeeklySchedulePage = () => {
         if (normalize(row.building) !== normalize(selectedBuilding)) return false;
         if (selectedRoom !== "all" && row.room !== selectedRoom) return false;
       }
-      if (assignedOnly && row.status !== "ASSIGNED" && row.status !== "PUBLISHED") return false;
+      if (
+        assignedOnly &&
+        row.status !== "ASSIGNED" &&
+        row.status !== "PUBLISHED" &&
+        row.status !== "ROOM_BORROW" &&
+        row.status !== "ROOM_CHANGE"
+      ) {
+        return false;
+      }
       if (!showConflicts && row.status === "CONFLICT") return false;
       return true;
     });
@@ -958,6 +1317,7 @@ const WeeklySchedulePage = () => {
               onNextWeek={handleNextWeek}
               hasPrev={hasPrevWeek}
               hasNext={hasNextWeek}
+              hideLecturer={backendRole === "LECTURER"}
             />
           ))}
         </div>

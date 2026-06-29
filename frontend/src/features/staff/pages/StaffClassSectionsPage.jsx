@@ -12,6 +12,7 @@ import { httpClient } from "@/services/httpClient";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
+import { getSectionIdentity } from "@/utils/sectionDisplay";
 import {
   Select,
   SelectContent,
@@ -124,25 +125,31 @@ const StaffClassSectionsPage = ({
         const response = await httpClient.get(endpoint, {
           params: filterSemester !== "all" ? { semesterId: filterSemester } : {},
         });
-        const data = getPayloadList(response).map((item) => ({
-          dbId: item.id,
-          id: item.classCode,
-          name: item.courseName,
-          department: item.departmentCode,
-          faculty: item.facultyCode,
-          credits: item.credits,
-          students: item.studentCount,
-          lecturer: item.lecturerName,
-          day: item.day,
-          slot: formatSchedule(item),
-          room: item.room,
-          classCodes: item.classCodes || "",
-          classNames: item.classNames || "",
-          status: mapStatus(item.allocationStatus),
-          allocationStatus: item.allocationStatus,
-          semesterId: item.semesterId,
-          maxCapacity: item.maxCapacity,
-        }));
+        const data = getPayloadList(response).map((item) => {
+          const { courseCode, sectionCode } = getSectionIdentity(item);
+
+          return {
+            dbId: item.id,
+            id: item.id,
+            courseCode,
+            sectionCode,
+            name: item.courseName,
+            department: item.departmentCode,
+            faculty: item.facultyCode,
+            credits: item.credits,
+            students: item.studentCount,
+            lecturer: item.lecturerName,
+            day: item.day,
+            slot: formatSchedule(item),
+            room: item.room,
+            classCodes: item.classCodes || "",
+            classNames: item.classNames || "",
+            status: mapStatus(item.allocationStatus),
+            allocationStatus: item.allocationStatus,
+            semesterId: item.semesterId,
+            maxCapacity: item.maxCapacity,
+          };
+        });
 
         setSections(data);
       } catch (error) {
@@ -162,7 +169,8 @@ const StaffClassSectionsPage = ({
     return sections.filter((section) => {
       const matchSearch =
         !keyword ||
-        section.id?.toLowerCase().includes(keyword) ||
+        section.courseCode?.toLowerCase().includes(keyword) ||
+        section.sectionCode?.toLowerCase().includes(keyword) ||
         section.name?.toLowerCase().includes(keyword) ||
         section.lecturer?.toLowerCase().includes(keyword) ||
         section.classCodes?.toLowerCase().includes(keyword);
@@ -205,10 +213,7 @@ const StaffClassSectionsPage = ({
             {description}
           </p>
         </div>
-        <Button variant="outline" disabled className="w-fit border-gray-200">
-          <Download className="w-4 h-4" />
-          Xuất Excel
-        </Button>
+
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -230,7 +235,7 @@ const StaffClassSectionsPage = ({
         <div className="flex-1 md:min-w-[260px] relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
-            placeholder="Tìm theo Mã lớp học phần, tên môn, giảng viên..."
+            placeholder="Tìm theo mã học phần, nhóm/tổ, tên môn, giảng viên..."
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             className="pl-9 h-9 text-sm"
@@ -301,7 +306,7 @@ const StaffClassSectionsPage = ({
         <Table>
           <TableHeader>
             <TableRow className="bg-gray-50 border-b">
-              <TableHead className="text-xs font-bold text-gray-600">Mã lớp học phần</TableHead>
+              <TableHead className="text-xs font-bold text-gray-600">Học phần / Nhóm</TableHead>
               <TableHead className="text-xs font-bold text-gray-600">Môn học</TableHead>
               <TableHead className="text-xs font-bold text-gray-600">Bộ môn</TableHead>
               <TableHead className="text-xs font-bold text-gray-600">Classes</TableHead>
@@ -320,8 +325,23 @@ const StaffClassSectionsPage = ({
 
               return (
                 <TableRow key={section.dbId} className="hover:bg-gray-50 border-b">
-                  <TableCell className="font-semibold text-blue-600 text-xs">
-                    {section.id}
+                  <TableCell className="text-xs">
+                    <div className="space-y-0.5">
+                      {section.courseCode ? (
+                        <>
+                          <p className="font-semibold text-blue-600">
+                            {section.courseCode}
+                          </p>
+                          <p className="text-[11px] font-medium text-gray-500">
+                            {section.sectionCode || "-"}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="font-semibold text-blue-600">
+                          {section.sectionCode || "-"}
+                        </p>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="font-medium text-gray-900 text-sm">
                     {section.name}

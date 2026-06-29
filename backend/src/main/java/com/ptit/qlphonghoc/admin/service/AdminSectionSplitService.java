@@ -8,6 +8,7 @@ import com.ptit.qlphonghoc.admin.dto.AdminSplitSuggestionResponse;
 import com.ptit.qlphonghoc.admin.dto.AdminSplitSuggestionResponse.SplitPartSuggestion;
 import com.ptit.qlphonghoc.admin.dto.AdminSplitSuggestionResponse.SplitSuggestion;
 import com.ptit.qlphonghoc.admin.repository.AdminSectionSplitRepository;
+import com.ptit.qlphonghoc.admin.repository.AdminSectionSplitRepository.LecturerRef;
 import com.ptit.qlphonghoc.admin.repository.AdminSectionSplitRepository.RoomRef;
 import com.ptit.qlphonghoc.admin.repository.AdminSectionSplitRepository.SlotRef;
 import com.ptit.qlphonghoc.admin.repository.AdminSectionSplitRepository.SlotRangeRef;
@@ -18,6 +19,7 @@ import com.ptit.qlphonghoc.audit.service.WorkflowAuditLogger;
 import com.ptit.qlphonghoc.common.exception.BadRequestException;
 import com.ptit.qlphonghoc.common.exception.ResourceNotFoundException;
 import com.ptit.qlphonghoc.timetableworkflow.TimetableWorkflowStatus;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -160,52 +162,56 @@ public class AdminSectionSplitService {
         validateLecturerConflicts(request.scheduleId(), context, parts);
         validateRoomAssignments(request.scheduleId(), context, parts);
 
-        NormalizedPart first = parts.get(0);
-        if (repository.updateOriginalSection(
-                sectionId,
-                first.sectionCode(),
-                first.studentCount(),
-                first.lecturerId()
-        ) != 1 || repository.updateOriginalSchedule(
-                sectionId,
-                request.scheduleId(),
-                first.dayOfWeek(),
-                first.slotStartId(),
-                first.slotEndId(),
-                first.classroomId(),
-                adminUserId,
-                "Tách từ " + context.courseCode() + ".L" + context.sectionCode()
-        ) != 1) {
-            throw new BadRequestException("SECTION_SPLIT_FAILED", "Không thể cập nhật nhóm đầu tiên sau tách.");
-        }
-
         List<Integer> createdSectionIds = new ArrayList<>();
         List<Integer> updatedScheduleIds = new ArrayList<>();
-        updatedScheduleIds.add(request.scheduleId());
-        for (int index = 1; index < parts.size(); index++) {
-            NormalizedPart part = parts.get(index);
-            Integer createdSectionId = repository.insertSection(
-                    context,
-                    part.sectionCode(),
-                    part.studentCount(),
-                    part.lecturerId()
-            );
-            Integer createdScheduleId = repository.insertSchedule(
-                    createdSectionId,
-                    context,
-                    part.dayOfWeek(),
-                    part.slotStartId(),
-                    part.slotEndId(),
-                    part.classroomId(),
+        try {
+            NormalizedPart first = parts.get(0);
+            if (repository.updateOriginalSection(
+                    sectionId,
+                    first.sectionCode(),
+                    first.studentCount(),
+                    first.lecturerId()
+            ) != 1 || repository.updateOriginalSchedule(
+                    sectionId,
+                    request.scheduleId(),
+                    first.dayOfWeek(),
+                    first.slotStartId(),
+                    first.slotEndId(),
+                    first.classroomId(),
                     adminUserId,
                     "Tách từ " + context.courseCode() + ".L" + context.sectionCode()
-            );
-            createdSectionIds.add(createdSectionId);
-            updatedScheduleIds.add(createdScheduleId);
-        }
+            ) != 1) {
+                throw new BadRequestException("SECTION_SPLIT_FAILED", "Không thể cập nhật nhóm đầu tiên sau tách.");
+            }
 
-        if (repository.markSemesterDraft(context.semesterId()) != 1) {
-            throw new BadRequestException("SECTION_SPLIT_FAILED", "Không thể đưa thời khóa biểu về bản nháp.");
+            updatedScheduleIds.add(request.scheduleId());
+            for (int index = 1; index < parts.size(); index++) {
+                NormalizedPart part = parts.get(index);
+                Integer createdSectionId = repository.insertSection(
+                        context,
+                        part.sectionCode(),
+                        part.studentCount(),
+                        part.lecturerId()
+                );
+                Integer createdScheduleId = repository.insertSchedule(
+                        createdSectionId,
+                        context,
+                        part.dayOfWeek(),
+                        part.slotStartId(),
+                        part.slotEndId(),
+                        part.classroomId(),
+                        adminUserId,
+                        "Tách từ " + context.courseCode() + ".L" + context.sectionCode()
+                );
+                createdSectionIds.add(createdSectionId);
+                updatedScheduleIds.add(createdScheduleId);
+            }
+
+            if (repository.markSemesterDraft(context.semesterId()) != 1) {
+                throw new BadRequestException("SECTION_SPLIT_FAILED", "Không thể đưa thời khóa biểu về bản nháp.");
+            }
+        } catch (DuplicateKeyException exception) {
+            throw duplicateSectionCodeException();
         }
         auditLogger.logWorkflowTransition(
                 adminUserId,
@@ -239,19 +245,22 @@ public class AdminSectionSplitService {
             if (!repository.lecturerExists(part.lecturerId())) {
                 throw new BadRequestException("LECTURER_NOT_FOUND", "Giảng viên của nhóm tách không tồn tại.");
             }
+            if (repository.countLecturerEligibleForCourse(part.lecturerId(), context.courseId()) == 0) {
+                throw new BadRequestException(
+                        "LECTURER_NOT_ELIGIBLE",
+                        "Giảng viên được chọn không thuộc khoa/ngành của học phần."
+                );
+            }
             String sectionCode = normalizeSectionCode(context.courseCode(), part.sectionCode());
             String codeKey = sectionCode.toUpperCase(Locale.ROOT);
             if (!requestCodes.add(codeKey)
                     || repository.sectionCodeExists(
-                            context.semesterId(),
-                            context.courseId(),
-                            sectionCode,
-                            sectionId
-                    )) {
-                throw new BadRequestException(
-                        "DUPLICATE_SECTION_CODE",
-                        "Mã nhóm " + sectionCode + " đã tồn tại trong môn học và học kỳ này."
-                );
+                    context.semesterId(),
+                    context.courseId(),
+                    sectionCode,
+                    sectionId
+            )) {
+                throw duplicateSectionCodeException(sectionCode);
             }
             SlotRef start = repository.resolveSlot(part.slotStartId(), part.slotStartNo())
                     .orElseThrow(() -> new BadRequestException("INVALID_SLOT", "Không tìm thấy tiết bắt đầu."));
@@ -283,14 +292,25 @@ public class AdminSectionSplitService {
         Set<String> requestCodes = new HashSet<>();
         for (int index = 0; index < request.parts().size(); index++) {
             AdminSplitSuggestionRequest.SuggestionPart part = request.parts().get(index);
-            if (!repository.lecturerExists(part.lecturerId())) {
-                throw new BadRequestException("LECTURER_NOT_FOUND", "Giảng viên của nhóm tách không tồn tại.");
+
+            if (part.lecturerId() != null) {
+                if (!repository.lecturerExists(part.lecturerId())) {
+                    throw new BadRequestException("LECTURER_NOT_FOUND", "Giảng viên ưu tiên của nhóm tách không tồn tại.");
+                }
+                if (repository.countLecturerEligibleForCourse(part.lecturerId(), context.courseId()) == 0) {
+                    throw new BadRequestException(
+                            "LECTURER_NOT_ELIGIBLE",
+                            "Giảng viên ưu tiên không thuộc khoa/ngành của học phần."
+                    );
+                }
             }
+
             String sectionCode = normalizeSectionCode(context.courseCode(), part.sectionCode());
             String codeKey = sectionCode.toUpperCase(Locale.ROOT);
             if (!requestCodes.add(codeKey)) {
-                throw new BadRequestException("DUPLICATE_SECTION_CODE", "Mã nhóm " + sectionCode + " bị trùng.");
+                throw duplicateSectionCodeException(sectionCode);
             }
+
             inputs.add(new SuggestionInput(
                     index,
                     sectionCode,
@@ -341,87 +361,129 @@ public class AdminSectionSplitService {
             int offset,
             LinkedHashSet<String> rejectedReasons
     ) {
+        List<LecturerRef> eligibleLecturers = repository.findEligibleLecturersByCourse(context.courseId());
+        if (eligibleLecturers.isEmpty()) {
+            rejectedReasons.add("Không tìm thấy giảng viên thuộc khoa/ngành của học phần.");
+            return List.of();
+        }
+
         List<SplitPartSuggestion> parts = new ArrayList<>();
         List<PlacedPart> placed = new ArrayList<>();
 
         for (int inputIndex = 0; inputIndex < inputs.size(); inputIndex++) {
             SuggestionInput input = inputs.get(inputIndex);
             SplitPartSuggestion selected = null;
-            for (int attempt = 0; attempt < candidateTimes.size(); attempt++) {
-                CandidateTime candidate = candidateTimes.get((offset + inputIndex + attempt) % candidateTimes.size());
-                if (repository.countCalendarBlockConflicts(
-                        context.semesterId(),
-                        candidate.dayOfWeek(),
-                        context.fromWeekNo(),
-                        context.toWeekNo()
-                ) > 0) {
-                    rejectedReasons.add("Một số khung giờ bị chặn bởi lịch học vụ");
-                    continue;
-                }
-                if (repository.lecturerHasOverlap(
-                        context.semesterId(),
-                        input.lecturerId(),
-                        candidate.dayOfWeek(),
-                        candidate.slot().startId(),
-                        candidate.slot().endId(),
-                        context.fromWeekNo(),
-                        context.toWeekNo(),
-                        originalScheduleId
-                ) || conflictsWithPlacedLecturer(input.lecturerId(), candidate, placed)) {
-                    rejectedReasons.add("Một số khung giờ bị trùng với lịch giảng viên của nhóm khác.");
-                    continue;
+            List<LecturerRef> orderedLecturers = orderLecturersForInput(eligibleLecturers, input.preferredLecturerId());
+
+            for (LecturerRef lecturer : orderedLecturers) {
+                boolean lecturerHasAnyCandidate = false;
+
+                for (int attempt = 0; attempt < candidateTimes.size(); attempt++) {
+                    CandidateTime candidate = candidateTimes.get((offset + inputIndex + attempt) % candidateTimes.size());
+
+                    if (repository.countCalendarBlockConflicts(
+                            context.semesterId(),
+                            candidate.dayOfWeek(),
+                            context.fromWeekNo(),
+                            context.toWeekNo()
+                    ) > 0) {
+                        rejectedReasons.add("Một số khung giờ bị chặn bởi lịch học vụ.");
+                        continue;
+                    }
+
+                    if (repository.lecturerHasOverlap(
+                            context.semesterId(),
+                            lecturer.getLecturerId(),
+                            candidate.dayOfWeek(),
+                            candidate.slot().startId(),
+                            candidate.slot().endId(),
+                            context.fromWeekNo(),
+                            context.toWeekNo(),
+                            originalScheduleId
+                    ) || conflictsWithPlacedLecturer(lecturer.getLecturerId(), candidate, placed)) {
+                        continue;
+                    }
+
+                    lecturerHasAnyCandidate = true;
+
+                    List<RoomRef> rooms = repository.findAvailableRooms(
+                            context.semesterId(),
+                            candidate.dayOfWeek(),
+                            candidate.slot().startId(),
+                            candidate.slot().endId(),
+                            context.fromWeekNo(),
+                            context.toWeekNo(),
+                            originalScheduleId,
+                            context.requiredRoomType(),
+                            input.studentCount(),
+                            List.of(),
+                            3
+                    );
+
+                    RoomRef room = rooms.stream()
+                            .filter(candidateRoom -> !conflictsWithPlacedRoom(candidateRoom.id(), candidate, placed))
+                            .findFirst()
+                            .orElse(null);
+
+                    if (room == null) {
+                        continue;
+                    }
+
+                    selected = new SplitPartSuggestion(
+                            input.partIndex(),
+                            input.sectionCode(),
+                            input.studentCount(),
+                            lecturer.getLecturerId(),
+                            lecturer.getLecturerCode(),
+                            lecturer.getFullName(),
+                            candidate.dayOfWeek(),
+                            dayLabel(candidate.dayOfWeek()),
+                            candidate.slot().startId(),
+                            candidate.slot().endId(),
+                            candidate.slot().startNo(),
+                            candidate.slot().endNo(),
+                            room.id(),
+                            room.code(),
+                            room.capacity(),
+                            room.roomType()
+                    );
+                    placed.add(new PlacedPart(lecturer.getLecturerId(), room.id(), candidate));
+                    break;
                 }
 
-                List<RoomRef> rooms = repository.findAvailableRooms(
-                        context.semesterId(),
-                        candidate.dayOfWeek(),
-                        candidate.slot().startId(),
-                        candidate.slot().endId(),
-                        context.fromWeekNo(),
-                        context.toWeekNo(),
-                        originalScheduleId,
-                        context.requiredRoomType(),
-                        input.studentCount(),
-                        List.of(),
-                        3
-                );
-                if (rooms.isEmpty()) {
-                    rejectedReasons.add("Không tìm thấy phòng học trống cho nhóm " + input.sectionCode() + " vào khung giờ " + dayLabel(candidate.dayOfWeek()) + " tiết " + candidate.slot().startNo() + "-" + candidate.slot().endNo() + ".");
-                    continue;
+                if (selected != null) {
+                    break;
                 }
-                RoomRef room = rooms.stream()
-                        .filter(candidateRoom -> !conflictsWithPlacedRoom(candidateRoom.id(), candidate, placed))
-                        .findFirst()
-                        .orElse(null);
-                if (room == null) {
-                    rejectedReasons.add("Không tìm thấy phòng học trống cho nhóm " + input.sectionCode() + " vào khung giờ " + dayLabel(candidate.dayOfWeek()) + " tiết " + candidate.slot().startNo() + "-" + candidate.slot().endNo() + ".");
-                    continue;
+
+                if (!lecturerHasAnyCandidate) {
+                    rejectedReasons.add("Không tìm thấy giảng viên phù hợp không trùng lịch cho nhóm " + input.sectionCode() + ".");
                 }
-                selected = new SplitPartSuggestion(
-                        input.partIndex(),
-                        input.sectionCode(),
-                        input.studentCount(),
-                        input.lecturerId(),
-                        candidate.dayOfWeek(),
-                        dayLabel(candidate.dayOfWeek()),
-                        candidate.slot().startId(),
-                        candidate.slot().endId(),
-                        candidate.slot().startNo(),
-                        candidate.slot().endNo(),
-                        room.id(),
-                        room.code(),
-                        room.capacity(),
-                        room.roomType()
-                );
-                placed.add(new PlacedPart(input.lecturerId(), room.id(), candidate));
-                break;
             }
+
             if (selected == null) {
+                rejectedReasons.add("Không tìm thấy phòng học trống phù hợp cho nhóm " + input.sectionCode() + ".");
                 return parts;
             }
             parts.add(selected);
         }
         return parts;
+    }
+
+    private List<LecturerRef> orderLecturersForInput(List<LecturerRef> lecturers, Integer preferredLecturerId) {
+        if (preferredLecturerId == null) {
+            return lecturers;
+        }
+
+        List<LecturerRef> ordered = new ArrayList<>(lecturers);
+        ordered.sort((left, right) -> {
+            boolean leftPreferred = preferredLecturerId.equals(left.getLecturerId());
+            boolean rightPreferred = preferredLecturerId.equals(right.getLecturerId());
+            if (leftPreferred == rightPreferred) {
+                return 0;
+            }
+            return leftPreferred ? -1 : 1;
+        });
+        return ordered;
     }
 
     private boolean conflictsWithPlacedLecturer(Integer lecturerId, CandidateTime candidate, List<PlacedPart> placed) {
@@ -563,6 +625,18 @@ public class AdminSectionSplitService {
         );
     }
 
+    private BadRequestException duplicateSectionCodeException() {
+        return duplicateSectionCodeException(null);
+    }
+
+    private BadRequestException duplicateSectionCodeException(String sectionCode) {
+        String target = sectionCode == null || sectionCode.isBlank() ? "Mã nhóm sau tách" : "Mã nhóm " + sectionCode;
+        return new BadRequestException(
+                "DUPLICATE_SECTION_CODE",
+                target + " đã tồn tại trong môn học và học kỳ này, kể cả dữ liệu đã hủy. Vui lòng chọn mã nhóm khác."
+        );
+    }
+
     private String normalizeSectionCode(String courseCode, String rawCode) {
         String value = rawCode.trim();
         String fullPrefix = courseCode + ".L";
@@ -628,7 +702,7 @@ public class AdminSectionSplitService {
             Integer partIndex,
             String sectionCode,
             Integer studentCount,
-            Integer lecturerId,
+            Integer preferredLecturerId,
             Integer slotStartNo,
             Integer slotEndNo
     ) {

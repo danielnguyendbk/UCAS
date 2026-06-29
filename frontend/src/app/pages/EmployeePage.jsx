@@ -12,11 +12,11 @@ import { Input } from "../components/ui/input";
 import ScheduleToolbar from "../components/ScheduleToolbar";
 
 const roomUsageData = [
-  { id: "CS101.L11", course: "Lập trình hướng đối tượng", room: "A-301", building: "Tòa A", type: "Phòng thường", day: "Thứ 2", slot: "Tiết 1-3", time: "07:00-09:30", lecturer: "TS. Nguyễn Văn An", students: 45, prepStatus: "ready", floor: 3, capacity: 50, section: "D21CNTT01" },
-  { id: "NET301.L05", course: "Mạng máy tính", room: "A-101", building: "Tòa A", type: "Phòng thường", day: "Thứ 2", slot: "Tiết 7-9", time: "13:00-15:30", lecturer: "ThS. Lê Minh Tú", students: 38, prepStatus: "not-ready", floor: 1, capacity: 40, section: "D21CNTT02" },
-  { id: "DB202.L08", course: "Cơ sở dữ liệu", room: "B-203", building: "Tòa B", type: "Phòng máy", day: "Thứ 3", slot: "Tiết 4-6", time: "09:45-12:15", lecturer: "TS. Phân Quang Hưng", students: 28, prepStatus: "ready", floor: 2, capacity: 30, section: "D21CNTT03" },
-  { id: "MATH201.L02", course: "Toán cao cấp 2", room: "C-301", building: "Tòa C", type: "Phòng thường", day: "Thứ 4", slot: "Tiết 1-3", time: "07:00-09:30", lecturer: "GS.TS. Trần Thị Bình", students: 58, prepStatus: "ready", floor: 3, capacity: 60, section: "D21TOAN01" },
-  { id: "AI401.L01", course: "Trí tuệ nhân tạo", room: "A-301", building: "Tòa A", type: "Phòng thường", day: "Thứ 5", slot: "Tiết 1-3", time: "07:00-09:30", lecturer: "PGS.TS. Hoàng Văn Nam", students: 35, prepStatus: "not-ready", floor: 3, capacity: 50, section: "D20CNTT01" }
+  { id: "1", courseCode: "CS101", sectionCode: "L11", course: "Lập trình hướng đối tượng", room: "A-301", building: "Tòa A", type: "Phòng thường", day: "Thứ 2", slot: "Tiết 1-3", time: "07:00-09:30", lecturer: "TS. Nguyễn Văn An", students: 45, prepStatus: "ready", floor: 3, capacity: 50, section: "D21CNTT01" },
+  { id: "2", courseCode: "NET301", sectionCode: "L05", course: "Mạng máy tính", room: "A-101", building: "Tòa A", type: "Phòng thường", day: "Thứ 2", slot: "Tiết 7-9", time: "13:00-15:30", lecturer: "ThS. Lê Minh Tú", students: 38, prepStatus: "not-ready", floor: 1, capacity: 40, section: "D21CNTT02" },
+  { id: "3", courseCode: "DB202", sectionCode: "L08", course: "Cơ sở dữ liệu", room: "B-203", building: "Tòa B", type: "Phòng máy", day: "Thứ 3", slot: "Tiết 4-6", time: "09:45-12:15", lecturer: "TS. Phân Quang Hưng", students: 28, prepStatus: "ready", floor: 2, capacity: 30, section: "D21CNTT03" },
+  { id: "4", courseCode: "MATH201", sectionCode: "L02", course: "Toán cao cấp 2", room: "C-301", building: "Tòa C", type: "Phòng thường", day: "Thứ 4", slot: "Tiết 1-3", time: "07:00-09:30", lecturer: "GS.TS. Trần Thị Bình", students: 58, prepStatus: "ready", floor: 3, capacity: 60, section: "D21TOAN01" },
+  { id: "5", courseCode: "AI401", sectionCode: "L01", course: "Trí tuệ nhân tạo", room: "A-301", building: "Tòa A", type: "Phòng thường", day: "Thứ 5", slot: "Tiết 1-3", time: "07:00-09:30", lecturer: "PGS.TS. Hoàng Văn Nam", students: 35, prepStatus: "not-ready", floor: 3, capacity: 50, section: "D20CNTT01" }
 ];
 
 const requestHistoryData = [
@@ -264,7 +264,7 @@ const EmployeePage = () => {
                                       </div>
                                       <div className="flex justify-between">
                                         <span>Mã lớp học phần:</span>
-                                        <span className="font-semibold text-white">{item.section}</span>
+                                        <span className="font-semibold text-white">{[item.courseCode, item.sectionCode].filter(Boolean).join(" · ")}</span>
                                       </div>
                                       <div className="flex justify-between border-t border-gray-700 pt-1 mt-1">
                                         <span>Thời gian:</span>

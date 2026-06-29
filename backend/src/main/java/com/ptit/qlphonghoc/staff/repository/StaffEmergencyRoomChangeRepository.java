@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -34,6 +35,7 @@ public interface StaffEmergencyRoomChangeRepository extends JpaRepository<ClassS
             sch.slot_start_id AS timeSlotId,
             sch.slot_start_id AS slotStartId,
             sch.slot_end_id AS slotEndId,
+            ts_end.end_time AS scheduleEndTime,
             ts_start.slot_no AS slotNumber,
             ts_start.slot_no AS slotStartNo,
             ts_end.slot_no AS slotEndNo,
@@ -78,6 +80,7 @@ public interface StaffEmergencyRoomChangeRepository extends JpaRepository<ClassS
                 WHEN 'SAT' THEN 'Thu 7'
                 WHEN 'SUN' THEN 'Chu nhat'
             END AS dayOfWeek,
+            sch.day_of_week AS dayCode,
             sch.slot_start_id AS slotStartId,
             sch.slot_end_id AS slotEndId,
             ts_start.slot_no AS slotStart,
@@ -91,6 +94,17 @@ public interface StaffEmergencyRoomChangeRepository extends JpaRepository<ClassS
             trc.target_date AS targetDate,
             trc.from_week AS fromWeek,
             trc.to_week AS toWeek,
+            CASE
+                WHEN trc.change_scope = 'SESSION' THEN target_sw.week_no
+                WHEN trc.from_week IS NOT NULL THEN week_bounds.minWeekNo + trc.from_week - 1
+                ELSE NULL
+            END AS fromWeekNo,
+            CASE
+                WHEN trc.change_scope = 'SESSION' THEN target_sw.week_no
+                WHEN trc.change_scope = 'WEEK_RANGE' AND trc.to_week IS NOT NULL THEN week_bounds.minWeekNo + trc.to_week - 1
+                WHEN trc.change_scope = 'REST_OF_SEMESTER' THEN week_bounds.maxWeekNo
+                ELSE NULL
+            END AS toWeekNo,
             trc.old_classroom_id AS oldClassroomId,
             CONCAT(old_b.building_code, '-', old_cr.room_number) AS oldRoomCode,
             trc.requested_classroom_id AS requestedClassroomId,
@@ -126,6 +140,17 @@ public interface StaffEmergencyRoomChangeRepository extends JpaRepository<ClassS
         LEFT JOIN buildings req_b ON req_b.building_id = req_cr.building_id
         LEFT JOIN classrooms new_cr ON new_cr.classroom_id = trc.new_classroom_id
         LEFT JOIN buildings new_b ON new_b.building_id = new_cr.building_id
+        LEFT JOIN semester_weeks target_sw
+          ON target_sw.semester_id = trc.semester_id
+         AND trc.target_date BETWEEN target_sw.start_date AND target_sw.end_date
+        LEFT JOIN (
+            SELECT
+                semester_id,
+                MIN(week_no) AS minWeekNo,
+                MAX(week_no) AS maxWeekNo
+            FROM semester_weeks
+            GROUP BY semester_id
+        ) week_bounds ON week_bounds.semester_id = trc.semester_id
         LEFT JOIN users reviewer ON reviewer.user_id = trc.reviewed_by
         """;
 
@@ -137,6 +162,14 @@ public interface StaffEmergencyRoomChangeRepository extends JpaRepository<ClassS
           AND status = 'ACTIVE'
         """, nativeQuery = true)
     int countActiveStaffOrAdminById(@Param("userId") Integer userId);
+
+    @Query(value = """
+        SELECT classroom_id
+        FROM classrooms
+        WHERE classroom_id = :classroomId
+        FOR UPDATE
+        """, nativeQuery = true)
+    Optional<Integer> lockClassroomById(@Param("classroomId") Integer classroomId);
 
     @Query(value = SCHEDULE_SELECT + SCHEDULE_FROM + """
         WHERE cs.semester_id = :semesterId
@@ -293,6 +326,14 @@ public interface StaffEmergencyRoomChangeRepository extends JpaRepository<ClassS
                             AND COALESCE(trc.to_week, 999) >= :fromWeek)
                     ))
                 )
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM classroom_issue_reports cir
+              WHERE cir.classroom_id = cr.classroom_id
+                AND cir.is_deleted = FALSE
+                AND cir.status IN ('PENDING','IN_PROGRESS')
+                AND cir.severity_level IN ('HIGH','URGENT')
           )
         """, nativeQuery = true)
     int countAvailableRoomForChange(
@@ -454,6 +495,14 @@ public interface StaffEmergencyRoomChangeRepository extends JpaRepository<ClassS
                             AND COALESCE(trc.to_week, 999) >= :fromWeek)
                     ))
                 )
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM classroom_issue_reports cir
+              WHERE cir.classroom_id = cr.classroom_id
+                AND cir.is_deleted = FALSE
+                AND cir.status IN ('PENDING','IN_PROGRESS')
+                AND cir.severity_level IN ('HIGH','URGENT')
           )
         ORDER BY cr.capacity ASC, b.building_code, cr.room_number
         """, nativeQuery = true)
@@ -729,6 +778,7 @@ public interface StaffEmergencyRoomChangeRepository extends JpaRepository<ClassS
         Integer getTimeSlotId();
         Integer getSlotStartId();
         Integer getSlotEndId();
+        LocalTime getScheduleEndTime();
         Integer getSlotNumber();
         Integer getSlotStartNo();
         Integer getSlotEndNo();
@@ -766,6 +816,7 @@ public interface StaffEmergencyRoomChangeRepository extends JpaRepository<ClassS
         String getCourseName();
         String getLecturerName();
         String getDayOfWeek();
+        String getDayCode();
         Integer getSlotStartId();
         Integer getSlotEndId();
         Integer getSlotStart();
@@ -776,6 +827,8 @@ public interface StaffEmergencyRoomChangeRepository extends JpaRepository<ClassS
         LocalDate getTargetDate();
         Integer getFromWeek();
         Integer getToWeek();
+        Integer getFromWeekNo();
+        Integer getToWeekNo();
         Integer getOldClassroomId();
         String getOldRoomCode();
         Integer getRequestedClassroomId();

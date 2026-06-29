@@ -381,7 +381,7 @@ export default function TimetableImportPage() {
                         <td className="px-4 py-3 font-mono text-xs text-slate-500">{row.rowNumber}</td>
                         <td className="px-4 py-3"><Badge variant="outline" className={meta.className}>{meta.label}</Badge></td>
                         <td className="px-4 py-3 text-xs font-medium text-slate-700">{OPERATION_LABELS[row.operation] ?? row.operation}</td>
-                        <td className="px-4 py-3"><p className="font-mono text-xs font-semibold text-slate-900">{row.courseCode} · {row.sectionCode}</p><p className="mt-1 max-w-[220px] text-xs text-slate-500">{row.className}</p></td>
+                        <td className="px-4 py-3"><p className="font-mono text-xs font-semibold text-slate-900">{row.courseCode}</p><p className="mt-1 max-w-[220px] text-xs text-slate-500">{row.className}</p></td>
                         <td className="px-4 py-3 font-mono text-xs text-slate-700">{row.lecturerCode}</td>
                         <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-600">{row.schedule}</td>
                         <td className="px-4 py-3 font-mono text-xs text-slate-700">{row.preferredClassroomCode || "—"}</td>

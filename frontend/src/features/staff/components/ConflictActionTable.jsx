@@ -25,6 +25,7 @@ import {
   getCourseCode,
   SEVERITY_LABELS,
 } from "@/features/staff/utils/allocationHelpers";
+import { getDisplayClassCodes, getDisplaySectionCode } from "@/utils/sectionDisplay";
 
 const ADMIN_NOTE_MAX_LENGTH = 255;
 
@@ -36,6 +37,9 @@ const severityClass = (severity) => {
 
 const valueOrDash = (value) =>
   value === null || value === undefined || value === "" ? "—" : value;
+
+const getAdministrativeClass = (allocation, conflict) =>
+  getDisplayClassCodes({ ...conflict, ...allocation }, "");
 
 const buildAdminNoteTemplate = (conflict, allocation) => {
   const merged = { ...allocation, ...conflict };
@@ -129,8 +133,8 @@ export const ConflictActionTable = ({
           <Table className="min-w-[1120px] table-fixed">
             <TableHeader>
               <TableRow className="bg-gray-50">
-                <TableHead className="w-[90px] text-xs font-semibold text-gray-600">Mã HP</TableHead>
-                <TableHead className="w-[170px] text-xs font-semibold text-gray-600">Tên môn học</TableHead>
+                <TableHead className="w-[130px] text-xs font-semibold text-gray-600">Mã HP</TableHead>
+                <TableHead className="w-[130px] text-xs font-semibold text-gray-600">Tên môn học</TableHead>
                 <TableHead className="w-[90px] text-xs font-semibold text-gray-600">Nhóm/Tổ</TableHead>
                 <TableHead className="w-[130px] text-xs font-semibold text-gray-600">Lớp hành chính</TableHead>
                 <TableHead className="w-[130px] text-xs font-semibold text-gray-600">Giảng viên</TableHead>
@@ -160,10 +164,10 @@ export const ConflictActionTable = ({
                       {valueOrDash(conflict.courseName)}
                     </TableCell>
                     <TableCell className="break-words text-xs text-gray-600">
-                      {valueOrDash(conflict.sectionCode)}
+                      {getDisplaySectionCode(conflict)}
                     </TableCell>
                     <TableCell className="break-words text-xs text-gray-500">
-                      {valueOrDash(allocation?.administrativeClass || conflict.administrativeClass || conflict.sectionCode)}
+                      {valueOrDash(getAdministrativeClass(allocation, conflict))}
                     </TableCell>
                     <TableCell className="break-words text-xs text-gray-600">
                       {valueOrDash(conflict.lecturerName || allocation?.lecturerName)}
@@ -266,8 +270,8 @@ export const ConflictActionTable = ({
                 {[
                   ["Mã học phần", getCourseCode(detailAllocation || detailConflict)],
                   ["Tên môn", detailConflict.courseName],
-                  ["Nhóm/Tổ", detailConflict.sectionCode],
-                  ["Lớp hành chính", detailAllocation?.administrativeClass || detailConflict.administrativeClass || detailConflict.sectionCode],
+                  ["Nhóm/Tổ", getDisplaySectionCode(detailConflict)],
+                  ["Lớp hành chính", getAdministrativeClass(detailAllocation, detailConflict)],
                   ["Giảng viên", detailConflict.lecturerName || detailAllocation?.lecturerName],
                   ["Sĩ số", detailConflict.enrolledCount ?? detailAllocation?.enrolledCount],
                   ["Thời gian học", formatSchedule({ ...detailAllocation, ...detailConflict })],

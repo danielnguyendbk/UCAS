@@ -301,7 +301,7 @@ const ROLE_PATH_GUARDS = {
 
 const BACKEND_ROLE_LABELS = {
   ADMIN: "QUẢN TRỊ VIÊN",
-  STAFF: "PHÒNG ĐÀO TẠO",
+  STAFF: "CÁN BỘ QUẢN LÝ PHÒNG HỌC",
   LECTURER: "GIẢNG VIÊN",
   STUDENT: "SINH VIÊN",
   FACILITY: "CƠ SỞ VẬT CHẤT",
@@ -1008,17 +1008,7 @@ const AppLayout = () => {
             >
               <Menu className="w-5 h-5" />
             </button>
-            <div className="hidden sm:block">
-              <h2 className="text-sm font-bold text-gray-900">
-                Hệ thống Quản lý CSVC
-              </h2>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                <p className="text-[11px] text-gray-500 font-medium">
-                  {activeSemesterName || "Đang tải học kỳ"}
-                </p>
-              </div>
-            </div>
+
           </div>
 
           <div className="flex items-center gap-3">
