@@ -1,25 +1,3 @@
-# OS
-.DS_Store
-Thumbs.db
-
-# Editor
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-
-# Environment files
-.env
-.env.*
-!.env.example
-
 # Dependencies
 node_modules/
 **/node_modules/
@@ -28,20 +6,73 @@ node_modules/
 dist/
 build/
 coverage/
+target/
 **/dist/
 **/build/
 **/coverage/
+**/target/
+*.class
+*.jar
+*.war
 
-# TypeScript cache
+# Runtime uploads and generated output
+backend/uploads/
+uploads/
+output/
+docs/reports/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Environment and local config
+.env
+.env.*
+*.env
+!.env.example
+application-local.yml
+backend/src/main/resources/application-local.yml
+
+# IDE and assistant local state
+.idea/
+.vscode/
+.claude/
+*.iml
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*.swo
+*.sw?
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Caches
+.cache/
+.tmp/
+tmp/
 *.tsbuildinfo
 
-# Python (if backend uses Python later)
+# Optional Python artifacts
 __pycache__/
 *.py[cod]
 *.pyo
 .venv/
 venv/
+.pytest_cache/
 
-# Backend runtime files
+# Local database files
+*.sqlite
 *.sqlite3
 *.db
+
+# Temporary backup
+trash/
