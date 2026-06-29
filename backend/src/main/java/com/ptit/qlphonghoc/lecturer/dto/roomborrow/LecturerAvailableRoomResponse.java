@@ -3,6 +3,9 @@ package com.ptit.qlphonghoc.lecturer.dto.roomborrow;
 public class LecturerAvailableRoomResponse {
 
     private Integer classroomId;
+    private Integer buildingId;
+    private String buildingCode;
+    private String buildingName;
     private String roomCode;
     private Integer capacity;
     private String roomType;
@@ -16,6 +19,30 @@ public class LecturerAvailableRoomResponse {
 
     public void setClassroomId(Integer classroomId) {
         this.classroomId = classroomId;
+    }
+
+    public Integer getBuildingId() {
+        return buildingId;
+    }
+
+    public void setBuildingId(Integer buildingId) {
+        this.buildingId = buildingId;
+    }
+
+    public String getBuildingCode() {
+        return buildingCode;
+    }
+
+    public void setBuildingCode(String buildingCode) {
+        this.buildingCode = buildingCode;
+    }
+
+    public String getBuildingName() {
+        return buildingName;
+    }
+
+    public void setBuildingName(String buildingName) {
+        this.buildingName = buildingName;
     }
 
     public String getRoomCode() {

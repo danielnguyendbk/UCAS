@@ -116,8 +116,6 @@ public class StaffRoomBorrowRequestService {
         response.setRequesterName(projection.getRequesterName());
         response.setRequesterUsername(projection.getRequesterUsername());
         response.setRequesterRole(projection.getRequesterRole());
-        response.setClubId(projection.getClubId());
-        response.setClubName(projection.getClubName());
         response.setSectionId(projection.getSectionId());
         response.setSectionCode(projection.getSectionCode());
         response.setCourseName(projection.getCourseName());

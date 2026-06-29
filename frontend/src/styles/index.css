@@ -1,3 +1,40 @@
 @import './fonts.css';
 @import './tailwind.css';
 @import './theme.css';
+
+/* Áp dụng cho toàn bộ trang web */
+html,
+body {
+    /* Cho trình duyệt Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+    /* Màu thanh cuộn (slate-300) và nền trong suốt */
+}
+
+/* Cho các trình duyệt dùng Webkit (Chrome, Safari, Edge, Opera) */
+::-webkit-scrollbar {
+    width: 6px;
+    /* Độ dày khi cuộn dọc - chỉnh số này nhỏ xuống tùy ý */
+    height: 6px;
+    /* Độ dày khi cuộn ngang */
+}
+
+/* Phần thanh trượt (Thumb) */
+::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    /* Màu của thanh cuộn (tương đương slate-300) */
+    border-radius: 10px;
+    /* Bo tròn góc thanh trượt nhìn cho mượt */
+}
+
+/* Hiệu ứng khi rê chuột vào thanh cuộn */
+::-webkit-scrollbar-thumb:hover {
+    background-color: #94a3b8;
+    /* Đậm lên một chút khi hover (slate-400) */
+}
+
+/* Phần nền đường chạy của thanh cuộn (Track) */
+::-webkit-scrollbar-track {
+    background: transparent;
+    /* Để trong suốt giúp giao diện sạch sẽ, không bị vệt trắng thừa */
+}

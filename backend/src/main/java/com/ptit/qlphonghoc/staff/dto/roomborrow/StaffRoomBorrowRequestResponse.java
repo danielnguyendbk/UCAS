@@ -22,8 +22,7 @@ public class StaffRoomBorrowRequestResponse {
     private String requesterName;
     private String requesterUsername;
     private String requesterRole;
-    private Integer clubId;
-    private String clubName;
+
     private Integer sectionId;
     private String sectionCode;
     private String courseName;
@@ -180,21 +179,9 @@ public class StaffRoomBorrowRequestResponse {
         this.requesterRole = requesterRole;
     }
 
-    public Integer getClubId() {
-        return clubId;
-    }
 
-    public void setClubId(Integer clubId) {
-        this.clubId = clubId;
-    }
 
-    public String getClubName() {
-        return clubName;
-    }
-
-    public void setClubName(String clubName) {
-        this.clubName = clubName;
-    }
+    
 
     public Integer getSectionId() {
         return sectionId;

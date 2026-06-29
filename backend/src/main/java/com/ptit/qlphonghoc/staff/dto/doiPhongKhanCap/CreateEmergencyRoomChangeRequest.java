@@ -28,9 +28,6 @@ public class CreateEmergencyRoomChangeRequest {
     @NotBlank(message = "reason khong duoc de trong")
     private String reason;
 
-    @NotNull(message = "staffUserId khong duoc de trong")
-    private Integer staffUserId;
-
     public Integer getSemesterId() {
         return semesterId;
     }
@@ -93,13 +90,5 @@ public class CreateEmergencyRoomChangeRequest {
 
     public void setReason(String reason) {
         this.reason = reason;
-    }
-
-    public Integer getStaffUserId() {
-        return staffUserId;
-    }
-
-    public void setStaffUserId(Integer staffUserId) {
-        this.staffUserId = staffUserId;
     }
 }

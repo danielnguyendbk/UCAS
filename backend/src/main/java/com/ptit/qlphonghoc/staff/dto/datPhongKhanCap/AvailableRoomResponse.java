@@ -3,12 +3,19 @@ package com.ptit.qlphonghoc.staff.dto.datPhongKhanCap;
 public class AvailableRoomResponse {
 
     private Integer classroomId;
+    private Integer buildingId;
+    private String buildingCode;
+    private String buildingName;
     private String roomCode;
     private Integer capacity;
     private String roomType;
     private String roomTypeText;
     private String mainEquipment;
     private String statusText;
+    private Integer slotStartNo;
+    private Integer slotEndNo;
+    private String startTime;
+    private String endTime;
 
     public AvailableRoomResponse() {
     }
@@ -19,6 +26,30 @@ public class AvailableRoomResponse {
 
     public void setClassroomId(Integer classroomId) {
         this.classroomId = classroomId;
+    }
+
+    public Integer getBuildingId() {
+        return buildingId;
+    }
+
+    public void setBuildingId(Integer buildingId) {
+        this.buildingId = buildingId;
+    }
+
+    public String getBuildingCode() {
+        return buildingCode;
+    }
+
+    public void setBuildingCode(String buildingCode) {
+        this.buildingCode = buildingCode;
+    }
+
+    public String getBuildingName() {
+        return buildingName;
+    }
+
+    public void setBuildingName(String buildingName) {
+        this.buildingName = buildingName;
     }
 
     public String getRoomCode() {
@@ -67,5 +98,37 @@ public class AvailableRoomResponse {
 
     public void setStatusText(String statusText) {
         this.statusText = statusText;
+    }
+
+    public Integer getSlotStartNo() {
+        return slotStartNo;
+    }
+
+    public void setSlotStartNo(Integer slotStartNo) {
+        this.slotStartNo = slotStartNo;
+    }
+
+    public Integer getSlotEndNo() {
+        return slotEndNo;
+    }
+
+    public void setSlotEndNo(Integer slotEndNo) {
+        this.slotEndNo = slotEndNo;
+    }
+
+    public String getStartTime() {
+        return startTime;
+    }
+
+    public void setStartTime(String startTime) {
+        this.startTime = startTime;
+    }
+
+    public String getEndTime() {
+        return endTime;
+    }
+
+    public void setEndTime(String endTime) {
+        this.endTime = endTime;
     }
 }

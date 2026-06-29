@@ -5,24 +5,28 @@ import com.ptit.qlphonghoc.staff.dto.class_section.StaffSectionTableResponse;
 import com.ptit.qlphonghoc.staff.dto.class_section.UpdateSectionRequest;
 import com.ptit.qlphonghoc.staff.entity.ClassSection;
 import com.ptit.qlphonghoc.staff.repository.ClassSectionRepository;
+import com.ptit.qlphonghoc.timetableworkflow.service.TimetableMutationPolicy;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.text.Normalizer;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 
 @Service
-public class StaffClassSectionService {
+public class StaffClassSectionService implements ClassSectionTableReader {
 
     private final ClassSectionRepository classSectionRepository;
+    private final TimetableMutationPolicy mutationPolicy;
 
-    public StaffClassSectionService(ClassSectionRepository classSectionRepository) {
+    public StaffClassSectionService(
+            ClassSectionRepository classSectionRepository,
+            TimetableMutationPolicy mutationPolicy
+    ) {
         this.classSectionRepository = classSectionRepository;
+        this.mutationPolicy = mutationPolicy;
     }
 
     @Transactional(readOnly = true)
@@ -34,6 +38,7 @@ public class StaffClassSectionService {
     }
 
     @Transactional(readOnly = true)
+    @Override
     public StaffSectionTableResponse getById(Integer id) {
         return classSectionRepository.findStaffTableById(id)
                 .map(this::toResponse)
@@ -45,9 +50,10 @@ public class StaffClassSectionService {
 
     @Transactional
     public StaffSectionTableResponse create(CreateSectionRequest request) {
+        mutationPolicy.assertOriginalTimetableMutable(request.getSemesterId());
         validateMainInput(request);
-        List<Integer> classIds = normalizeClassIds(request.getClassIds());
-        int enrolledCount = validateClassSelection(classIds, request.getMaxCapacity());
+        String className = normalizeClassName(request.getClassName());
+        int enrolledCount = validateClassSelection(className, request.getMaxCapacity());
         checkSemesterStatus(request.getSemesterId());
         validateScheduleSelection(request);
 
@@ -55,7 +61,7 @@ public class StaffClassSectionService {
         applyRequestToEntity(section, request, enrolledCount);
 
         ClassSection saved = classSectionRepository.saveAndFlush(section);
-        syncSectionEnrollments(saved.getId(), classIds);
+        syncSectionEnrollments(saved.getId(), className);
         saveOrUpdateSchedule(
                 saved.getId(),
                 request.getClassroomId(),
@@ -69,21 +75,25 @@ public class StaffClassSectionService {
 
     @Transactional
     public StaffSectionTableResponse update(Integer id, UpdateSectionRequest request) {
-        validateMainInput(request);
-        List<Integer> classIds = normalizeClassIds(request.getClassIds());
-        int enrolledCount = validateClassSelection(classIds, request.getMaxCapacity());
-        checkSemesterStatus(request.getSemesterId());
-        validateScheduleSelection(request);
-
         ClassSection section = classSectionRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Khong tim thay lop hoc phan id = " + id
                 ));
+        mutationPolicy.assertOriginalTimetableMutable(section.getSemesterId());
+        if (!section.getSemesterId().equals(request.getSemesterId())) {
+            mutationPolicy.assertOriginalTimetableMutable(request.getSemesterId());
+        }
+
+        validateMainInput(request);
+        String className = normalizeClassName(request.getClassName());
+        int enrolledCount = validateClassSelection(className, request.getMaxCapacity());
+        checkSemesterStatus(request.getSemesterId());
+        validateScheduleSelection(request);
 
         applyRequestToEntity(section, request, enrolledCount);
         classSectionRepository.saveAndFlush(section);
-        syncSectionEnrollments(id, classIds);
+        syncSectionEnrollments(id, className);
         saveOrUpdateSchedule(
                 id,
                 request.getClassroomId(),
@@ -102,6 +112,7 @@ public class StaffClassSectionService {
                         HttpStatus.NOT_FOUND,
                         "Khong tim thay lop hoc phan id = " + id
                 ));
+        mutationPolicy.assertOriginalTimetableMutable(section.getSemesterId());
 
         if (classSectionRepository.countActiveEnrollmentsBySectionId(id) > 0) {
             throw new ResponseStatusException(
@@ -142,7 +153,7 @@ public class StaffClassSectionService {
     }
 
     private void validateScheduleSelection(CreateSectionRequest request) {
-        if (classSectionRepository.countActiveClassroomById(request.getClassroomId()) == 0) {
+        if (request.getClassroomId() != null && classSectionRepository.countActiveClassroomById(request.getClassroomId()) == 0) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Phong hoc khong ton tai hoac dang khong hoat dong."
@@ -157,52 +168,38 @@ public class StaffClassSectionService {
         }
     }
 
-    private List<Integer> normalizeClassIds(List<Integer> rawClassIds) {
-        if (rawClassIds == null) {
+    private String normalizeClassName(String rawClassName) {
+        if (rawClassName == null || rawClassName.isBlank()) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Can chon tu 1 den toi da 2 classes."
+                    "className khong duoc de trong."
             );
         }
-
-        List<Integer> classIds = rawClassIds.stream()
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
-
-        if (classIds.isEmpty() || classIds.size() > 2) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Can chon tu 1 den toi da 2 classes."
-            );
-        }
-
-        return classIds;
+        return rawClassName.trim();
     }
 
-    private int validateClassSelection(List<Integer> classIds, Integer maxCapacity) {
-        int activeClassCount = classSectionRepository.countActiveClassesByIds(classIds);
-        if (activeClassCount != classIds.size()) {
+    private int validateClassSelection(String className, Integer maxCapacity) {
+        int studentCount = classSectionRepository.countStudentsByClassName(className);
+        if (studentCount == 0) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Danh sach classes khong hop le."
+                    "Khong tim thay sinh vien nao thuoc className da chon."
             );
         }
 
-        int studentCount = classSectionRepository.countStudentsByClassIds(classIds);
         if (maxCapacity == null || maxCapacity < studentCount) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "maxCapacity khong duoc nho hon tong so sinh vien cua cac classes da chon."
+                    "maxCapacity khong duoc nho hon tong so sinh vien cua className da chon."
             );
         }
 
         return studentCount;
     }
 
-    private void syncSectionEnrollments(Integer sectionId, List<Integer> classIds) {
+    private void syncSectionEnrollments(Integer sectionId, String className) {
         classSectionRepository.deactivateEnrollmentsOfSection(sectionId);
-        classSectionRepository.enrollStudentsFromClasses(sectionId, classIds);
+        classSectionRepository.enrollStudentsByClassName(sectionId, className);
     }
 
     private void applyRequestToEntity(ClassSection section, CreateSectionRequest request, int enrolledCount) {
@@ -210,6 +207,7 @@ public class StaffClassSectionService {
         section.setCourseId(request.getCourseId());
         section.setLecturerId(request.getLecturerId());
         section.setSectionCode(request.getSectionCode().trim());
+        section.setClassName(request.getClassName().trim());
         section.setEnrolledCount(enrolledCount);
         section.setMaxCapacity(request.getMaxCapacity());
 
@@ -275,17 +273,20 @@ public class StaffClassSectionService {
         StaffSectionTableResponse response = new StaffSectionTableResponse();
 
         response.setId(projection.getId());
+        response.setScheduleId(projection.getScheduleId());
+        response.setSectionCode(projection.getSectionCode());
         response.setClassCode(projection.getClassCode());
         response.setCourseName(projection.getCourseName());
         response.setFacultyCode(projection.getFacultyCode());
         response.setDepartmentCode(projection.getDepartmentCode());
         response.setCredits(projection.getCredits());
+        response.setRequiredRoomType(projection.getRequiredRoomType());
         response.setStudentCount(projection.getStudentCount());
         response.setSemesterId(projection.getSemesterId());
         response.setCourseId(projection.getCourseId());
         response.setLecturerId(projection.getLecturerId());
         response.setMaxCapacity(projection.getMaxCapacity());
-        response.setClassIds(parseClassIds(projection.getClassIds()));
+        response.setClassIds(List.of());
         response.setClassCodes(projection.getClassCodes());
         response.setClassNames(projection.getClassNames());
         response.setLecturerName(projection.getLecturerName());
@@ -296,25 +297,25 @@ public class StaffClassSectionService {
         response.setSlotEndId(projection.getSlotEndId());
         response.setSlotStart(projection.getSlotStart());
         response.setSlotEnd(projection.getSlotEnd());
+        response.setFromWeekNo(projection.getFromWeekNo());
+        response.setToWeekNo(projection.getToWeekNo());
         response.setSchedule(projection.getSchedule());
         response.setClassroomId(projection.getClassroomId());
+        response.setRoomCapacity(projection.getRoomCapacity());
         response.setRoom(projection.getRoom());
+        response.setClassroomCode(projection.getClassroomCode());
+        response.setScheduleStatus(projection.getScheduleStatus());
+        response.setValidationStatus(projection.getValidationStatus());
+        response.setConflictReason(projection.getConflictReason());
+        response.setNote(projection.getNote());
         response.setAllocationStatus(projection.getAllocationStatus());
         response.setStatusText(projection.getStatusText());
         response.setSectionStatus(projection.getSectionStatus());
+        // --- THÊM 2 DÒNG NÀY ĐỂ ĐẨY GIỜ SANG DTO ---
+        response.setStartTime(projection.getStartTime());
+        response.setEndTime(projection.getEndTime());
 
         return response;
     }
 
-    private List<Integer> parseClassIds(String classIds) {
-        if (classIds == null || classIds.isBlank()) {
-            return List.of();
-        }
-
-        return Arrays.stream(classIds.split(","))
-                .map(String::trim)
-                .filter(value -> !value.isBlank())
-                .map(Integer::valueOf)
-                .toList();
-    }
 }

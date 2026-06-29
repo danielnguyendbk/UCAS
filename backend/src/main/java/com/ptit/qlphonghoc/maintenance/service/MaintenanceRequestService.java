@@ -114,26 +114,26 @@ public class MaintenanceRequestService {
     public List<MaintenanceRequestResponse> getMyRequests(Integer reporterUserId) {
         return jdbcTemplate.query("""
             SELECT
-                cir.id AS id,
+                cir.issue_report_id AS id,
                 cir.issue_title AS issueTitle,
                 cir.issue_category AS issueCategory,
                 cir.severity_level AS severityLevel,
                 cir.description AS description,
                 cir.image_url AS imageUrl,
                 cir.status AS status,
-                CONCAT(b.code, '-', cr.room_number) AS roomCode,
-                cr.room_name AS roomName,
-                b.name AS buildingName,
-                reporter.full_name AS reporterName,
-                handler.full_name AS handledByName,
+                CONCAT(b.building_code, '-', cr.room_number) AS roomCode,
+                cr.classroom_name AS roomName,
+                b.building_name AS buildingName,
+                reporter.username AS reporterName,
+                handler.username AS handledByName,
                 cir.resolution_note AS resolutionNote,
                 cir.created_at AS createdAt,
                 cir.handled_at AS handledAt
             FROM classroom_issue_reports cir
-            JOIN classrooms cr ON cr.id = cir.classroom_id
-            JOIN buildings b ON b.id = cr.building_id
-            JOIN users reporter ON reporter.id = cir.reporter_user_id
-            LEFT JOIN users handler ON handler.id = cir.handled_by
+            JOIN classrooms cr ON cr.classroom_id = cir.classroom_id
+            JOIN buildings b ON b.building_id = cr.building_id
+            JOIN users reporter ON reporter.user_id = cir.reporter_user_id
+            LEFT JOIN users handler ON handler.user_id = cir.handled_by
             WHERE cir.reporter_user_id = ?
               AND cir.is_deleted = FALSE
             ORDER BY cir.created_at DESC
@@ -146,26 +146,26 @@ public class MaintenanceRequestService {
         if (normalizedStatus == null) {
             return jdbcTemplate.query("""
                 SELECT
-                    cir.id AS id,
+                    cir.issue_report_id AS id,
                     cir.issue_title AS issueTitle,
                     cir.issue_category AS issueCategory,
                     cir.severity_level AS severityLevel,
                     cir.description AS description,
                     cir.image_url AS imageUrl,
                     cir.status AS status,
-                    CONCAT(b.code, '-', cr.room_number) AS roomCode,
-                    cr.room_name AS roomName,
-                    b.name AS buildingName,
-                    reporter.full_name AS reporterName,
-                    handler.full_name AS handledByName,
+                    CONCAT(b.building_code, '-', cr.room_number) AS roomCode,
+                    cr.classroom_name AS roomName,
+                    b.building_name AS buildingName,
+                    reporter.username AS reporterName,
+                    handler.username AS handledByName,
                     cir.resolution_note AS resolutionNote,
                     cir.created_at AS createdAt,
                     cir.handled_at AS handledAt
                 FROM classroom_issue_reports cir
-                JOIN classrooms cr ON cr.id = cir.classroom_id
-                JOIN buildings b ON b.id = cr.building_id
-                JOIN users reporter ON reporter.id = cir.reporter_user_id
-                LEFT JOIN users handler ON handler.id = cir.handled_by
+                JOIN classrooms cr ON cr.classroom_id = cir.classroom_id
+                JOIN buildings b ON b.building_id = cr.building_id
+                JOIN users reporter ON reporter.user_id = cir.reporter_user_id
+                LEFT JOIN users handler ON handler.user_id = cir.handled_by
                 WHERE cir.is_deleted = FALSE
                 ORDER BY
                     CASE cir.status
@@ -181,26 +181,26 @@ public class MaintenanceRequestService {
 
         return jdbcTemplate.query("""
             SELECT
-                cir.id AS id,
+                cir.issue_report_id AS id,
                 cir.issue_title AS issueTitle,
                 cir.issue_category AS issueCategory,
                 cir.severity_level AS severityLevel,
                 cir.description AS description,
                 cir.image_url AS imageUrl,
                 cir.status AS status,
-                CONCAT(b.code, '-', cr.room_number) AS roomCode,
-                cr.room_name AS roomName,
-                b.name AS buildingName,
-                reporter.full_name AS reporterName,
-                handler.full_name AS handledByName,
+                CONCAT(b.building_code, '-', cr.room_number) AS roomCode,
+                cr.classroom_name AS roomName,
+                b.building_name AS buildingName,
+                reporter.username AS reporterName,
+                handler.username AS handledByName,
                 cir.resolution_note AS resolutionNote,
                 cir.created_at AS createdAt,
                 cir.handled_at AS handledAt
             FROM classroom_issue_reports cir
-            JOIN classrooms cr ON cr.id = cir.classroom_id
-            JOIN buildings b ON b.id = cr.building_id
-            JOIN users reporter ON reporter.id = cir.reporter_user_id
-            LEFT JOIN users handler ON handler.id = cir.handled_by
+            JOIN classrooms cr ON cr.classroom_id = cir.classroom_id
+            JOIN buildings b ON b.building_id = cr.building_id
+            JOIN users reporter ON reporter.user_id = cir.reporter_user_id
+            LEFT JOIN users handler ON handler.user_id = cir.handled_by
             WHERE cir.is_deleted = FALSE
               AND cir.status = ?
             ORDER BY cir.created_at DESC
@@ -227,7 +227,7 @@ public class MaintenanceRequestService {
                        handled_by = ?,
                        handled_at = CURRENT_TIMESTAMP,
                        resolution_note = ?
-                 WHERE id = ?
+                 WHERE issue_report_id = ?
                    AND is_deleted = FALSE
                 """, normalizedStatus, handlerUserId, note, id);
 
@@ -248,27 +248,27 @@ public class MaintenanceRequestService {
     private MaintenanceRequestResponse findById(Integer id, Integer reporterUserId) {
         List<MaintenanceRequestResponse> responses = jdbcTemplate.query("""
             SELECT
-                cir.id AS id,
+                cir.issue_report_id AS id,
                 cir.issue_title AS issueTitle,
                 cir.issue_category AS issueCategory,
                 cir.severity_level AS severityLevel,
                 cir.description AS description,
                 cir.image_url AS imageUrl,
                 cir.status AS status,
-                CONCAT(b.code, '-', cr.room_number) AS roomCode,
-                cr.room_name AS roomName,
-                b.name AS buildingName,
-                reporter.full_name AS reporterName,
-                handler.full_name AS handledByName,
+                CONCAT(b.building_code, '-', cr.room_number) AS roomCode,
+                cr.classroom_name AS roomName,
+                b.building_name AS buildingName,
+                reporter.username AS reporterName,
+                handler.username AS handledByName,
                 cir.resolution_note AS resolutionNote,
                 cir.created_at AS createdAt,
                 cir.handled_at AS handledAt
             FROM classroom_issue_reports cir
-            JOIN classrooms cr ON cr.id = cir.classroom_id
-            JOIN buildings b ON b.id = cr.building_id
-            JOIN users reporter ON reporter.id = cir.reporter_user_id
-            LEFT JOIN users handler ON handler.id = cir.handled_by
-            WHERE cir.id = ?
+            JOIN classrooms cr ON cr.classroom_id = cir.classroom_id
+            JOIN buildings b ON b.building_id = cr.building_id
+            JOIN users reporter ON reporter.user_id = cir.reporter_user_id
+            LEFT JOIN users handler ON handler.user_id = cir.handled_by
+            WHERE cir.issue_report_id = ?
               AND cir.reporter_user_id = ?
               AND cir.is_deleted = FALSE
             """, responseMapper(), id, reporterUserId);
@@ -282,27 +282,27 @@ public class MaintenanceRequestService {
     private MaintenanceRequestResponse findByIdForStaff(Integer id) {
         List<MaintenanceRequestResponse> responses = jdbcTemplate.query("""
             SELECT
-                cir.id AS id,
+                cir.issue_report_id AS id,
                 cir.issue_title AS issueTitle,
                 cir.issue_category AS issueCategory,
                 cir.severity_level AS severityLevel,
                 cir.description AS description,
                 cir.image_url AS imageUrl,
                 cir.status AS status,
-                CONCAT(b.code, '-', cr.room_number) AS roomCode,
-                cr.room_name AS roomName,
-                b.name AS buildingName,
-                reporter.full_name AS reporterName,
-                handler.full_name AS handledByName,
+                CONCAT(b.building_code, '-', cr.room_number) AS roomCode,
+                cr.classroom_name AS roomName,
+                b.building_name AS buildingName,
+                reporter.username AS reporterName,
+                handler.username AS handledByName,
                 cir.resolution_note AS resolutionNote,
                 cir.created_at AS createdAt,
                 cir.handled_at AS handledAt
             FROM classroom_issue_reports cir
-            JOIN classrooms cr ON cr.id = cir.classroom_id
-            JOIN buildings b ON b.id = cr.building_id
-            JOIN users reporter ON reporter.id = cir.reporter_user_id
-            LEFT JOIN users handler ON handler.id = cir.handled_by
-            WHERE cir.id = ?
+            JOIN classrooms cr ON cr.classroom_id = cir.classroom_id
+            JOIN buildings b ON b.building_id = cr.building_id
+            JOIN users reporter ON reporter.user_id = cir.reporter_user_id
+            LEFT JOIN users handler ON handler.user_id = cir.handled_by
+            WHERE cir.issue_report_id = ?
               AND cir.is_deleted = FALSE
             """, responseMapper(), id);
 
@@ -320,24 +320,25 @@ public class MaintenanceRequestService {
 
         List<Classroom> rooms = jdbcTemplate.query("""
             SELECT
-                cr.id AS classroomId,
-                CONCAT(b.code, '-', cr.room_number) AS roomCode,
-                cr.room_name AS roomName
+                cr.classroom_id AS classroomId,
+                CONCAT(b.building_code, '-', cr.room_number) AS roomCode,
+                cr.classroom_name AS roomName
             FROM classrooms cr
-            JOIN buildings b ON b.id = cr.building_id
+            JOIN buildings b ON b.building_id = cr.building_id
             WHERE cr.is_active = TRUE
               AND (
-                  UPPER(REPLACE(REPLACE(CONCAT(b.code, '-', cr.room_number), '-', ''), ' ', '')) = ?
+                  UPPER(REPLACE(REPLACE(CONCAT(b.building_code, '-', cr.room_number), '-', ''), ' ', '')) = ?
+                  OR UPPER(REPLACE(REPLACE(cr.classroom_code, '-', ''), ' ', '')) = ?
                   OR UPPER(REPLACE(REPLACE(cr.room_number, '-', ''), ' ', '')) = ?
               )
             ORDER BY
-                cr.id
+                cr.classroom_id
             LIMIT 1
             """, (rs, rowNum) -> new Classroom(
                 rs.getInt("classroomId"),
                 rs.getString("roomCode"),
                 rs.getString("roomName")
-        ), roomCode, roomCode);
+        ), roomCode, roomCode, roomCode);
 
         if (rooms.isEmpty()) {
             throw new ResponseStatusException(

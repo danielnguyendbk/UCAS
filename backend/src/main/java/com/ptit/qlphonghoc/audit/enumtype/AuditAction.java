@@ -5,8 +5,16 @@ public enum AuditAction {
     UPDATE,
     DELETE,
     LOGIN,
+    LOGOUT,
     APPROVE,
     REJECT,
     REQUEST,
-    CANCEL
+    CANCEL,
+    ASSIGN_ROOM,
+    CHANGE_ROOM,
+    GENERATE_SESSION,
+    SCHEDULE_EXAM,
+    OPEN_ROOM,
+    CLOSE_ROOM,
+    ROLLBACK
 }

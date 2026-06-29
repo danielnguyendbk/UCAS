@@ -1,9 +1,7 @@
-"use client";
-import { jsx, jsxs } from "react/jsx-runtime";
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { cva } from "class-variance-authority";
-import { PanelLeftIcon } from "lucide-react";
+import { PanelLeftIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { useIsMobile } from "./use-mobile";
 import { cn } from "./utils";
 import { Button } from "./button";
@@ -88,23 +86,27 @@ function SidebarProvider({
     }),
     [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar]
   );
-  return /* @__PURE__ */ jsx(SidebarContext.Provider, { value: contextValue, children: /* @__PURE__ */ jsx(TooltipProvider, { delayDuration: 0, children: /* @__PURE__ */ jsx(
-    "div",
-    {
-      "data-slot": "sidebar-wrapper",
-      style: {
-        "--sidebar-width": SIDEBAR_WIDTH,
-        "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
-        ...style
-      },
-      className: cn(
-        "group/sidebar-wrapper has-data-[variant=inset]:bg-sidebar flex min-h-svh w-full",
-        className
-      ),
-      ...props,
-      children
-    }
-  ) }) });
+  return (
+    <SidebarContext.Provider value={contextValue}>
+      <TooltipProvider delayDuration={0}>
+        <div
+          data-slot="sidebar-wrapper"
+          style={{
+            "--sidebar-width": SIDEBAR_WIDTH,
+            "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
+            ...style
+          }}
+          className={cn(
+            "group/sidebar-wrapper has-data-[variant=inset]:bg-sidebar flex min-h-svh w-full",
+            className
+          )}
+          {...props}
+        >
+          {children}
+        </div>
+      </TooltipProvider>
+    </SidebarContext.Provider>
+  );
 }
 function Sidebar({
   side = "left",
@@ -114,90 +116,93 @@ function Sidebar({
   children,
   ...props
 }) {
-  const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
+  const { isMobile, state, openMobile, setOpenMobile, toggleSidebar } = useSidebar();
   if (collapsible === "none") {
-    return /* @__PURE__ */ jsx(
-      "div",
-      {
-        "data-slot": "sidebar",
-        className: cn(
+    return (
+      <div
+        data-slot="sidebar"
+        className={cn(
           "bg-sidebar text-sidebar-foreground flex h-full w-(--sidebar-width) flex-col",
           className
-        ),
-        ...props,
-        children
-      }
+        )}
+        {...props}
+      >
+        {children}
+      </div>
     );
   }
   if (isMobile) {
-    return /* @__PURE__ */ jsx(Sheet, { open: openMobile, onOpenChange: setOpenMobile, ...props, children: /* @__PURE__ */ jsxs(
-      SheetContent,
-      {
-        "data-sidebar": "sidebar",
-        "data-slot": "sidebar",
-        "data-mobile": "true",
-        className: "bg-sidebar text-sidebar-foreground w-(--sidebar-width) p-0 [&>button]:hidden",
-        style: {
-          "--sidebar-width": SIDEBAR_WIDTH_MOBILE
-        },
-        side,
-        children: [
-          /* @__PURE__ */ jsxs(SheetHeader, { className: "sr-only", children: [
-            /* @__PURE__ */ jsx(SheetTitle, { children: "Sidebar" }),
-            /* @__PURE__ */ jsx(SheetDescription, { children: "Displays the mobile sidebar." })
-          ] }),
-          /* @__PURE__ */ jsx("div", { className: "flex h-full w-full flex-col", children })
-        ]
-      }
-    ) });
+    return (
+      <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
+        <SheetContent
+          data-sidebar="sidebar"
+          data-slot="sidebar"
+          data-mobile="true"
+          className="bg-sidebar text-sidebar-foreground w-(--sidebar-width) p-0 [&>button]:hidden"
+          style={{
+            "--sidebar-width": SIDEBAR_WIDTH_MOBILE
+          }}
+          side={side}
+        >
+          <SheetHeader className="sr-only">
+            <SheetTitle>Sidebar</SheetTitle>
+            <SheetDescription>Displays the mobile sidebar.</SheetDescription>
+          </SheetHeader>
+          <div className="flex h-full w-full flex-col">{children}</div>
+        </SheetContent>
+      </Sheet>
+    );
   }
-  return /* @__PURE__ */ jsxs(
-    "div",
-    {
-      className: "group peer text-sidebar-foreground hidden md:block",
-      "data-state": state,
-      "data-collapsible": state === "collapsed" ? collapsible : "",
-      "data-variant": variant,
-      "data-side": side,
-      "data-slot": "sidebar",
-      children: [
-        /* @__PURE__ */ jsx(
-          "div",
-          {
-            "data-slot": "sidebar-gap",
-            className: cn(
-              "relative w-(--sidebar-width) bg-transparent transition-[width] duration-200 ease-linear",
-              "group-data-[collapsible=offcanvas]:w-0",
-              "group-data-[side=right]:rotate-180",
-              variant === "floating" || variant === "inset" ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]" : "group-data-[collapsible=icon]:w-(--sidebar-width-icon)"
-            )
-          }
-        ),
-        /* @__PURE__ */ jsx(
-          "div",
-          {
-            "data-slot": "sidebar-container",
-            className: cn(
-              "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear md:flex",
-              side === "left" ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]" : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
-              // Adjust the padding for floating and inset variants.
-              variant === "floating" || variant === "inset" ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]" : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l",
-              className
-            ),
-            ...props,
-            children: /* @__PURE__ */ jsx(
-              "div",
-              {
-                "data-sidebar": "sidebar",
-                "data-slot": "sidebar-inner",
-                className: "bg-sidebar group-data-[variant=floating]:border-sidebar-border flex h-full w-full flex-col group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:shadow-sm",
-                children
-              }
-            )
-          }
-        )
-      ]
-    }
+  return (
+    <div
+      className="group peer text-sidebar-foreground hidden md:block"
+      data-state={state}
+      data-collapsible={state === "collapsed" ? collapsible : ""}
+      data-variant={variant}
+      data-side={side}
+      data-slot="sidebar"
+    >
+      <div
+        data-slot="sidebar-gap"
+        className={cn(
+          "relative w-(--sidebar-width) bg-transparent transition-[width] duration-200 ease-linear",
+          "group-data-[collapsible=offcanvas]:w-0",
+          "group-data-[side=right]:rotate-180",
+          variant === "floating" || variant === "inset" ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]" : "group-data-[collapsible=icon]:w-(--sidebar-width-icon)"
+        )}
+      />
+      <div
+        data-slot="sidebar-container"
+        className={cn(
+          "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear md:flex",
+          side === "left" ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]" : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
+          variant === "floating" || variant === "inset" ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]" : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l",
+          className
+        )}
+        {...props}
+      >
+        <div
+          data-sidebar="sidebar"
+          data-slot="sidebar-inner"
+          className="bg-sidebar group-data-[variant=floating]:border-sidebar-border relative flex h-full w-full flex-col group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:shadow-sm"
+        >
+          {children}
+          {/* Nút Chevron để thu nhỏ/mở rộng Sidebar */}
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            className="absolute top-1/2 -right-3 z-40 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-md transition hover:bg-slate-50 hover:text-slate-700 focus:outline-none"
+            aria-label="Toggle Sidebar"
+          >
+            {state === "expanded" ? (
+              <ChevronLeft className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 function SidebarTrigger({
@@ -206,38 +211,35 @@ function SidebarTrigger({
   ...props
 }) {
   const { toggleSidebar } = useSidebar();
-  return /* @__PURE__ */ jsxs(
-    Button,
-    {
-      "data-sidebar": "trigger",
-      "data-slot": "sidebar-trigger",
-      variant: "ghost",
-      size: "icon",
-      className: cn("size-7", className),
-      onClick: (event) => {
+  return (
+    <Button
+      data-sidebar="trigger"
+      data-slot="sidebar-trigger"
+      variant="ghost"
+      size="icon"
+      className={cn("size-7", className)}
+      onClick={(event) => {
         onClick?.(event);
         toggleSidebar();
-      },
-      ...props,
-      children: [
-        /* @__PURE__ */ jsx(PanelLeftIcon, {}),
-        /* @__PURE__ */ jsx("span", { className: "sr-only", children: "Toggle Sidebar" })
-      ]
-    }
+      }}
+      ...props
+    >
+      <PanelLeftIcon />
+      <span className="sr-only">Toggle Sidebar</span>
+    </Button>
   );
 }
 function SidebarRail({ className, ...props }) {
   const { toggleSidebar } = useSidebar();
-  return /* @__PURE__ */ jsx(
-    "button",
-    {
-      "data-sidebar": "rail",
-      "data-slot": "sidebar-rail",
-      "aria-label": "Toggle Sidebar",
-      tabIndex: -1,
-      onClick: toggleSidebar,
-      title: "Toggle Sidebar",
-      className: cn(
+  return (
+    <button
+      data-sidebar="rail"
+      data-slot="sidebar-rail"
+      aria-label="Toggle Sidebar"
+      tabIndex={-1}
+      onClick={toggleSidebar}
+      title="Toggle Sidebar"
+      className={cn(
         "hover:after:bg-sidebar-border absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] sm:flex",
         "in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",
         "[[data-side=left][data-state=collapsed]_&]:cursor-e-resize [[data-side=right][data-state=collapsed]_&]:cursor-w-resize",
@@ -245,9 +247,9 @@ function SidebarRail({ className, ...props }) {
         "[[data-side=left][data-collapsible=offcanvas]_&]:-right-2",
         "[[data-side=right][data-collapsible=offcanvas]_&]:-left-2",
         className
-      ),
-      ...props
-    }
+      )}
+      {...props}
+    />
   );
 }
 function SidebarInset({ className, ...props }) {
@@ -467,7 +469,8 @@ function SidebarMenuButton({
       children: tooltip
     };
   }
-  return /* @__PURE__ */ jsxs(Tooltip, { children: [
+  return /* @__PURE__ */ jsxs(Tooltip, {
+    children: [
     /* @__PURE__ */ jsx(TooltipTrigger, { asChild: true, children: button }),
     /* @__PURE__ */ jsx(
       TooltipContent,
@@ -478,7 +481,8 @@ function SidebarMenuButton({
         ...tooltip
       }
     )
-  ] });
+    ]
+  });
 }
 function SidebarMenuAction({
   className,

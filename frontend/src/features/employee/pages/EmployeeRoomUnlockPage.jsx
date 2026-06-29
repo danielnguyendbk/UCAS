@@ -131,7 +131,7 @@ const EmployeeRoomUnlockPage = () => {
                 <TableRow className="bg-gray-50">
                   <TableHead className="font-semibold text-xs">Thời gian (Ca học)</TableHead>
                   <TableHead className="font-semibold text-xs">Phòng</TableHead>
-                  <TableHead className="font-semibold text-xs">Mã lớp / Giảng viên</TableHead>
+                  <TableHead className="font-semibold text-xs">Mã lớp học phần / Giảng viên</TableHead>
                   <TableHead className="font-semibold text-xs text-center">Trạng thái</TableHead>
                   <TableHead className="font-semibold text-xs text-right">Thao tác</TableHead>
                 </TableRow>

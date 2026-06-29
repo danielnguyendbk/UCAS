@@ -22,7 +22,7 @@ export const AllocationTable = ({ items, isLoading, onOpenRoomSearch }) => {
           <TableHeader>
             <TableRow className="bg-gray-50">
               <TableHead className="text-xs font-semibold text-gray-600">
-                Mã lớp HP
+                Mã lớp học phần HP
               </TableHead>
               <TableHead className="text-xs font-semibold text-gray-600">
                 Tên môn

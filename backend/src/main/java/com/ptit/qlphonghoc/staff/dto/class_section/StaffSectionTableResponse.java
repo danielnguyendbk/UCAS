@@ -1,9 +1,12 @@
 package com.ptit.qlphonghoc.staff.dto.class_section;
 
+import java.time.LocalTime;
 import java.util.List;
 
 public class StaffSectionTableResponse {
     private Integer id;
+    private Integer scheduleId;
+    private String sectionCode;
     private String classCode;
     private String courseName;
     private String facultyCode;
@@ -18,9 +21,16 @@ public class StaffSectionTableResponse {
     private Integer slotEndId;
     private Integer slotStart;
     private Integer slotEnd;
+    private Integer fromWeekNo;
+    private Integer toWeekNo;
     private String schedule;
     private Integer classroomId;
     private String room;
+    private String classroomCode;
+    private String scheduleStatus;
+    private String validationStatus;
+    private String conflictReason;
+    private String note;
     private String allocationStatus;
     private String statusText;
     private String sectionStatus;
@@ -28,12 +38,25 @@ public class StaffSectionTableResponse {
     private Integer courseId;
     private Integer lecturerId;
     private Integer maxCapacity;
+    private String requiredRoomType;
+    private Integer roomCapacity;
     private List<Integer> classIds;
     private String classCodes;
     private String classNames;
 
+    // --- Hai trường thời gian ---
+    private LocalTime startTime;
+    private LocalTime endTime;
+
+    // --- GETTER & SETTER ---
     public Integer getId() { return id; }
     public void setId(Integer id) { this.id = id; }
+
+    public Integer getScheduleId() { return scheduleId; }
+    public void setScheduleId(Integer scheduleId) { this.scheduleId = scheduleId; }
+
+    public String getSectionCode() { return sectionCode; }
+    public void setSectionCode(String sectionCode) { this.sectionCode = sectionCode; }
 
     public String getClassCode() { return classCode; }
     public void setClassCode(String classCode) { this.classCode = classCode; }
@@ -77,6 +100,12 @@ public class StaffSectionTableResponse {
     public Integer getSlotEnd() { return slotEnd; }
     public void setSlotEnd(Integer slotEnd) { this.slotEnd = slotEnd; }
 
+    public Integer getFromWeekNo() { return fromWeekNo; }
+    public void setFromWeekNo(Integer fromWeekNo) { this.fromWeekNo = fromWeekNo; }
+
+    public Integer getToWeekNo() { return toWeekNo; }
+    public void setToWeekNo(Integer toWeekNo) { this.toWeekNo = toWeekNo; }
+
     public String getSchedule() { return schedule; }
     public void setSchedule(String schedule) { this.schedule = schedule; }
 
@@ -85,6 +114,21 @@ public class StaffSectionTableResponse {
 
     public String getRoom() { return room; }
     public void setRoom(String room) { this.room = room; }
+
+    public String getClassroomCode() { return classroomCode; }
+    public void setClassroomCode(String classroomCode) { this.classroomCode = classroomCode; }
+
+    public String getScheduleStatus() { return scheduleStatus; }
+    public void setScheduleStatus(String scheduleStatus) { this.scheduleStatus = scheduleStatus; }
+
+    public String getValidationStatus() { return validationStatus; }
+    public void setValidationStatus(String validationStatus) { this.validationStatus = validationStatus; }
+
+    public String getConflictReason() { return conflictReason; }
+    public void setConflictReason(String conflictReason) { this.conflictReason = conflictReason; }
+
+    public String getNote() { return note; }
+    public void setNote(String note) { this.note = note; }
 
     public String getAllocationStatus() { return allocationStatus; }
     public void setAllocationStatus(String allocationStatus) { this.allocationStatus = allocationStatus; }
@@ -107,6 +151,12 @@ public class StaffSectionTableResponse {
     public Integer getMaxCapacity() { return maxCapacity; }
     public void setMaxCapacity(Integer maxCapacity) { this.maxCapacity = maxCapacity; }
 
+    public String getRequiredRoomType() { return requiredRoomType; }
+    public void setRequiredRoomType(String requiredRoomType) { this.requiredRoomType = requiredRoomType; }
+
+    public Integer getRoomCapacity() { return roomCapacity; }
+    public void setRoomCapacity(Integer roomCapacity) { this.roomCapacity = roomCapacity; }
+
     public List<Integer> getClassIds() { return classIds; }
     public void setClassIds(List<Integer> classIds) { this.classIds = classIds; }
 
@@ -115,4 +165,10 @@ public class StaffSectionTableResponse {
 
     public String getClassNames() { return classNames; }
     public void setClassNames(String classNames) { this.classNames = classNames; }
+
+    public LocalTime getStartTime() { return startTime; }
+    public void setStartTime(LocalTime startTime) { this.startTime = startTime; }
+
+    public LocalTime getEndTime() { return endTime; }
+    public void setEndTime(LocalTime endTime) { this.endTime = endTime; }
 }

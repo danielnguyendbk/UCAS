@@ -4,7 +4,6 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,8 +22,9 @@ public class CreateSectionRequest {
     @NotBlank(message = "sectionCode khong duoc de trong")
     private String sectionCode;
 
-    @NotNull(message = "classIds khong duoc de trong")
-    @Size(min = 1, max = 2, message = "Chi duoc chon tu 1 den toi da 2 classes")
+    @NotBlank(message = "className khong duoc de trong")
+    private String className;
+
     private List<Integer> classIds = new ArrayList<>();
 
     @Min(value = 0, message = "enrolledCount phai >= 0")
@@ -43,7 +43,6 @@ public class CreateSectionRequest {
     @NotBlank(message = "day khong duoc de trong")
     private String day;
 
-    @NotNull(message = "classroomId khong duoc de trong")
     private Integer classroomId;
 
     @NotNull(message = "slotStartId khong duoc de trong")
@@ -98,6 +97,14 @@ public class CreateSectionRequest {
 
     public void setClassIds(List<Integer> classIds) {
         this.classIds = classIds;
+    }
+
+    public String getClassName() {
+        return className;
+    }
+
+    public void setClassName(String className) {
+        this.className = className;
     }
 
     public Integer getEnrolledCount() {

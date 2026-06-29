@@ -10,6 +10,7 @@ public class ClassSection {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "section_id")
     private Integer id;
 
     @Column(name = "semester_id", nullable = false)
@@ -21,8 +22,11 @@ public class ClassSection {
     @Column(name = "lecturer_id", nullable = false)
     private Integer lecturerId;
 
-    @Column(name = "section_code", nullable = false, length = 10)
+    @Column(name = "section_code", nullable = false, length = 20)
     private String sectionCode;
+
+    @Column(name = "class_name", nullable = false, length = 50)
+    private String className;
 
     @Column(name = "enrolled_count", nullable = false)
     private Integer enrolledCount = 0;
@@ -80,6 +84,14 @@ public class ClassSection {
 
     public void setSectionCode(String sectionCode) {
         this.sectionCode = sectionCode;
+    }
+
+    public String getClassName() {
+        return className;
+    }
+
+    public void setClassName(String className) {
+        this.className = className;
     }
 
     public Integer getEnrolledCount() {

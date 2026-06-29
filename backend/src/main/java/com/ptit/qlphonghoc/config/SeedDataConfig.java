@@ -19,7 +19,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 public class SeedDataConfig {
 
     @Bean
-    @ConditionalOnProperty(name = "app.seed.enabled", havingValue = "true")
+    // @ConditionalOnProperty(name = "app.seed.enabled", havingValue = "true")
     CommandLineRunner seedData(UserRepository userRepository,
                                LecturerRepository lecturerRepository,
                                StudentRepository studentRepository,
@@ -75,7 +75,7 @@ public class SeedDataConfig {
                             String email,
                             String fullName,
                             UserRole role) {
-        return userRepository.findByUsernameAndIsDeletedFalse(username)
+        return userRepository.findByUsername(username)
                 .orElseGet(() -> {
                     User user = new User();
                     user.setUsername(username);

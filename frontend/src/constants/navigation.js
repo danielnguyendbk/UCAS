@@ -1,100 +1,410 @@
 import {
-  BookMarked,
-  BookOpen,
+  ArrowLeftRight,
   Building2,
   Calendar,
   CalendarCheck,
-  CalendarDays,
   ClipboardCheck,
   ClipboardList,
-  Eye,
-  FileText,
   GraduationCap,
+  History,
+  Key,
   LayoutDashboard,
   PlusSquare,
   School,
-  Search,
   Settings,
-  UserCog,
-  Users,
-  Wand2,
+  Upload,
   Wrench,
-  History,
-  ArrowLeftRight,
-  Key
+  ShieldAlert,
 } from "lucide-react";
 import { APP_ROUTES } from "./routes";
+
 const ROLE_LABELS = {
-  Admin: "Qu\u1EA3n tr\u1ECB vi\xEAn",
-  Staff: "Gi\xE1o v\u1EE5",
-  Lecturer: "Gi\u1EA3ng vi\xEAn",
-  Employee: "Nh\xE2n vi\xEAn",
-  Student: "Sinh vi\xEAn"
+  Admin: "Quản trị viên",
+  Staff: "Giáo vụ",
+  Lecturer: "Giảng viên",
+  Employee: "Nhân viên CSVC",
+  Student: "Sinh viên",
 };
+
 const ROLE_BADGE_CLASSES = {
   Admin: "bg-red-100 text-red-700",
   Staff: "bg-blue-100 text-blue-700",
   Lecturer: "bg-purple-100 text-purple-700",
   Employee: "bg-orange-100 text-orange-700",
-  Student: "bg-green-100 text-green-700"
+  Student: "bg-green-100 text-green-700",
 };
+
 const NAVIGATION_BY_ROLE = {
   Admin: [
-    { icon: LayoutDashboard, label: "T\u1ED5ng quan", path: APP_ROUTES.home },
-    { icon: School, label: "Ph\xF2ng h\u1ECDc", path: APP_ROUTES.classrooms },
-    { icon: BookOpen, label: "M\xF4n h\u1ECDc", path: APP_ROUTES.courses },
-    { icon: Users, label: "Gi\u1EA3ng vi\xEAn", path: APP_ROUTES.lecturers },
-    { icon: ClipboardList, label: "L\u1EDBp h\u1ECDc ph\u1EA7n", path: APP_ROUTES.adminSections },
-    { icon: Calendar, label: "Th\u1EDDi kh\xF3a bi\u1EC3u", path: APP_ROUTES.timetable },
-    { icon: CalendarDays, label: "L\u1ECBch tu\u1EA7n", path: APP_ROUTES.weeklySchedule },
-    { icon: Wand2, label: "Ph\xE2n c\xF4ng t\u1EF1 \u0111\u1ED9ng", path: APP_ROUTES.autoAssignment },
-    { icon: FileText, label: "B\xE1o c\xE1o", path: APP_ROUTES.reports },
-    { icon: UserCog, label: "Qu\u1EA3n l\xFD ng\u01B0\u1EDDi d\xF9ng", path: APP_ROUTES.userManagement },
-    { icon: Settings, label: "C\xE0i \u0111\u1EB7t", path: APP_ROUTES.settings }
+    {
+      type: "group",
+      id: "admin-overview",
+      label: "Tổng quan",
+      icon: LayoutDashboard,
+      children: [
+        {
+          id: "admin-dashboard",
+          label: "Bảng điều khiển",
+          path: APP_ROUTES.adminDashboard,
+        },
+      ],
+    },
+    {
+      type: "group",
+      id: "admin-training",
+      label: "Quản lý đào tạo",
+      icon: GraduationCap,
+      children: [
+        { id: "admin-courses", label: "Môn học", path: APP_ROUTES.adminCourses },
+        { id: "admin-lecturers", label: "Giảng viên", path: APP_ROUTES.adminLecturers },
+        { id: "admin-sections", label: "Lớp học phần", path: APP_ROUTES.adminSections },
+      ],
+    },
+    {
+      type: "group",
+      id: "admin-timetable",
+      label: "Thời khóa biểu",
+      icon: Calendar,
+      children: [
+        {
+          id: "admin-timetable-view",
+          label: "Thời khóa biểu toàn trường",
+          path: APP_ROUTES.adminTimetable,
+        },
+        {
+          id: "admin-timetable-import",
+          label: "Import thời khóa biểu",
+          path: APP_ROUTES.adminTimetableImport,
+        },
+        {
+          id: "admin-timetable-approval",
+          label: "Duyệt & công bố TKB",
+          path: APP_ROUTES.adminTimetableApproval,
+        },
+        {
+          id: "admin-calendar-blocks",
+          label: "Ngày nghỉ & lịch học vụ",
+          path: APP_ROUTES.adminCalendarBlocks,
+        },
+      ],
+    },
+    {
+      type: "group",
+      id: "admin-exams",
+      label: "Thi cử",
+      icon: ClipboardCheck,
+      children: [
+        {
+          id: "admin-exams-list",
+          label: "Lịch thi",
+          path: APP_ROUTES.adminExams,
+        },
+        {
+          id: "admin-exams-import",
+          label: "Import lịch thi",
+          path: APP_ROUTES.adminExamImport,
+        },
+        {
+          id: "admin-exams-approval",
+          label: "Duyệt & công bố lịch thi",
+          path: APP_ROUTES.adminExamApproval,
+        },
+      ],
+    },
+    {
+      type: "group",
+      id: "admin-facilities",
+      label: "Cơ sở vật chất",
+      icon: School,
+      children: [
+        { id: "admin-rooms", label: "Phòng học", path: APP_ROUTES.adminRooms },
+        {
+          id: "admin-facility-staff",
+          label: "Nhân viên CSVC",
+          path: APP_ROUTES.adminFacilityStaff,
+        },
+      ],
+    },
+    {
+      type: "group",
+      id: "admin-system",
+      label: "Hệ thống",
+      icon: Settings,
+      children: [
+        { id: "admin-reports", label: "Báo cáo", path: APP_ROUTES.adminReports },
+        { id: "admin-users", label: "Tài khoản người dùng", path: APP_ROUTES.adminUsers },
+        { id: "admin-audit-logs", label: "Nhật ký hệ thống", path: APP_ROUTES.adminAuditLogs },
+        { id: "admin-settings", label: "Cài đặt hệ thống", path: APP_ROUTES.adminSettings },
+      ],
+    },
   ],
+
   Staff: [
-    { icon: LayoutDashboard, label: "T\u1ED5ng quan", path: APP_ROUTES.staffDashboard },
-    { icon: Calendar, label: "Th\u1EDDi kh\xF3a bi\u1EC3u", path: APP_ROUTES.staffSchedule },
-    { icon: ClipboardList, label: "L\u1EDBp h\u1ECDc ph\u1EA7n", path: APP_ROUTES.staffClassSections },
-    { icon: Building2, label: "Ph\xE2n ph\xF2ng & Xung \u0111\u1ED9t", path: APP_ROUTES.staffAllocation },
-    { icon: Search, label: "Tra c\u1EE9u l\u1ECBch", path: APP_ROUTES.staffLookup },
-    { icon: PlusSquare, label: "\u0110\u1EB7t/\u0110\u1ED5i ph\xF2ng kh\u1EA9n c\u1EA5p", path: APP_ROUTES.staffBookings, badge: "G\u1EA5p" },
-    { icon: ClipboardCheck, label: "Danh s\xE1ch \u0111\u1EB7t ph\xF2ng", path: APP_ROUTES.staffBookingList },
-    { icon: Building2, label: "Danh s\xE1ch \u0111\u1ED5i ph\xF2ng", path: APP_ROUTES.staffRoomChangeList },
-    { type: "divider", label: "Qu\u1EA3n l\xFD CSVC" },
-    { icon: Wrench, label: "Qu\u1EA3n l\xFD s\u1EEDa ch\u1EEFa", path: APP_ROUTES.staffMaintenanceList, badge: "M\u1EDBi" }
+    {
+      type: "group",
+      id: "staff-overview",
+      label: "Tổng quan",
+      icon: LayoutDashboard,
+      children: [
+        {
+          id: "staff-dashboard",
+          label: "Bảng điều khiển",
+          path: APP_ROUTES.staffDashboard,
+        },
+      ],
+    },
+    {
+      type: "group",
+      id: "staff-timetable",
+      label: "Thời khóa biểu",
+      icon: Calendar,
+      children: [
+        {
+          id: "staff-timetable-view",
+          label: "Thời khóa biểu toàn trường",
+          path: APP_ROUTES.staffTimetable,
+        },
+        {
+          id: "staff-auto-assignment",
+          label: "Phân phòng học",
+          path: APP_ROUTES.staffAutoAssignment,
+        },
+        {
+          id: "staff-class-sections",
+          label: "Lớp học phần",
+          path: APP_ROUTES.staffClassSections,
+        },
+      ],
+    },
+    {
+      type: "group",
+      id: "staff-exams",
+      label: "Thi cử",
+      icon: ClipboardCheck,
+      children: [
+        {
+            id: "staff-exam-schedule",
+            label: "Lịch thi phòng học",
+            path: APP_ROUTES.staffExamSchedule,
+        },
+        {
+          id: "staff-exam-allocation",
+          label: "Phân phòng thi",
+          path: APP_ROUTES.staffExamAllocation,
+        },
+
+      ],
+    },
+    {
+      type: "group",
+      id: "staff-room-operations",
+      label: "Đặt / đổi phòng",
+      icon: PlusSquare,
+      children: [
+        {
+          id: "staff-emergency-room-change",
+          label: "Đặt/đổi phòng khẩn cấp",
+          path: APP_ROUTES.staffEmergencyRoomChange,
+          badge: "Gấp",
+        },
+        {
+          id: "staff-booking-list",
+          label: "Danh sách đặt phòng",
+          path: APP_ROUTES.staffBookingList,
+        },
+        {
+          id: "staff-room-change-list",
+          label: "Danh sách đổi phòng",
+          path: APP_ROUTES.staffRoomChangeList,
+        },
+      ],
+    },
+    {
+      type: "group",
+      id: "staff-maintenance",
+      label: "Sửa chữa",
+      icon: Wrench,
+      children: [
+        {
+          id: "staff-maintenance-requests",
+          label: "Yêu cầu sửa chữa",
+          path: APP_ROUTES.staffMaintenanceRequests,
+        },
+      ],
+    },
   ],
-  Lecturer: [
-    { icon: CalendarCheck, label: "L\u1ECBch d\u1EA1y c\u1EE7a t\xF4i", path: APP_ROUTES.lecturerSchedule },
-    { type: "divider", label: "\u0110\u1EB7t ph\xF2ng" },
-    { icon: PlusSquare, label: "Y\xEAu c\u1EA7u \u0111\u1EB7t ph\xF2ng", path: APP_ROUTES.lecturerBooking },
-    { icon: ClipboardList, label: "DS y\xEAu c\u1EA7u \u0111\u1EB7t ph\xF2ng", path: APP_ROUTES.lecturerBookingHistory },
-    { type: "divider", label: "S\u1EEDa ch\u1EEFa" },
-    { icon: Wrench, label: "Y\xEAu c\u1EA7u s\u1EEDa ch\u1EEFa", path: APP_ROUTES.lecturerMaintenanceRequest },
-    { icon: History, label: "L\u1ECBch s\u1EED s\u1EEDa ch\u1EEFa", path: APP_ROUTES.lecturerMaintenanceHistory },
-    { type: "divider", label: "\u0110\u1ED5i ph\xF2ng" },
-    { icon: ArrowLeftRight, label: "Xin \u0111\u1ED5i ph\xF2ng", path: APP_ROUTES.lecturerRoomChangeRequest },
-    { icon: ClipboardCheck, label: "Tr\u1EA1ng th\xE1i \u0111\u1ED5i ph\xF2ng", path: APP_ROUTES.lecturerRoomChangeList }
-  ],
+
   Employee: [
-    { icon: Key, label: "X\xE1c nh\u1EADn m\u1EDF c\u1EEDa", path: APP_ROUTES.employeeRoomUnlock, badge: "M\u1EDBi" },
-    { icon: Eye, label: "L\u1ECBch s\u1EED d\u1EE5ng ph\xF2ng", path: APP_ROUTES.employeeUsage },
-    { type: "divider", label: "S\u1EEDa ch\u1EEFa" },
-    { icon: Wrench, label: "Y\xEAu c\u1EA7u s\u1EEDa ch\u1EEFa", path: APP_ROUTES.employeeMaintenanceRequest },
-    { icon: History, label: "L\u1ECBch s\u1EED s\u1EEDa ch\u1EEFa", path: APP_ROUTES.employeeMaintenanceHistory }
+    {
+      type: "group",
+      id: "facility-operations",
+      label: "Vận hành phòng",
+      icon: Key,
+      children: [
+        {
+          id: "facility-open-close",
+          label: "Mở khóa phòng",
+          path: APP_ROUTES.facilityOpenClose,
+          badge: "Hôm nay",
+        },
+        {
+          id: "facility-timetable",
+          label: "Thời khóa biểu toàn trường",
+          path: APP_ROUTES.facilityTimetable,
+        },
+      ],
+    },
+    {
+      type: "group",
+      id: "facility-maintenance",
+      label: "Sửa chữa",
+      icon: Wrench,
+      children: [
+        {
+          id: "facility-maintenance-request",
+          label: "Gửi yêu cầu sửa chữa",
+          path: APP_ROUTES.facilityMaintenanceRequest,
+        },
+        {
+          id: "facility-issues",
+          label: "Lịch sử sự cố sửa chữa",
+          path: APP_ROUTES.facilityIssues,
+        },
+      ],
+    },
   ],
+
+  Lecturer: [
+    {
+      type: "group",
+      id: "lecturer-teaching",
+      label: "Giảng dạy",
+      icon: CalendarCheck,
+      children: [
+        {
+          id: "lecturer-timetable",
+          label: "Thời khóa biểu",
+          path: APP_ROUTES.lecturerTimetable,
+        },
+        {
+          id: "lecturer-room-change-request",
+          label: "Xin đổi phòng",
+          path: APP_ROUTES.lecturerRoomChangeRequest,
+        },
+        {
+          id: "lecturer-room-change-list",
+          label: "Trạng thái đổi phòng",
+          path: APP_ROUTES.lecturerRoomChangeList,
+        },
+      ],
+    },
+    {
+      type: "group",
+      id: "lecturer-exams",
+      label: "Thi cử",
+      icon: ClipboardCheck,
+      children: [
+        {
+          id: "lecturer-exams",
+          label: "Lịch coi thi",
+          path: APP_ROUTES.lecturerExams,
+        },
+      ],
+    },
+    {
+      type: "group",
+      id: "lecturer-booking",
+      label: "Đặt phòng",
+      icon: PlusSquare,
+      children: [
+        {
+          id: "lecturer-room-booking",
+          label: "Yêu cầu đặt phòng",
+          path: APP_ROUTES.lecturerRoomBooking,
+        },
+        {
+          id: "lecturer-booking-history",
+          label: "Danh sách yêu cầu đặt phòng",
+          path: APP_ROUTES.lecturerBookingHistory,
+        },
+      ],
+    },
+    {
+      type: "group",
+      id: "lecturer-maintenance",
+      label: "Sửa chữa",
+      icon: Wrench,
+      children: [
+        {
+          id: "lecturer-maintenance-request",
+          label: "Yêu cầu sửa chữa",
+          path: APP_ROUTES.lecturerMaintenanceRequest,
+        },
+        {
+          id: "lecturer-maintenance-history",
+          label: "Lịch sử sửa chữa",
+          path: APP_ROUTES.lecturerMaintenanceHistory,
+        },
+      ],
+    },
+  ],
+
   Student: [
-    { icon: GraduationCap, label: "Lịch học của tôi", path: APP_ROUTES.studentSchedule },
-    { type: "divider", label: "Đặt phòng" },
-    { icon: PlusSquare, label: "Yêu cầu đặt phòng", path: APP_ROUTES.studentBooking },
-    { icon: ClipboardList, label: "DS yêu cầu đặt phòng", path: APP_ROUTES.studentBookingHistory },
-    { type: "divider", label: "Sửa chữa" },
-    { icon: Wrench, label: "Yêu cầu sửa chữa", path: APP_ROUTES.studentMaintenanceRequest },
-    { icon: History, label: "Lịch sử sửa chữa", path: APP_ROUTES.studentMaintenanceHistory }
-  ]
+    {
+      type: "group",
+      id: "student-study",
+      label: "Học tập",
+      icon: GraduationCap,
+      children: [
+        {
+          id: "student-timetable",
+          label: "Thời khóa biểu",
+          path: APP_ROUTES.studentTimetable,
+        },
+        {
+          id: "student-exams",
+          label: "Lịch thi",
+          path: APP_ROUTES.studentExams,
+        },
+      ],
+    },
+    {
+      type: "group",
+      id: "student-booking",
+      label: "Đặt phòng",
+      icon: PlusSquare,
+      children: [
+        {
+          id: "student-room-booking",
+          label: "Đặt phòng",
+          path: APP_ROUTES.studentRoomBooking,
+        },
+        {
+          id: "student-booking-history",
+          label: "DS yêu cầu đặt phòng",
+          path: APP_ROUTES.studentBookingHistory,
+        },
+      ],
+    },
+    {
+      type: "group",
+      id: "student-maintenance",
+      label: "Sửa chữa",
+      icon: Wrench,
+      children: [
+        {
+          id: "student-maintenance-request",
+          label: "Yêu cầu sửa chữa",
+          path: APP_ROUTES.studentMaintenanceRequest,
+        },
+        {
+          id: "student-maintenance-history",
+          label: "Lịch sử sửa chữa",
+          path: APP_ROUTES.studentMaintenanceHistory,
+        },
+      ],
+    },
+  ],
 };
-export {
-  NAVIGATION_BY_ROLE,
-  ROLE_BADGE_CLASSES,
-  ROLE_LABELS
-};
+
+export { NAVIGATION_BY_ROLE, ROLE_BADGE_CLASSES, ROLE_LABELS };

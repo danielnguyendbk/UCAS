@@ -1,6 +1,7 @@
 package com.ptit.qlphonghoc.staff.controller;
 
 import com.ptit.qlphonghoc.auth.security.CustomUserDetails;
+import com.ptit.qlphonghoc.staff.dto.allocation.PageResponse;
 import com.ptit.qlphonghoc.staff.dto.roomborrow.RejectRoomBorrowRequest;
 import com.ptit.qlphonghoc.staff.dto.roomborrow.StaffRoomBorrowRequestResponse;
 import com.ptit.qlphonghoc.staff.service.StaffRoomBorrowRequestService;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Locale;
 
 @RestController
 @RequestMapping("/api/staff/room-borrow-requests")
@@ -28,10 +30,24 @@ public class StaffRoomBorrowRequestController {
     }
 
     @GetMapping
-    public ResponseEntity<List<StaffRoomBorrowRequestResponse>> getRequests(
-            @RequestParam(required = false) String status
+    public ResponseEntity<?> getRequests(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(defaultValue = "false") boolean includeCancelled
     ) {
-        return ResponseEntity.ok(service.getRequests(status));
+        List<StaffRoomBorrowRequestResponse> list = service.getRequests(status)
+                .stream()
+                .filter(request -> includeCancelled
+                        || "CANCELLED".equalsIgnoreCase(status)
+                        || !"CANCELLED".equalsIgnoreCase(request.getStatus()))
+                .filter(request -> matchesSearch(request, search))
+                .toList();
+        if (page != null || size != null) {
+            return ResponseEntity.ok(PageResponse.from(list, page, size));
+        }
+        return ResponseEntity.ok(list);
     }
 
     @PatchMapping("/{id}/approve")
@@ -48,5 +64,25 @@ public class StaffRoomBorrowRequestController {
             @Valid @RequestBody RejectRoomBorrowRequest request
     ) {
         return ResponseEntity.ok(service.reject(id, request.getRejectReason()));
+    }
+
+    private boolean matchesSearch(StaffRoomBorrowRequestResponse request, String search) {
+        if (search == null || search.isBlank()) {
+            return true;
+        }
+        String keyword = search.trim().toLowerCase(Locale.ROOT);
+        return contains(request.getId(), keyword)
+                || contains(request.getRequestTitle(), keyword)
+                || contains(request.getRequesterName(), keyword)
+                || contains(request.getRequesterUsername(), keyword)
+                || contains(request.getSectionCode(), keyword)
+                || contains(request.getCourseName(), keyword)
+                || contains(request.getPreferredRoomCode(), keyword)
+                || contains(request.getApprovedRoomCode(), keyword)
+                || contains(request.getStatus(), keyword);
+    }
+
+    private boolean contains(Object value, String keyword) {
+        return value != null && String.valueOf(value).toLowerCase(Locale.ROOT).contains(keyword);
     }
 }

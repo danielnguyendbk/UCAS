@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +16,7 @@ import {
 } from "../ui/table";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
+import { Input } from "../ui/input";
 import {
   Select,
   SelectContent,
@@ -23,8 +24,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
-import { Filter } from "lucide-react";
+import { Filter, RefreshCw, Search } from "lucide-react";
 import { httpClient } from "../../../services/httpClient";
+import { getApiError } from "../../../utils/apiError";
+
+const PAGE_SIZE = 8;
 
 export default function RoomSearchModal({
   open,
@@ -36,6 +40,8 @@ export default function RoomSearchModal({
   slotStartId,
   slotEndId,
   expectedAttendees,
+  buildingId = "",
+  initialRoomType = "all",
   isAllocationMode = false,
   dayOfWeek = "",
   isEmergencyChangeMode = false,
@@ -47,11 +53,41 @@ export default function RoomSearchModal({
   targetDate,
   fromWeek,
   toWeek,
+  isSelecting = false,
+  selectingRoomId = null,
 }) {
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [roomType, setRoomType] = useState("all");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [page, setPage] = useState(1);
+
+  const filteredRooms = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return rooms;
+    return rooms.filter((room) =>
+      [
+        room.roomCode,
+        room.buildingCode,
+        room.buildingName,
+        room.roomTypeText,
+        room.mainEquipment,
+      ].some((value) => String(value || "").toLowerCase().includes(query)),
+    );
+  }, [rooms, searchTerm]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRooms.length / PAGE_SIZE));
+  const visibleRooms = useMemo(
+    () => filteredRooms.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filteredRooms, page],
+  );
+
+  useEffect(() => {
+    if (open) {
+      setRoomType(initialRoomType && initialRoomType !== "OTHER" ? initialRoomType : "all");
+    }
+  }, [open, initialRoomType]);
 
   useEffect(() => {
     if (open) {
@@ -60,6 +96,8 @@ export default function RoomSearchModal({
       setRooms([]);
       setError("");
       setRoomType("all");
+      setSearchTerm("");
+      setPage(1);
     }
   }, [
     open,
@@ -70,6 +108,8 @@ export default function RoomSearchModal({
     slotStartId,
     slotEndId,
     expectedAttendees,
+    buildingId,
+    initialRoomType,
     isAllocationMode,
     dayOfWeek,
     isEmergencyChangeMode,
@@ -81,7 +121,16 @@ export default function RoomSearchModal({
     targetDate,
     fromWeek,
     toWeek,
+    searchTerm,
   ]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, roomType]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
 
   const fetchAvailableRooms = async () => {
     const effectiveTargetDate = targetDate || date;
@@ -119,16 +168,25 @@ export default function RoomSearchModal({
 
     try {
       let endpoint = "/api/staff/emergency-room-bookings/available-rooms";
+      const effectiveRoomType =
+        roomType && roomType !== "all"
+          ? roomType
+          : initialRoomType && initialRoomType !== "OTHER"
+            ? initialRoomType
+            : "all";
       const params = {
         semesterId,
         slot,
         expectedAttendees,
-        roomType: roomType === "all" ? "" : roomType,
+        buildingId: buildingId || undefined,
+        roomType: effectiveRoomType === "all" ? "" : effectiveRoomType,
+        keyword: searchTerm.trim(),
       };
 
       if (isAllocationMode) {
         endpoint = "/api/staff/allocations/available-rooms";
         params.dayOfWeek = dayOfWeek;
+        if (scheduleId) params.scheduleId = scheduleId;
       } else if (isEmergencyChangeMode) {
         endpoint = isLecturerChangeMode
           ? "/api/lecturer/room-change-requests/available-rooms"
@@ -160,12 +218,14 @@ export default function RoomSearchModal({
       }
 
       const res = await httpClient.get(endpoint, { params });
-      const roomData = res.data?.data || res.data || [];
-      setRooms(roomData);
+      const payload = res.data?.data ?? res.data;
+      setRooms(Array.isArray(payload) ? payload : payload?.items || []);
     } catch (err) {
       setError(
-        err.response?.data?.message ||
+        getApiError(
+          err,
           "Không tìm thấy phòng khả dụng cho dữ liệu đã chọn.",
+        ).message,
       );
     } finally {
       setLoading(false);
@@ -174,7 +234,7 @@ export default function RoomSearchModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!w-[95vw] !max-w-[800px] sm:!max-w-[750px] overflow-hidden">
+      <DialogContent className="!w-[95vw] !max-w-[920px] overflow-hidden">
         <DialogHeader>
           <DialogTitle>Danh sách phòng khả dụng</DialogTitle>
           <DialogDescription className="hidden">
@@ -182,8 +242,17 @@ export default function RoomSearchModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex items-center px-1">
-          <div className="relative w-56">
+        <div className="flex flex-col gap-2 px-1 sm:flex-row sm:items-center">
+          <div className="relative min-w-0 flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Tìm mã phòng, tòa nhà hoặc thiết bị..."
+              className="h-9 bg-white pl-9"
+            />
+          </div>
+          <div className="relative w-full sm:w-56">
             <Select value={roomType} onValueChange={setRoomType}>
               <SelectTrigger className="h-9 text-sm border-gray-300 bg-white">
                 <Filter className="w-3.5 h-3.5 mr-2 text-gray-500" />
@@ -209,20 +278,23 @@ export default function RoomSearchModal({
             <div className="flex justify-center py-10">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             </div>
-          ) : rooms.length === 0 ? (
+          ) : filteredRooms.length === 0 ? (
             <p className="text-center py-10 text-gray-500">
               Không tìm thấy phòng trống nào đáp ứng yêu cầu.
             </p>
           ) : (
-            <div className="max-h-[400px] overflow-y-auto overflow-x-hidden border rounded-lg shadow-sm">
-              <Table className="w-full table-fixed">
+            <div className="space-y-3">
+              <div className="max-h-[440px] overflow-auto rounded-lg border border-gray-200">
+              <Table className="min-w-[780px] table-fixed">
                 <TableHeader className="bg-gray-50 sticky top-0 z-10 shadow-sm">
                   <TableRow>
                     <TableHead className="w-[120px]">Mã phòng</TableHead>
+                    <TableHead className="w-[145px]">Tòa nhà</TableHead>
                     <TableHead className="w-[130px]">Loại phòng</TableHead>
                     <TableHead className="w-[100px] text-center">
                       Sức chứa
                     </TableHead>
+                    <TableHead className="w-[105px] text-center">Phù hợp</TableHead>
                     <TableHead>Thiết bị</TableHead>
                     <TableHead className="w-[130px] text-center">
                       Thao tác
@@ -231,10 +303,13 @@ export default function RoomSearchModal({
                 </TableHeader>
 
                 <TableBody>
-                  {rooms.map((room) => (
+                  {visibleRooms.map((room) => (
                     <TableRow key={room.classroomId}>
                       <TableCell className="font-bold text-blue-700 whitespace-normal break-words">
                         {room.roomCode}
+                      </TableCell>
+                      <TableCell className="text-xs text-gray-600">
+                        {room.buildingName || room.buildingCode || room.roomCode?.split("-")?.[0] || "—"}
                       </TableCell>
                       <TableCell>
                         <Badge
@@ -247,6 +322,11 @@ export default function RoomSearchModal({
                       <TableCell className="text-center font-medium">
                         {room.capacity}
                       </TableCell>
+                      <TableCell className="text-center">
+                        <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
+                          Phù hợp
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-xs text-gray-600 whitespace-normal break-words leading-relaxed">
                         {room.mainEquipment}
                       </TableCell>
@@ -254,17 +334,51 @@ export default function RoomSearchModal({
                         <Button
                           size="sm"
                           className="whitespace-nowrap"
+                          disabled={isSelecting}
                           onClick={() =>
                             onSelect(room.classroomId, room.roomCode, room)
                           }
                         >
-                          Chọn phòng
+                          {isSelecting && Number(selectingRoomId) === Number(room.classroomId) ? (
+                            <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          ) : null}
+                          {isSelecting && Number(selectingRoomId) === Number(room.classroomId)
+                            ? "Đang chọn"
+                            : "Chọn phòng"}
                         </Button>
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+                <span>
+                  Hiển thị {(page - 1) * PAGE_SIZE + 1}–
+                  {Math.min(page * PAGE_SIZE, filteredRooms.length)} / {filteredRooms.length} phòng
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={page <= 1}
+                    onClick={() => setPage((current) => current - 1)}
+                  >
+                    Trước
+                  </Button>
+                  <span>Trang {page}/{totalPages}</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((current) => current + 1)}
+                  >
+                    Sau
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
         </div>

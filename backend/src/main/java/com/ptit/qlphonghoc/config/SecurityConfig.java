@@ -46,12 +46,13 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/login").permitAll()
+                        .requestMatchers("/api/auth/login", "/api/auth/forgot-password", "/api/auth/reset-password").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/maintenance-files/**").permitAll()
                         .requestMatchers(HttpMethod.HEAD, "/api/maintenance-files/**").permitAll()
-                        .requestMatchers("/api/auth/me").authenticated()
+                        .requestMatchers("/api/auth/me", "/api/auth/change-password").authenticated()
+                        .requestMatchers("/api/admin/facility-assignments", "/api/admin/facility-assignments/**").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/api/staff/class-sections/**").hasAnyRole("STAFF", "ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/staff/class-sections", "/api/staff/class-sections/**").hasAnyRole("STAFF", "ADMIN", "FACILITY")
                         .requestMatchers("/api/staff/**").hasAnyRole("STAFF", "ADMIN")
                         .requestMatchers("/api/lecturer/**").hasRole("LECTURER")
                         .requestMatchers("/api/student/**").hasRole("STUDENT")
@@ -63,13 +64,27 @@ public class SecurityConfig {
                             response.setStatus(HttpStatus.UNAUTHORIZED.value());
                             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                             objectMapper.writeValue(response.getOutputStream(),
-                                    new ErrorResponse(false, "Unauthorized", null, LocalDateTime.now()));
+                                    new ErrorResponse(
+                                            false,
+                                            "UNAUTHORIZED",
+                                            "Unauthorized",
+                                            null,
+                                            null,
+                                            LocalDateTime.now()
+                                    ));
                         })
                         .accessDeniedHandler((request, response, accessDeniedException) -> {
                             response.setStatus(HttpStatus.FORBIDDEN.value());
                             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                             objectMapper.writeValue(response.getOutputStream(),
-                                    new ErrorResponse(false, "Access denied", null, LocalDateTime.now()));
+                                    new ErrorResponse(
+                                            false,
+                                            "ACCESS_DENIED",
+                                            "Access denied",
+                                            null,
+                                            null,
+                                            LocalDateTime.now()
+                                    ));
                         })
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

@@ -1,5 +1,6 @@
 package com.ptit.qlphonghoc.staff.service;
 
+import com.ptit.qlphonghoc.common.exception.BadRequestException;
 import com.ptit.qlphonghoc.staff.dto.datPhongKhanCap.AvailableRoomResponse;
 import com.ptit.qlphonghoc.staff.dto.datPhongKhanCap.CreateEmergencyRoomBookingRequest;
 import com.ptit.qlphonghoc.staff.dto.datPhongKhanCap.EmergencyRoomBookingResponse;
@@ -30,6 +31,7 @@ public class StaffEmergencyRoomBookingService {
             Integer slotStartId,
             Integer slotEndId,
             Integer expectedAttendees,
+            Integer buildingId,
             String roomType,
             String keyword
     ) {
@@ -46,6 +48,7 @@ public class StaffEmergencyRoomBookingService {
                         slotStartId,
                         slotEndId,
                         expectedAttendees,
+                        buildingId,
                         normalizedRoomType,
                         normalizedKeyword
                 )
@@ -55,11 +58,11 @@ public class StaffEmergencyRoomBookingService {
     }
 
     @Transactional
-    public EmergencyRoomBookingResponse create(CreateEmergencyRoomBookingRequest request) {
+    public EmergencyRoomBookingResponse create(CreateEmergencyRoomBookingRequest request, Integer staffUserId) {
         Integer slotStartId = effectiveSlotStartId(request);
         Integer slotEndId = effectiveSlotEndId(request, slotStartId);
 
-        validateCreateInput(request, slotStartId, slotEndId);
+        validateCreateInput(request, staffUserId, slotStartId, slotEndId);
 
         String dayOfWeek = toDayCode(request.getBookingDate());
         int availableCount = repository.countAvailableClassroomForEmergency(
@@ -73,8 +76,8 @@ public class StaffEmergencyRoomBookingService {
         );
 
         if (availableCount == 0) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+            throw new BadRequestException(
+                    "ROOM_TIME_CONFLICT",
                     "Phong khong kha dung: co the da trung lich, khong du suc chua hoac khong hoat dong."
             );
         }
@@ -89,7 +92,7 @@ public class StaffEmergencyRoomBookingService {
                 request.getBookingDate(),
                 slotStartId,
                 slotEndId,
-                request.getStaffUserId(),
+                staffUserId,
                 request.getExpectedAttendees(),
                 request.getClassroomId(),
                 purposeNote,
@@ -126,6 +129,9 @@ public class StaffEmergencyRoomBookingService {
         if (bookingDate == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "bookingDate is required.");
         }
+        if (bookingDate.isBefore(LocalDate.now())) {
+            throw new BadRequestException("INVALID_TIME_RANGE", "bookingDate khong duoc la ngay trong qua khu.");
+        }
         if (slotStartId == null || slotEndId == null) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
@@ -133,8 +139,8 @@ public class StaffEmergencyRoomBookingService {
             );
         }
         if (repository.countValidSlotRange(slotStartId, slotEndId) == 0) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+            throw new BadRequestException(
+                    "INVALID_TIME_RANGE",
                     "slotEndId must be greater than or equal to slotStartId."
             );
         }
@@ -153,6 +159,7 @@ public class StaffEmergencyRoomBookingService {
 
     private void validateCreateInput(
             CreateEmergencyRoomBookingRequest request,
+            Integer staffUserId,
             Integer slotStartId,
             Integer slotEndId
     ) {
@@ -188,20 +195,20 @@ public class StaffEmergencyRoomBookingService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "classroomId is required.");
         }
         if (request.getPurpose() == null || request.getPurpose().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "purpose is required.");
+            throw new BadRequestException("VALIDATION_FAILED", "purpose is required.");
         }
         if (request.getEmergencyReason() == null || request.getEmergencyReason().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "emergencyReason is required.");
+            throw new BadRequestException("VALIDATION_FAILED", "emergencyReason is required.");
         }
-        if (request.getStaffUserId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "staffUserId is required.");
+        if (request.getEmergencyReason().trim().length() < 10) {
+            throw new BadRequestException("VALIDATION_FAILED", "emergencyReason phai co it nhat 10 ky tu.");
         }
 
-        int staffCount = repository.countActiveStaffOrAdminById(request.getStaffUserId());
+        int staffCount = repository.countActiveStaffOrAdminById(staffUserId);
         if (staffCount == 0) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "staffUserId khong hop le hoac khong phai STAFF/ADMIN dang hoat dong."
+                    "Nguoi dung khong hop le hoac khong phai STAFF/ADMIN dang hoat dong."
             );
         }
 
@@ -210,8 +217,8 @@ public class StaffEmergencyRoomBookingService {
                 request.getExpectedAttendees()
         );
         if (classroomCount == 0) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+            throw new BadRequestException(
+                    "CLASSROOM_NOT_FOUND",
                     "Phong khong ton tai, khong hoat dong hoac khong du suc chua."
             );
         }
@@ -259,12 +266,19 @@ public class StaffEmergencyRoomBookingService {
     ) {
         AvailableRoomResponse response = new AvailableRoomResponse();
         response.setClassroomId(projection.getClassroomId());
+        response.setBuildingId(projection.getBuildingId());
+        response.setBuildingCode(projection.getBuildingCode());
+        response.setBuildingName(projection.getBuildingName());
         response.setRoomCode(projection.getRoomCode());
         response.setCapacity(projection.getCapacity());
         response.setRoomType(projection.getRoomType());
         response.setRoomTypeText(projection.getRoomTypeText());
         response.setMainEquipment(projection.getMainEquipment());
         response.setStatusText(projection.getStatusText());
+        response.setSlotStartNo(projection.getSlotStartNo());
+        response.setSlotEndNo(projection.getSlotEndNo());
+        response.setStartTime(projection.getStartTime());
+        response.setEndTime(projection.getEndTime());
         return response;
     }
 

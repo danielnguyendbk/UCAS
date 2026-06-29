@@ -20,6 +20,7 @@ import {
 } from "../components/ui/select";
 import { APP_ROUTES } from "@/constants/routes";
 import { httpClient } from "@/services/httpClient";
+import { toast } from "sonner";
 
 const weekOptions = Array.from({ length: 20 }, (_, index) => {
   const value = String(index + 1);
@@ -35,9 +36,6 @@ const dayCodeToJsDay = {
   FRI: 5,
   SAT: 6,
 };
-
-const normalizeText = (value) => (value || "").toString().trim().toLowerCase();
-const normalizeCode = (value) => normalizeText(value).replace(/\s+/g, "");
 
 const toDateInputValue = (date) => {
   const localDate = new Date(
@@ -82,24 +80,72 @@ const getSemesterStatus = (semester) =>
 
 const getActiveSemesterId = (semesters) => {
   const activeSemester = semesters.find(
-    (semester) => String(getSemesterStatus(semester) || "").toUpperCase() === "ACTIVE",
+    (semester) =>
+      String(getSemesterStatus(semester) || "").toUpperCase() === "ACTIVE",
   );
   return String(getSemesterId(activeSemester || semesters[0]) || "");
 };
 
 const getResponseList = (response) => {
-  const payload = response.data;
+  const payload = response?.data;
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.content)) return payload.content;
   return [];
 };
 
+const getScheduleId = (schedule) =>
+  schedule?.scheduleId ??
+  schedule?.schedule_id ??
+  schedule?.sectionScheduleId ??
+  schedule?.section_schedule_id;
+
+const getScheduleClassCode = (schedule) =>
+  schedule?.classCode ?? schedule?.class_code ?? "";
+
+const getScheduleCourseName = (schedule) =>
+  schedule?.courseName ?? schedule?.course_name ?? "";
+
+const getScheduleLecturerName = (schedule) =>
+  schedule?.lecturerName ?? schedule?.lecturer_name ?? "";
+
+const getScheduleDayCode = (schedule) =>
+  schedule?.dayOfWeekCode ?? schedule?.day_of_week_code ?? "";
+
+const getScheduleDayText = (schedule) =>
+  schedule?.dayOfWeekText ?? schedule?.day_of_week_text ?? "";
+
 const getSchedulePeriod = (schedule) =>
-  schedule?.periodText || schedule?.slotLabel || String(schedule?.slotNumber || "");
+  schedule?.periodText ??
+  schedule?.period_text ??
+  schedule?.slotLabel ??
+  schedule?.slot_label ??
+  String(schedule?.slotNumber ?? schedule?.slot_number ?? "");
+
+const getScheduleRoomCode = (schedule) =>
+  schedule?.currentRoomCode ??
+  schedule?.current_room_code ??
+  schedule?.oldRoomCode ??
+  schedule?.old_room_code ??
+  schedule?.roomCode ??
+  schedule?.room_code ??
+  "";
+
+const getScheduleRoomDisplay = (schedule) => {
+  const roomCode = getScheduleRoomCode(schedule);
+  return roomCode || "Chưa phân phòng";
+};
+
+const getScheduleMaxCapacity = (schedule) =>
+  schedule?.maxCapacity ?? schedule?.max_capacity ?? "";
+
+const getScheduleRequiredRoomType = (schedule) =>
+  schedule?.requiredRoomType ?? schedule?.required_room_type ?? "all";
 
 const initialForm = {
   semesterId: "",
-  sectionCode: "",
+  sectionScheduleId: "",
   scope: "SESSION",
   targetDate: "",
   fromWeek: "",
@@ -120,6 +166,14 @@ const LecturerRoomChangeRequestPage = () => {
   const [submittedRequest, setSubmittedRequest] = useState(null);
   const [isRoomSearchOpen, setIsRoomSearchOpen] = useState(false);
 
+  const selectedSchedule = useMemo(
+    () =>
+      schedules.find(
+        (schedule) => String(getScheduleId(schedule)) === form.sectionScheduleId,
+      ) || null,
+    [form.sectionScheduleId, schedules],
+  );
+
   const applySemesters = (list) => {
     setSemesters(list);
     const activeSemesterId = getActiveSemesterId(list);
@@ -128,27 +182,6 @@ const LecturerRoomChangeRequestPage = () => {
     }
   };
 
-  const matchedSchedules = useMemo(() => {
-    const code = normalizeCode(form.sectionCode);
-    if (!code) return [];
-
-    return schedules.filter((schedule) =>
-      normalizeCode(schedule.classCode).includes(code),
-    );
-  }, [form.sectionCode, schedules]);
-
-  const selectedSchedule = useMemo(() => {
-    const code = normalizeCode(form.sectionCode);
-    if (!code) return null;
-
-    const exactCodeMatch = matchedSchedules.find(
-      (schedule) => normalizeCode(schedule.classCode) === code,
-    );
-    if (exactCodeMatch) return exactCodeMatch;
-
-    return matchedSchedules.length === 1 ? matchedSchedules[0] : null;
-  }, [form.sectionCode, matchedSchedules]);
-
   useEffect(() => {
     const fetchSemesters = async () => {
       try {
@@ -156,6 +189,7 @@ const LecturerRoomChangeRequestPage = () => {
         applySemesters(getResponseList(response));
       } catch (error) {
         console.error("Không tải được danh sách học kỳ:", error);
+        toast.error("Không tải được danh sách học kỳ.");
       }
     };
 
@@ -179,6 +213,8 @@ const LecturerRoomChangeRequestPage = () => {
 
     const fetchSchedules = async () => {
       setLoadingSchedules(true);
+      setErrors((prev) => ({ ...prev, sectionInfo: undefined }));
+
       try {
         const response = await httpClient.get(
           "/api/lecturer/room-change-requests/schedules",
@@ -188,6 +224,10 @@ const LecturerRoomChangeRequestPage = () => {
       } catch (error) {
         setSchedules([]);
         console.error("Không tải được lịch lớp của giảng viên:", error);
+        toast.error(
+          error?.response?.data?.message ||
+            "Không tải được danh sách học phần được phân công.",
+        );
       } finally {
         setLoadingSchedules(false);
       }
@@ -199,19 +239,24 @@ const LecturerRoomChangeRequestPage = () => {
   useEffect(() => {
     if (!selectedSchedule || form.scope !== "SESSION") return;
 
-    if (!isDateMatchingDayCode(form.targetDate, selectedSchedule.dayOfWeekCode)) {
+    const dayCode = getScheduleDayCode(selectedSchedule);
+    if (!isDateMatchingDayCode(form.targetDate, dayCode)) {
       setForm((prev) => ({
         ...prev,
-        targetDate: getNextDateForDay(selectedSchedule.dayOfWeekCode),
+        targetDate: getNextDateForDay(dayCode),
         roomId: "",
         roomCode: "",
       }));
     }
-  }, [selectedSchedule?.scheduleId, form.scope]);
+  }, [selectedSchedule, form.scope]);
 
   const updateForm = (patch) => {
     setForm((prev) => ({ ...prev, ...patch }));
     setSubmittedRequest(null);
+    setErrors((prev) => ({
+      ...prev,
+      ...Object.fromEntries(Object.keys(patch).map((key) => [key, undefined])),
+    }));
   };
 
   const resetRoom = (patch) => {
@@ -219,6 +264,23 @@ const LecturerRoomChangeRequestPage = () => {
       ...patch,
       roomId: "",
       roomCode: "",
+    });
+  };
+
+  const handleScheduleChange = (value) => {
+    const schedule = schedules.find(
+      (item) => String(getScheduleId(item)) === value,
+    );
+    const nextTargetDate =
+      form.scope === "SESSION" && schedule
+        ? getNextDateForDay(getScheduleDayCode(schedule))
+        : "";
+
+    resetRoom({
+      sectionScheduleId: value,
+      targetDate: nextTargetDate,
+      fromWeek: "",
+      toWeek: "",
     });
   };
 
@@ -236,13 +298,8 @@ const LecturerRoomChangeRequestPage = () => {
 
     if (!form.semesterId) nextErrors.semesterId = "Vui lòng chọn học kỳ.";
 
-    if (!form.sectionCode.trim()) {
-      nextErrors.sectionInfo = "Vui lòng nhập mã lớp học phần.";
-    } else if (!selectedSchedule) {
-      nextErrors.sectionInfo =
-        matchedSchedules.length > 1
-          ? "Có nhiều lớp phù hợp, vui lòng nhập mã lớp chính xác hơn."
-          : "Không tìm thấy lớp học phần đã phân phòng trong học kỳ này.";
+    if (!form.sectionScheduleId || !selectedSchedule) {
+      nextErrors.sectionInfo = "Vui lòng chọn lớp học phần được phân công.";
     }
 
     if (form.scope === "SESSION" && !form.targetDate) {
@@ -250,9 +307,14 @@ const LecturerRoomChangeRequestPage = () => {
     } else if (
       form.scope === "SESSION" &&
       selectedSchedule &&
-      !isDateMatchingDayCode(form.targetDate, selectedSchedule.dayOfWeekCode)
+      !isDateMatchingDayCode(
+        form.targetDate,
+        getScheduleDayCode(selectedSchedule),
+      )
     ) {
-      nextErrors.targetDate = `Ngày đổi phòng phải trùng ${selectedSchedule.dayOfWeekText}.`;
+      nextErrors.targetDate = `Ngày đổi phòng phải trùng ${getScheduleDayText(
+        selectedSchedule,
+      )}.`;
     }
 
     if (form.scope === "WEEK_RANGE") {
@@ -272,7 +334,11 @@ const LecturerRoomChangeRequestPage = () => {
     }
 
     if (!form.roomId) nextErrors.roomId = "Vui lòng chọn phòng mới.";
-    if (!form.reason.trim()) nextErrors.reason = "Vui lòng nhập lý do đổi phòng.";
+    if (!form.reason.trim()) {
+      nextErrors.reason = "Vui lòng nhập lý do đổi phòng.";
+    } else if (form.reason.trim().length < 10) {
+      nextErrors.reason = "Lý do đổi phòng phải có ít nhất 10 ký tự.";
+    }
 
     return nextErrors;
   };
@@ -287,7 +353,7 @@ const LecturerRoomChangeRequestPage = () => {
     try {
       const payload = {
         semesterId: Number(form.semesterId),
-        sectionScheduleId: Number(selectedSchedule.scheduleId),
+        sectionScheduleId: Number(form.sectionScheduleId),
         changeScope: form.scope,
         targetDate: form.scope === "SESSION" ? form.targetDate : null,
         fromWeek: form.scope !== "SESSION" ? Number(form.fromWeek) : null,
@@ -300,15 +366,16 @@ const LecturerRoomChangeRequestPage = () => {
         "/api/lecturer/room-change-requests",
         payload,
       );
-      setSubmittedRequest(response.data);
+
+      setSubmittedRequest(response?.data?.data ?? response?.data);
       setForm({
         ...initialForm,
         semesterId: form.semesterId,
       });
       setErrors({});
     } catch (error) {
-      alert(
-        error.response?.data?.message ||
+      toast.error(
+        error?.response?.data?.message ||
           "Có lỗi xảy ra khi gửi yêu cầu đổi phòng.",
       );
     } finally {
@@ -319,7 +386,10 @@ const LecturerRoomChangeRequestPage = () => {
   const isSessionDateValid =
     form.scope !== "SESSION" ||
     (selectedSchedule &&
-      isDateMatchingDayCode(form.targetDate, selectedSchedule.dayOfWeekCode));
+      isDateMatchingDayCode(
+        form.targetDate,
+        getScheduleDayCode(selectedSchedule),
+      ));
 
   const canOpenRoomSearch =
     form.semesterId &&
@@ -328,16 +398,11 @@ const LecturerRoomChangeRequestPage = () => {
       (form.scope === "WEEK_RANGE" && form.fromWeek && form.toWeek) ||
       (form.scope === "REST_OF_SEMESTER" && form.fromWeek));
 
-  const showNoMatch =
-    form.sectionCode.trim() &&
-    !loadingSchedules &&
-    matchedSchedules.length === 0;
-
-  const showMultipleMatches =
-    form.sectionCode.trim() &&
-    !loadingSchedules &&
-    matchedSchedules.length > 1 &&
-    !selectedSchedule;
+  const selectedScheduleOptionLabel = selectedSchedule
+    ? `${getScheduleClassCode(selectedSchedule)} · ${getScheduleCourseName(
+        selectedSchedule,
+      )} · Phòng hiện tại: ${getScheduleRoomDisplay(selectedSchedule)}`
+    : "";
 
   return (
     <div className="p-5 md:p-6 space-y-5">
@@ -390,7 +455,7 @@ const LecturerRoomChangeRequestPage = () => {
                   onValueChange={(value) =>
                     resetRoom({
                       semesterId: value,
-                      sectionCode: "",
+                      sectionScheduleId: "",
                       targetDate: "",
                       fromWeek: "",
                       toWeek: "",
@@ -418,39 +483,54 @@ const LecturerRoomChangeRequestPage = () => {
 
               <div className="space-y-2">
                 <Label>
-                  Mã lớp học phần & tên môn{" "}
+                  Lớp học phần được phân công{" "}
                   <span className="text-red-500">*</span>
                 </Label>
-                <div className="grid grid-cols-3 gap-2">
-                  <Input
-                    value={form.sectionCode}
-                    onChange={(event) =>
-                      resetRoom({ sectionCode: event.target.value })
-                    }
-                    placeholder="Mã lớp"
-                    className="h-10"
-                  />
-                  <Input
-                    readOnly
-                    value={selectedSchedule?.courseName || ""}
-                    placeholder="Tên môn học"
-                    className="h-10 col-span-2 bg-gray-50"
-                  />
-                </div>
+                <Select
+                  value={form.sectionScheduleId}
+                  onValueChange={handleScheduleChange}
+                  disabled={loadingSchedules || !form.semesterId}
+                >
+                  <SelectTrigger className="h-10">
+                    <SelectValue
+                      placeholder={
+                        loadingSchedules
+                          ? "Đang tải học phần..."
+                          : "Chọn lớp học phần"
+                      }
+                    >
+                      {selectedScheduleOptionLabel}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {schedules.length === 0 ? (
+                      <SelectItem value="__EMPTY_SCHEDULES__" disabled>
+                        Không có học phần được phân công trong học kỳ này
+                      </SelectItem>
+                    ) : (
+                      schedules.map((schedule) => {
+                        const id = String(getScheduleId(schedule));
+                        return (
+                          <SelectItem key={id} value={id}>
+                            {getScheduleClassCode(schedule)} ·{" "}
+                            {getScheduleCourseName(schedule)} ·{" "}
+                            {getScheduleDayText(schedule)}, tiết{" "}
+                            {getSchedulePeriod(schedule)} · Phòng hiện tại:{" "}
+                            {getScheduleRoomDisplay(schedule)}
+                          </SelectItem>
+                        );
+                      })
+                    )}
+                  </SelectContent>
+                </Select>
                 {loadingSchedules && (
                   <p className="text-xs text-gray-500">
                     Đang tải danh sách lớp học phần...
                   </p>
                 )}
-                {showNoMatch && (
-                  <p className="text-xs text-red-600">
-                    Không tìm thấy lớp học phần đã phân phòng trong học kỳ này.
-                  </p>
-                )}
-                {showMultipleMatches && (
-                  <p className="text-xs text-amber-700">
-                    Có {matchedSchedules.length} lớp phù hợp, hãy nhập mã lớp
-                    chính xác hơn.
+                {!loadingSchedules && form.semesterId && schedules.length === 0 && (
+                  <p className="text-xs text-gray-500">
+                    Không có học phần được phân công trong học kỳ này.
                   </p>
                 )}
                 {errors.sectionInfo && (
@@ -459,10 +539,24 @@ const LecturerRoomChangeRequestPage = () => {
               </div>
 
               <div className="space-y-2">
+                <Label>Tên môn học</Label>
+                <Input
+                  readOnly
+                  value={
+                    selectedSchedule ? getScheduleCourseName(selectedSchedule) : ""
+                  }
+                  placeholder="Tên môn học"
+                  className="h-10 bg-gray-50"
+                />
+              </div>
+
+              <div className="space-y-2">
                 <Label>Phòng hiện tại</Label>
                 <Input
                   readOnly
-                  value={selectedSchedule?.currentRoomCode || ""}
+                  value={
+                    selectedSchedule ? getScheduleRoomCode(selectedSchedule) : ""
+                  }
                   placeholder="Phòng hiện tại"
                   className="h-10 bg-gray-50 font-semibold text-gray-800"
                 />
@@ -473,20 +567,24 @@ const LecturerRoomChangeRequestPage = () => {
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
                     <p>
                       <span className="font-semibold">Lớp:</span>{" "}
-                      {selectedSchedule.classCode}
+                      {getScheduleClassCode(selectedSchedule)}
                     </p>
                     <p>
                       <span className="font-semibold">Giảng viên:</span>{" "}
-                      {selectedSchedule.lecturerName}
+                      {getScheduleLecturerName(selectedSchedule)}
                     </p>
                     <p>
                       <span className="font-semibold">Lịch:</span>{" "}
-                      {selectedSchedule.dayOfWeekText}, tiết{" "}
+                      {getScheduleDayText(selectedSchedule)}, tiết{" "}
                       {getSchedulePeriod(selectedSchedule)}
                     </p>
                     <p>
+                      <span className="font-semibold">Phòng hiện tại:</span>{" "}
+                      {getScheduleRoomDisplay(selectedSchedule)}
+                    </p>
+                    <p>
                       <span className="font-semibold">Sức chứa tối đa:</span>{" "}
-                      {selectedSchedule.maxCapacity}
+                      {getScheduleMaxCapacity(selectedSchedule)}
                     </p>
                   </div>
                 </div>
@@ -501,7 +599,7 @@ const LecturerRoomChangeRequestPage = () => {
                       scope: value,
                       targetDate:
                         value === "SESSION" && selectedSchedule
-                          ? getNextDateForDay(selectedSchedule.dayOfWeekCode)
+                          ? getNextDateForDay(getScheduleDayCode(selectedSchedule))
                           : "",
                       fromWeek: "",
                       toWeek: "",
@@ -533,13 +631,15 @@ const LecturerRoomChangeRequestPage = () => {
                       resetRoom({ targetDate: event.target.value })
                     }
                     className="h-10"
+                    disabled={!selectedSchedule}
                   />
                   {errors.targetDate && (
                     <p className="text-xs text-red-600">{errors.targetDate}</p>
                   )}
                   {!errors.targetDate && selectedSchedule && (
                     <p className="text-xs text-gray-500">
-                      Chỉ chọn ngày trùng {selectedSchedule.dayOfWeekText}.
+                      Chỉ chọn ngày trùng{" "}
+                      {getScheduleDayText(selectedSchedule)}.
                     </p>
                   )}
                 </div>
@@ -658,10 +758,15 @@ const LecturerRoomChangeRequestPage = () => {
         onOpenChange={setIsRoomSearchOpen}
         onSelect={handleRoomSelect}
         semesterId={form.semesterId}
-        expectedAttendees={selectedSchedule?.maxCapacity || ""}
+        expectedAttendees={
+          selectedSchedule ? getScheduleMaxCapacity(selectedSchedule) : ""
+        }
+        initialRoomType={
+          selectedSchedule ? getScheduleRequiredRoomType(selectedSchedule) : "all"
+        }
         isEmergencyChangeMode
         isLecturerChangeMode
-        scheduleId={selectedSchedule?.scheduleId}
+        scheduleId={selectedSchedule ? getScheduleId(selectedSchedule) : undefined}
         changeScope={form.scope}
         targetDate={form.targetDate}
         fromWeek={form.fromWeek}

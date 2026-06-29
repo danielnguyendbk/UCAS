@@ -3,7 +3,6 @@ package com.ptit.qlphonghoc.student.controller;
 import com.ptit.qlphonghoc.auth.security.CustomUserDetails;
 import com.ptit.qlphonghoc.student.dto.roomborrow.CreateStudentRoomBorrowRequest;
 import com.ptit.qlphonghoc.student.dto.roomborrow.StudentAvailableRoomResponse;
-import com.ptit.qlphonghoc.student.dto.roomborrow.StudentClubLookupResponse;
 import com.ptit.qlphonghoc.student.dto.roomborrow.StudentRoomBorrowRequestResponse;
 import com.ptit.qlphonghoc.student.service.StudentRoomBorrowRequestService;
 import jakarta.validation.Valid;
@@ -65,13 +64,7 @@ public class StudentRoomBorrowRequestController {
         );
     }
 
-    @GetMapping("/clubs/{clubCode}")
-    public ResponseEntity<StudentClubLookupResponse> getClub(
-            @PathVariable String clubCode,
-            @AuthenticationPrincipal CustomUserDetails userDetails
-    ) {
-        return ResponseEntity.ok(service.getClub(clubCode, userDetails.getUserId()));
-    }
+
 
     @PostMapping
     public ResponseEntity<StudentRoomBorrowRequestResponse> create(

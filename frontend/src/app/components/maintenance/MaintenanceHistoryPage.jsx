@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Eye, Loader2, Search, Wrench } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, Loader2, Search, Wrench } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent } from "../ui/card";
@@ -24,6 +24,8 @@ import {
   severityLabel,
   statusConfig,
 } from "./maintenanceConstants";
+
+const PAGE_SIZE = 10;
 
 const getResponseList = (response) => {
   const payload = response.data;
@@ -69,6 +71,7 @@ const MaintenanceHistoryPage = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [page, setPage] = useState(1);
   const [selectedRequest, setSelectedRequest] = useState(null);
 
   const fetchRequests = async () => {
@@ -108,6 +111,20 @@ const MaintenanceHistoryPage = ({
         .some((value) => value.toString().toLowerCase().includes(keyword)),
     );
   }, [requests, searchTerm]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE));
+  const paginatedRequests = filteredRequests.slice(
+    (page - 1) * PAGE_SIZE,
+    page * PAGE_SIZE,
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [apiBasePath, searchTerm]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
 
   return (
     <div className="p-5 md:p-6 space-y-5">
@@ -165,7 +182,7 @@ const MaintenanceHistoryPage = ({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRequests.map((request) => (
+                {paginatedRequests.map((request) => (
                   <TableRow key={request.id} className="hover:bg-gray-50">
                     <TableCell className="font-mono text-xs font-bold text-blue-700">
                       {request.requestCode}
@@ -208,6 +225,34 @@ const MaintenanceHistoryPage = ({
                 ))}
               </TableBody>
             </Table>
+          </div>
+          <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3">
+            <span className="text-xs text-gray-500">
+              Hiển thị {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filteredRequests.length)} / {filteredRequests.length}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={page === 1}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-xs font-medium text-gray-600">Trang {page}/{totalPages}</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={page === totalPages}
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
       )}

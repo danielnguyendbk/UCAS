@@ -2,9 +2,14 @@ package com.ptit.qlphonghoc.staff.controller;
 
 import com.ptit.qlphonghoc.auth.security.CustomUserDetails;
 import com.ptit.qlphonghoc.staff.dto.allocation.AllocationResponse;
+import com.ptit.qlphonghoc.staff.dto.allocation.AllocationValidationSummary;
 import com.ptit.qlphonghoc.staff.dto.allocation.ConflictResponse;
 import com.ptit.qlphonghoc.staff.dto.allocation.ManualAssignRequest;
+import com.ptit.qlphonghoc.staff.dto.allocation.PageResponse;
+import com.ptit.qlphonghoc.staff.dto.allocation.ScheduleNoteRequest;
+import com.ptit.qlphonghoc.staff.repository.StaffAllocationRepository;
 import com.ptit.qlphonghoc.staff.service.StaffAllocationService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,6 +17,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -29,31 +36,45 @@ public class StaffAllocationController {
     }
 
     @GetMapping
-    public ResponseEntity<Map<String, Object>> getAllocations(@RequestParam Integer semesterId) {
-        List<AllocationResponse> list = service.getAllocations(semesterId);
+    public ResponseEntity<?> getAllocations(
+            @RequestParam Integer semesterId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String status
+    ) {
+        List<AllocationResponse> list = service.getAllocations(semesterId, search, status);
+        if (page != null || size != null) {
+            return ResponseEntity.ok(PageResponse.from(list, page, size));
+        }
         return ResponseEntity.ok(Map.of("data", list));
     }
 
     @GetMapping("/conflicts")
-    public ResponseEntity<Map<String, Object>> getConflicts(@RequestParam Integer semesterId) {
-        List<ConflictResponse> list = service.getConflicts(semesterId);
+    public ResponseEntity<?> getConflicts(
+            @RequestParam Integer semesterId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String conflictType
+    ) {
+        List<ConflictResponse> list = service.getConflicts(semesterId, search, conflictType);
+        if (page != null || size != null) {
+            return ResponseEntity.ok(PageResponse.from(list, page, size));
+        }
         return ResponseEntity.ok(Map.of("data", list));
     }
 
-    @PostMapping("/manual")
-    public ResponseEntity<Map<String, String>> manualAssign(@RequestBody ManualAssignRequest request,
-                                                            @AuthenticationPrincipal CustomUserDetails userDetails) {
-        try {
-            service.manualAssign(request, userDetails.getUserId());
-            return ResponseEntity.ok(Map.of("message", "Phân phòng thành công!"));
-        } catch (Exception e) {
-            Throwable rootCause = e;
-            while (rootCause.getCause() != null) {
-                rootCause = rootCause.getCause();
-            }
+    @PostMapping("/validate")
+    public ResponseEntity<AllocationValidationSummary> validate(@RequestParam Integer semesterId) {
+        return ResponseEntity.ok(service.validateAllocations(semesterId));
+    }
 
-            return ResponseEntity.status(400).body(Map.of("message", rootCause.getMessage()));
-        }
+    @PostMapping("/manual")
+    public ResponseEntity<Map<String, String>> manualAssign(@Valid @RequestBody ManualAssignRequest request,
+                                                            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        service.manualAssign(request, userDetails.getUserId());
+        return ResponseEntity.ok(Map.of("message", "Phân phòng thành công!"));
     }
 
     @PostMapping("/auto-assign")
@@ -69,15 +90,36 @@ public class StaffAllocationController {
             @RequestParam String dayOfWeek,
             @RequestParam Integer slot,
             @RequestParam Integer expectedAttendees,
-            @RequestParam(required = false, defaultValue = "") String roomType
+            @RequestParam(required = false, defaultValue = "") String roomType,
+            @RequestParam(required = false) Integer scheduleId,
+            @RequestParam(required = false) Integer buildingId,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
     ) {
-        return ResponseEntity.ok(service.getAvailableRooms(
+        List<StaffAllocationRepository.AllocationRoomProjection> rooms = service.getAvailableRooms(
                 semesterId,
                 normalizeDayOfWeek(dayOfWeek),
                 slot,
                 expectedAttendees,
-                roomType
-        ));
+                roomType,
+                scheduleId,
+                buildingId,
+                search
+        );
+        if (page != null || size != null) {
+            return ResponseEntity.ok(PageResponse.from(rooms, page, size));
+        }
+        return ResponseEntity.ok(rooms);
+    }
+
+    @PutMapping("/schedules/{scheduleId}/note")
+    public ResponseEntity<Map<String, String>> saveScheduleNote(
+            @PathVariable Integer scheduleId,
+            @Valid @RequestBody ScheduleNoteRequest request
+    ) {
+        service.saveScheduleNote(scheduleId, request.note());
+        return ResponseEntity.ok(Map.of("message", "Đã lưu ghi chú cho Admin."));
     }
 
     private String normalizeDayOfWeek(String dayOfWeek) {

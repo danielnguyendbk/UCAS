@@ -13,13 +13,14 @@ public class Student {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "student_id")
     private Integer id;
 
     @Column(name = "user_id", nullable = false, unique = true)
     private Integer userId;
 
-    @Column(name = "faculty_id", nullable = false)
-    private Integer facultyId;
+    @Column(name = "department_id", nullable = false)
+    private Integer departmentId;
 
     @Column(name = "student_code", nullable = false, unique = true, length = 20)
     private String studentCode;
@@ -53,11 +54,19 @@ public class Student {
     }
 
     public Integer getFacultyId() {
-        return facultyId;
+        return departmentId;
     }
 
     public void setFacultyId(Integer facultyId) {
-        this.facultyId = facultyId;
+        this.departmentId = facultyId;
+    }
+
+    public Integer getDepartmentId() {
+        return departmentId;
+    }
+
+    public void setDepartmentId(Integer departmentId) {
+        this.departmentId = departmentId;
     }
 
     public String getStudentCode() {

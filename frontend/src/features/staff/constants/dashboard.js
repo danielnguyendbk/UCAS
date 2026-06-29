@@ -3,9 +3,10 @@ import {
   Building2,
   CalendarCheck,
   ClipboardList,
+  ClipboardCheck,
   ListChecks,
   PlusSquare,
-  Search
+  Wrench
 } from "lucide-react";
 import { APP_ROUTES } from "@/constants/routes";
 const STAFF_STATS = [
@@ -44,39 +45,46 @@ const STAFF_STATS = [
 ];
 const STAFF_QUICK_ACTIONS = [
   {
-    label: "Qu\u1EA3n l\xFD th\u1EDDi kh\xF3a bi\u1EC3u",
+    label: "Thời khóa biểu toàn trường",
     icon: ListChecks,
-    path: APP_ROUTES.staffSchedule,
+    path: APP_ROUTES.staffTimetable,
     color: "text-indigo-600",
     bg: "bg-indigo-50 hover:bg-indigo-100"
   },
   {
-    label: "Ph\xE2n ph\xF2ng & Xung \u0111\u1ED9t",
+    label: "Phân phòng học",
     icon: Building2,
-    path: APP_ROUTES.staffAllocation,
+    path: APP_ROUTES.staffAutoAssignment,
     color: "text-teal-600",
     bg: "bg-teal-50 hover:bg-teal-100"
   },
   {
-    label: "Tra c\u1EE9u l\u1ECBch ph\xF2ng",
-    icon: Search,
-    path: APP_ROUTES.staffLookup,
-    color: "text-cyan-600",
-    bg: "bg-cyan-50 hover:bg-cyan-100"
+    label: "Lớp học phần",
+    icon: ClipboardList,
+    path: APP_ROUTES.staffClassSections,
+    color: "text-sky-600",
+    bg: "bg-sky-50 hover:bg-sky-100"
   },
   {
-    label: "Tra c\u1EE9u l\u1ECBch h\u1ECDc",
+    label: "Lịch thi phòng học",
     icon: CalendarCheck,
-    path: APP_ROUTES.staffLookup,
+    path: APP_ROUTES.staffExamSchedule,
     color: "text-violet-600",
     bg: "bg-violet-50 hover:bg-violet-100"
   },
   {
-    label: "Danh s\xE1ch ph\xF2ng tr\u1ED1ng",
-    icon: Building2,
-    path: APP_ROUTES.staffLookup,
+    label: "Phân phòng thi",
+    icon: ClipboardCheck,
+    path: APP_ROUTES.staffExamAllocation,
     color: "text-emerald-600",
     bg: "bg-emerald-50 hover:bg-emerald-100"
+  },
+  {
+    label: "Đặt/đổi phòng khẩn cấp",
+    icon: PlusSquare,
+    path: APP_ROUTES.staffEmergencyRoomChange,
+    color: "text-orange-600",
+    bg: "bg-orange-50 hover:bg-orange-100"
   },
   {
     label: "Danh s\xE1ch \u0111\u1EB7t ph\xF2ng",
@@ -86,13 +94,19 @@ const STAFF_QUICK_ACTIONS = [
     bg: "bg-rose-50 hover:bg-rose-100"
   },
   {
-    label: "\u0110\u1EB7t ph\xF2ng kh\u1EA9n c\u1EA5p",
-    icon: PlusSquare,
-    path: APP_ROUTES.staffBookings,
-    color: "text-orange-600",
-    bg: "bg-orange-50 hover:bg-orange-100"
+    label: "Danh sách đổi phòng",
+    icon: CalendarCheck,
+    path: APP_ROUTES.staffRoomChangeList,
+    color: "text-cyan-600",
+    bg: "bg-cyan-50 hover:bg-cyan-100"
   },
-  
+  {
+    label: "Yêu cầu sửa chữa",
+    icon: Wrench,
+    path: APP_ROUTES.staffMaintenanceRequests,
+    color: "text-amber-600",
+    bg: "bg-amber-50 hover:bg-amber-100"
+  },
 ];
 const RECENT_SECTIONS = [
   {

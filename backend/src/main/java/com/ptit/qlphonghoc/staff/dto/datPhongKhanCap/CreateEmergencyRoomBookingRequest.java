@@ -48,13 +48,6 @@ public class CreateEmergencyRoomBookingRequest {
     @NotBlank(message = "emergencyReason is required")
     private String emergencyReason;
 
-    /*
-     * Staff user id creating the emergency booking.
-     * Later this should come from JWT instead of the request body.
-     */
-    @NotNull(message = "staffUserId is required")
-    private Integer staffUserId;
-
     public CreateEmergencyRoomBookingRequest() {
     }
 
@@ -152,13 +145,5 @@ public class CreateEmergencyRoomBookingRequest {
 
     public void setEmergencyReason(String emergencyReason) {
         this.emergencyReason = emergencyReason;
-    }
-
-    public Integer getStaffUserId() {
-        return staffUserId;
-    }
-
-    public void setStaffUserId(Integer staffUserId) {
-        this.staffUserId = staffUserId;
     }
 }

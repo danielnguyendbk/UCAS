@@ -3,14 +3,15 @@ package com.ptit.qlphonghoc.lecturer.controller;
 import com.ptit.qlphonghoc.auth.security.CustomUserDetails;
 import com.ptit.qlphonghoc.lecturer.dto.roomborrow.CreateLecturerRoomBorrowRequest;
 import com.ptit.qlphonghoc.lecturer.dto.roomborrow.LecturerAvailableRoomResponse;
-import com.ptit.qlphonghoc.lecturer.dto.roomborrow.LecturerClubLookupResponse;
 import com.ptit.qlphonghoc.lecturer.dto.roomborrow.LecturerRoomBorrowRequestResponse;
 import com.ptit.qlphonghoc.lecturer.dto.roomborrow.LecturerSectionLookupResponse;
 import com.ptit.qlphonghoc.lecturer.service.LecturerRoomBorrowRequestService;
+import com.ptit.qlphonghoc.staff.dto.allocation.PageResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -21,6 +22,12 @@ import org.springframework.web.bind.annotation.RestController;
 import java.net.URI;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
+
+import java.net.URI;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Locale;
 
 @RestController
 @RequestMapping("/api/lecturer/room-borrow-requests")
@@ -33,10 +40,27 @@ public class LecturerRoomBorrowRequestController {
     }
 
     @GetMapping
-    public ResponseEntity<List<LecturerRoomBorrowRequestResponse>> getMyRequests(
-            @AuthenticationPrincipal CustomUserDetails userDetails
+    public ResponseEntity<?> getMyRequests(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(defaultValue = "false") boolean includeCancelled
     ) {
-        return ResponseEntity.ok(service.getMyRequests(userDetails.getUserId()));
+        List<LecturerRoomBorrowRequestResponse> list = service.getMyRequests(userDetails.getUserId())
+                .stream()
+                .filter(request -> status == null || status.isBlank() || "ALL".equalsIgnoreCase(status)
+                        || status.equalsIgnoreCase(request.getStatus()))
+                .filter(request -> includeCancelled
+                        || "CANCELLED".equalsIgnoreCase(status)
+                        || !"CANCELLED".equalsIgnoreCase(request.getStatus()))
+                .filter(request -> matchesSearch(request, search))
+                .toList();
+        if (page != null || size != null) {
+            return ResponseEntity.ok(PageResponse.from(list, page, size));
+        }
+        return ResponseEntity.ok(list);
     }
 
     @GetMapping("/available-rooms")
@@ -47,6 +71,7 @@ public class LecturerRoomBorrowRequestController {
             @RequestParam(required = false) Integer slotEndId,
             @RequestParam(required = false) Integer slot,
             @RequestParam Integer expectedAttendees,
+            @RequestParam(required = false) Integer buildingId,
             @RequestParam(required = false) String roomType,
             @RequestParam(required = false) String keyword
     ) {
@@ -60,27 +85,30 @@ public class LecturerRoomBorrowRequestController {
                         effectiveSlotStartId,
                         effectiveSlotEndId,
                         expectedAttendees,
+                        buildingId,
                         roomType,
                         keyword
                 )
         );
     }
 
-    @GetMapping("/clubs/{clubCode}")
-    public ResponseEntity<LecturerClubLookupResponse> getClub(
-            @PathVariable String clubCode,
-            @AuthenticationPrincipal CustomUserDetails userDetails
-    ) {
-        return ResponseEntity.ok(service.getClub(clubCode, userDetails.getUserId()));
-    }
+
 
     @GetMapping("/sections/lookup")
-    public ResponseEntity<LecturerSectionLookupResponse> getSection(
+    public ResponseEntity<?> lookupSections(
             @RequestParam Integer semesterId,
-            @RequestParam String sectionCode,
+            @RequestParam(required = false) String sectionCode,
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
-        return ResponseEntity.ok(service.getSection(semesterId, sectionCode, userDetails.getUserId()));
+        if (sectionCode == null || sectionCode.isBlank()) {
+            return ResponseEntity.ok(
+                    service.getSections(semesterId, userDetails.getUserId())
+            );
+        }
+
+        return ResponseEntity.ok(
+                service.getSection(semesterId, sectionCode, userDetails.getUserId())
+        );
     }
 
     @PostMapping
@@ -93,5 +121,31 @@ public class LecturerRoomBorrowRequestController {
         return ResponseEntity
                 .created(URI.create("/api/lecturer/room-borrow-requests/" + response.getId()))
                 .body(response);
+    }
+
+    @PatchMapping("/{id}/cancel")
+    public ResponseEntity<LecturerRoomBorrowRequestResponse> cancel(
+            @PathVariable Integer id,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        return ResponseEntity.ok(service.cancel(id, userDetails.getUserId()));
+    }
+
+    private boolean matchesSearch(LecturerRoomBorrowRequestResponse request, String search) {
+        if (search == null || search.isBlank()) {
+            return true;
+        }
+        String keyword = search.trim().toLowerCase(Locale.ROOT);
+        return contains(request.getId(), keyword)
+                || contains(request.getRequestTitle(), keyword)
+                || contains(request.getSectionCode(), keyword)
+                || contains(request.getCourseName(), keyword)
+                || contains(request.getPreferredRoomCode(), keyword)
+                || contains(request.getApprovedRoomCode(), keyword)
+                || contains(request.getStatus(), keyword);
+    }
+
+    private boolean contains(Object value, String keyword) {
+        return value != null && String.valueOf(value).toLowerCase(Locale.ROOT).contains(keyword);
     }
 }

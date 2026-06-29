@@ -1,5 +1,13 @@
 package com.ptit.qlphonghoc.admin.controller;
 
+import com.ptit.qlphonghoc.admin.dto.AdminScheduleUpdateRequest;
+import com.ptit.qlphonghoc.admin.dto.AdminSplitSectionRequest;
+import com.ptit.qlphonghoc.admin.dto.AdminSplitSectionResponse;
+import com.ptit.qlphonghoc.admin.dto.AdminSplitSuggestionRequest;
+import com.ptit.qlphonghoc.admin.dto.AdminSplitSuggestionResponse;
+import com.ptit.qlphonghoc.admin.service.AdminSectionSplitService;
+import com.ptit.qlphonghoc.admin.service.AdminScheduleEditService;
+import com.ptit.qlphonghoc.auth.security.CustomUserDetails;
 import com.ptit.qlphonghoc.staff.dto.class_section.CreateSectionRequest;
 import com.ptit.qlphonghoc.staff.dto.class_section.StaffSectionTableResponse;
 import com.ptit.qlphonghoc.staff.dto.class_section.UpdateSectionRequest;
@@ -16,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
 import java.net.URI;
 import java.util.List;
@@ -26,9 +35,17 @@ import java.util.List;
 public class AdminClassSectionController {
 
     private final StaffClassSectionService classSectionService;
+    private final AdminScheduleEditService scheduleEditService;
+    private final AdminSectionSplitService sectionSplitService;
 
-    public AdminClassSectionController(StaffClassSectionService classSectionService) {
+    public AdminClassSectionController(
+            StaffClassSectionService classSectionService,
+            AdminScheduleEditService scheduleEditService,
+            AdminSectionSplitService sectionSplitService
+    ) {
         this.classSectionService = classSectionService;
+        this.scheduleEditService = scheduleEditService;
+        this.sectionSplitService = sectionSplitService;
     }
 
     @GetMapping
@@ -60,6 +77,68 @@ public class AdminClassSectionController {
             @Valid @RequestBody UpdateSectionRequest request
     ) {
         return ResponseEntity.ok(classSectionService.update(id, request));
+    }
+
+    @PutMapping("/{sectionId}/schedules/{scheduleId}")
+    public ResponseEntity<StaffSectionTableResponse> updateSchedule(
+            @PathVariable Integer sectionId,
+            @PathVariable Integer scheduleId,
+            @Valid @RequestBody AdminScheduleUpdateRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        return ResponseEntity.ok(
+                scheduleEditService.update(sectionId, scheduleId, request, userDetails.getUserId())
+        );
+    }
+
+    @GetMapping("/{sectionId}/schedules/{scheduleId}/available-rooms")
+    public ResponseEntity<?> getAvailableRooms(
+            @PathVariable Integer sectionId,
+            @PathVariable Integer scheduleId,
+            @RequestParam Integer semesterId,
+            @RequestParam String dayOfWeek,
+            @RequestParam Integer slotStartId,
+            @RequestParam Integer slotEndId,
+            @RequestParam Integer fromWeekNo,
+            @RequestParam Integer toWeekNo,
+            @RequestParam Integer expectedAttendees,
+            @RequestParam(required = false, defaultValue = "") String roomType,
+            @RequestParam(required = false) Integer buildingId,
+            @RequestParam(required = false) String search
+    ) {
+        return ResponseEntity.ok(scheduleEditService.getAvailableRooms(
+                sectionId,
+                scheduleId,
+                semesterId,
+                dayOfWeek,
+                slotStartId,
+                slotEndId,
+                fromWeekNo,
+                toWeekNo,
+                expectedAttendees,
+                roomType,
+                buildingId,
+                search
+        ));
+    }
+
+    @PostMapping("/{sectionId}/split")
+    public ResponseEntity<AdminSplitSectionResponse> splitSection(
+            @PathVariable Integer sectionId,
+            @Valid @RequestBody AdminSplitSectionRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        return ResponseEntity.ok(
+                sectionSplitService.split(sectionId, request, userDetails.getUserId())
+        );
+    }
+
+    @PostMapping("/{sectionId}/split/suggestions")
+    public ResponseEntity<AdminSplitSuggestionResponse> suggestSplitSection(
+            @PathVariable Integer sectionId,
+            @Valid @RequestBody AdminSplitSuggestionRequest request
+    ) {
+        return ResponseEntity.ok(sectionSplitService.suggest(sectionId, request));
     }
 
     @DeleteMapping("/{id}")

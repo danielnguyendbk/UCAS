@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import {
   Calendar, Clock, MapPin, Users, CheckCircle, Clock3, XCircle, Send, Eye, BookOpen, ChevronLeft, ChevronRight
@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { ScheduleGridView } from "../components/ScheduleGridView";
 import { Input } from "../components/ui/input";
+import { httpClient } from "../../services/httpClient";
 
 const mySchedule = [
   { id: 1, section: "CS101.L11", name: "Lập trình hướng đối tượng", credits: 3, class: "D21CNTT01", students: 45, day: "Thứ 2", slot: "Tiết 1-3", time: "07:00 - 09:30", room: "A-301", building: "Toà A", status: "active", week: "Tuần 15" },
@@ -44,6 +45,7 @@ const LecturerPage = () => {
   const [selectedSession, setSelectedSession] = useState(null);
   const [week, setWeek] = useState("15");
   const [viewMode, setViewMode] = useState("grid");
+  const [timeSlots, setTimeSlots] = useState([]);
   
   // Form states
   const [form, setForm] = useState({ type: "", section: "", applyDate: "", reason: "", room: "", slot: "" });
@@ -51,6 +53,26 @@ const LecturerPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [requestHistory, setRequestHistory] = useState(requestHistoryData);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchTimeSlots = async () => {
+      try {
+        const response = await httpClient.get("/api/categories/time-slots");
+        const slots = response.data?.data || response.data || [];
+        if (isMounted) setTimeSlots(Array.isArray(slots) ? slots : []);
+      } catch (error) {
+        console.error("Lỗi tải khung giờ thời khóa biểu:", error);
+      }
+    };
+
+    fetchTimeSlots();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const validateForm = () => {
     const errs = {};
@@ -269,6 +291,7 @@ const LecturerPage = () => {
                   color: s.status === 'conflict' ? 'red' : 'blue',
                   badge: statusConfigSchedule[s.status].label
                 }))}
+                timeSlots={timeSlots}
                 onItemClick={(item) => {
                   const session = mySchedule.find(s => s.id === item.id);
                   if (session) setSelectedSession(session);

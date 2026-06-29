@@ -6,9 +6,9 @@ import {
   Eye,
   Loader2,
   RefreshCw,
+  Search,
   XCircle,
 } from "lucide-react";
-import { authService } from "@/features/auth/services/authService";
 import { httpClient } from "@/services/httpClient";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -19,6 +19,13 @@ import {
   DialogTitle,
 } from "../components/ui/dialog";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -26,6 +33,15 @@ import {
   TableHeader,
   TableRow,
 } from "../components/ui/table";
+
+const PAGE_SIZE = 10;
+
+const STATUS_FILTERS = [
+  { value: "ALL", label: "Tất cả" },
+  { value: "PENDING", label: "Chờ duyệt" },
+  { value: "APPROVED", label: "Đã duyệt" },
+  { value: "REJECTED", label: "Từ chối" },
+];
 
 const STATUS_CONFIG = {
   APPROVED: {
@@ -98,17 +114,62 @@ const scopeText = (item) => {
 
 const getPeriodText = (item) => item?.periodText || item?.slot || "-";
 
+const PaginationBar = ({ page, totalPages, onPageChange }) => {
+  if (totalPages <= 1) return null;
+  const maxButtons = 5;
+  let startPage = Math.max(1, page - Math.floor(maxButtons / 2));
+  const endPage = Math.min(totalPages, startPage + maxButtons - 1);
+  if (endPage - startPage + 1 < maxButtons) startPage = Math.max(1, endPage - maxButtons + 1);
+  const pages = Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
+  return (
+    <div className="flex items-center justify-between border-t border-gray-100 bg-white px-4 py-3">
+      <p className="text-xs text-gray-500">
+        Trang {page} / {totalPages}
+      </p>
+      <div className="flex gap-1">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onPageChange(page - 1)}
+          disabled={page === 1}
+          className="h-7 px-2 text-xs"
+        >
+          ‹
+        </Button>
+        {pages.map((p) => (
+          <Button
+            key={p}
+            variant={p === page ? "default" : "outline"}
+            size="sm"
+            onClick={() => onPageChange(p)}
+            className="h-7 w-7 p-0 text-xs"
+          >
+            {p}
+          </Button>
+        ))}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onPageChange(page + 1)}
+          disabled={page === totalPages}
+          className="h-7 px-2 text-xs"
+        >
+          ›
+        </Button>
+      </div>
+    </div>
+  );
+};
+
 const LecturerRoomChangeListPage = () => {
   const [requests, setRequests] = useState([]);
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [page, setPage] = useState(1);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-
-  const currentUserId = useMemo(() => {
-    const user = authService.getPersistedUser();
-    return user?.id ? Number(user.id) : null;
-  }, []);
 
   const fetchRequests = useCallback(async () => {
     setIsLoading(true);
@@ -116,12 +177,7 @@ const LecturerRoomChangeListPage = () => {
     try {
       const response = await httpClient.get("/api/lecturer/room-change-requests");
       const payload = Array.isArray(response.data) ? response.data : response.data?.data;
-      const list = Array.isArray(payload) ? payload : [];
-      setRequests(
-        currentUserId
-          ? list.filter((item) => Number(item.requestedBy) === currentUserId)
-          : list,
-      );
+      setRequests(Array.isArray(payload) ? payload : []);
     } catch (requestError) {
       setError(
         requestError.response?.data?.message ||
@@ -130,11 +186,52 @@ const LecturerRoomChangeListPage = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [currentUserId]);
+  }, []);
 
   useEffect(() => {
     fetchRequests();
   }, [fetchRequests]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, searchTerm]);
+
+  const counts = useMemo(() => {
+    const next = { ALL: requests.length, PENDING: 0, APPROVED: 0, REJECTED: 0 };
+    requests.forEach((item) => {
+      const s = normalize(item.status);
+      if (next[s] !== undefined) next[s] += 1;
+    });
+    return next;
+  }, [requests]);
+
+  const filteredRequests = useMemo(() => {
+    const keyword = searchTerm.trim().toLowerCase();
+    return requests.filter((item) => {
+      const matchesStatus =
+        statusFilter === "ALL" || normalize(item.status) === statusFilter;
+      if (!matchesStatus) return false;
+      if (!keyword) return true;
+      return [
+        item.id,
+        item.classCode,
+        item.courseName,
+        item.oldRoomCode,
+        item.requestedRoomCode,
+        item.newRoomCode,
+        item.reason,
+        item.dayOfWeek,
+      ]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(keyword));
+    });
+  }, [requests, statusFilter, searchTerm]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE));
+  const paginatedRequests = filteredRequests.slice(
+    (page - 1) * PAGE_SIZE,
+    page * PAGE_SIZE,
+  );
 
   const openDetails = (item) => {
     setSelectedRequest(item);
@@ -151,10 +248,10 @@ const LecturerRoomChangeListPage = () => {
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900">
-            Trạng thái đổi phòng
+            Yêu cầu đổi phòng của tôi
           </h1>
           <p className="mt-0.5 text-sm text-gray-500">
-            Chỉ hiển thị các yêu cầu đổi phòng do tài khoản giảng viên hiện tại gửi.
+            Danh sách các yêu cầu đổi phòng bạn đã gửi và trạng thái xử lý.
           </p>
         </div>
         <Button variant="outline" onClick={fetchRequests} disabled={isLoading}>
@@ -165,6 +262,30 @@ const LecturerRoomChangeListPage = () => {
           )}
           Làm mới
         </Button>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-[200px_1fr]">
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="h-10 bg-white">
+            <SelectValue placeholder="Lọc trạng thái" />
+          </SelectTrigger>
+          <SelectContent>
+            {STATUS_FILTERS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label} ({counts[option.value] || 0})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <input
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Tìm theo lớp, môn, phòng hoặc lý do..."
+            className="h-10 w-full rounded-md border border-gray-200 bg-white pl-9 pr-3 text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+          />
+        </div>
       </div>
 
       {error && (
@@ -180,68 +301,82 @@ const LecturerRoomChangeListPage = () => {
             <Loader2 className="h-5 w-5 animate-spin" />
             Đang tải yêu cầu đổi phòng...
           </div>
-        ) : requests.length === 0 ? (
+        ) : filteredRequests.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Clock className="mb-3 h-10 w-10 text-gray-300" />
             <p className="text-sm font-semibold text-gray-500">
-              Bạn chưa có yêu cầu đổi phòng nào
+              {requests.length === 0
+                ? "Bạn chưa có yêu cầu đổi phòng nào"
+                : "Không có yêu cầu nào phù hợp với bộ lọc"}
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-gray-50">
-                  <TableHead className="text-xs font-semibold text-gray-600">Mã</TableHead>
-                  <TableHead className="text-xs font-semibold text-gray-600">Lớp học phần</TableHead>
-                  <TableHead className="text-xs font-semibold text-gray-600">Đổi phòng</TableHead>
-                  <TableHead className="text-xs font-semibold text-gray-600">Phạm vi</TableHead>
-                  <TableHead className="text-xs font-semibold text-gray-600">Tiết</TableHead>
-                  <TableHead className="text-center text-xs font-semibold text-gray-600">Trạng thái</TableHead>
-                  <TableHead className="text-xs font-semibold text-gray-600">Ngày tạo</TableHead>
-                  <TableHead className="text-center text-xs font-semibold text-gray-600">Xem</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {requests.map((item) => (
-                  <TableRow key={item.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <TableCell className="text-xs font-bold text-blue-700">#{item.id}</TableCell>
-                    <TableCell className="min-w-[180px]">
-                      <div className="text-xs font-semibold text-gray-900">{item.classCode}</div>
-                      <div className="mt-0.5 text-[11px] text-gray-500">{item.courseName}</div>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-xs font-semibold text-gray-800">
-                      {item.oldRoomCode} {"->"} {item.newRoomCode || item.requestedRoomCode}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-xs text-gray-700">
-                      {SCOPE_LABELS[normalize(item.changeScope)] || item.changeScope}
-                      <div className="mt-0.5 text-[11px] text-gray-500">{scopeText(item)}</div>
-                    </TableCell>
-                    <TableCell className="text-xs text-gray-700">
-                      {item.dayOfWeek} - Tiết {getPeriodText(item)}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <StatusBadge status={item.status} />
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-xs text-gray-500">
-                      {formatDateTime(item.createdAt)}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => openDetails(item)}
-                        className="h-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-                      >
-                        <Eye className="h-3.5 w-3.5" />
-                        Xem
-                      </Button>
-                    </TableCell>
+          <>
+            <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50/50 px-4 py-2">
+              <p className="text-xs text-gray-500">
+                Hiển thị{" "}
+                <span className="font-semibold text-gray-700">
+                  {paginatedRequests.length}
+                </span>{" "}
+                / {filteredRequests.length} yêu cầu
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50">
+                    <TableHead className="text-xs font-semibold text-gray-600">Mã</TableHead>
+                    <TableHead className="text-xs font-semibold text-gray-600">Lớp học phần</TableHead>
+                    <TableHead className="text-xs font-semibold text-gray-600">Đổi phòng</TableHead>
+                    <TableHead className="text-xs font-semibold text-gray-600">Phạm vi</TableHead>
+                    <TableHead className="text-xs font-semibold text-gray-600">Tiết học</TableHead>
+                    <TableHead className="text-center text-xs font-semibold text-gray-600">Trạng thái</TableHead>
+                    <TableHead className="text-xs font-semibold text-gray-600">Ngày tạo</TableHead>
+                    <TableHead className="text-center text-xs font-semibold text-gray-600">Xem</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {paginatedRequests.map((item) => (
+                    <TableRow key={item.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <TableCell className="text-xs font-bold text-blue-700">#{item.id}</TableCell>
+                      <TableCell className="min-w-[180px]">
+                        <div className="text-xs font-semibold text-gray-900">{item.classCode}</div>
+                        <div className="mt-0.5 text-[11px] text-gray-500">{item.courseName}</div>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-xs font-semibold text-gray-800">
+                        {item.oldRoomCode} {"->"} {item.newRoomCode || item.requestedRoomCode}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-xs text-gray-700">
+                        {SCOPE_LABELS[normalize(item.changeScope)] || item.changeScope}
+                        <div className="mt-0.5 text-[11px] text-gray-500">{scopeText(item)}</div>
+                      </TableCell>
+                      <TableCell className="text-xs text-gray-700">
+                        {item.dayOfWeek} - Tiết {getPeriodText(item)}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <StatusBadge status={item.status} />
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-xs text-gray-500">
+                        {formatDateTime(item.createdAt)}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => openDetails(item)}
+                          className="h-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          Xem
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <PaginationBar page={page} totalPages={totalPages} onPageChange={setPage} />
+          </>
         )}
       </div>
 
@@ -258,6 +393,12 @@ const LecturerRoomChangeListPage = () => {
                 <DialogTitle>Chi tiết yêu cầu #{selectedRequest.id}</DialogTitle>
               </DialogHeader>
               <div className="space-y-3 text-sm">
+                <div className="flex flex-wrap gap-2">
+                  <StatusBadge status={selectedRequest.status} />
+                  <Badge variant="outline">
+                    {SCOPE_LABELS[normalize(selectedRequest.changeScope)] || selectedRequest.changeScope}
+                  </Badge>
+                </div>
                 <div>
                   <p className="text-xs font-semibold uppercase text-gray-500">Lớp học phần</p>
                   <p className="font-medium text-gray-900">
@@ -271,24 +412,31 @@ const LecturerRoomChangeListPage = () => {
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase text-gray-500">Phạm vi</p>
-                  <p className="text-gray-700">{scopeText(selectedRequest)}</p>
+                  <p className="text-xs font-semibold uppercase text-gray-500">Thời gian học</p>
+                  <p className="text-gray-700">
+                    {selectedRequest.dayOfWeek} - Tiết {getPeriodText(selectedRequest)}
+                  </p>
                 </div>
                 <div>
+                  <p className="text-xs font-semibold uppercase text-gray-500">Phạm vi áp dụng</p>
+                  <p className="text-gray-700">{scopeText(selectedRequest)}</p>
+                </div>
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                   <p className="text-xs font-semibold uppercase text-gray-500">Lý do</p>
-                  <p className="whitespace-pre-wrap text-gray-700">{selectedRequest.reason}</p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">{selectedRequest.reason}</p>
                 </div>
                 {selectedRequest.rejectReason && (
-                  <div>
-                    <p className="text-xs font-semibold uppercase text-gray-500">Lý do từ chối</p>
-                    <p className="text-red-700">{selectedRequest.rejectReason}</p>
+                  <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                    <p className="text-xs font-semibold uppercase text-red-600">Lý do từ chối</p>
+                    <p className="mt-1 text-sm text-red-700">{selectedRequest.rejectReason}</p>
                   </div>
                 )}
                 {selectedRequest.reviewedAt && (
                   <div>
-                    <p className="text-xs font-semibold uppercase text-gray-500">Thông tin xử lý</p>
+                    <p className="text-xs font-semibold uppercase text-gray-500">Xử lý bởi</p>
                     <p className="text-gray-700">
-                      {selectedRequest.reviewedByName || "Giáo vụ"} - {formatDateTime(selectedRequest.reviewedAt)}
+                      {selectedRequest.reviewedByName || "Giáo vụ"} —{" "}
+                      {formatDateTime(selectedRequest.reviewedAt)}
                     </p>
                   </div>
                 )}

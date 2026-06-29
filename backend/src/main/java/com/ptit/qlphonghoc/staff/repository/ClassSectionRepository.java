@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import java.time.LocalTime;
 
 import java.util.List;
 import java.util.Optional;
@@ -13,16 +14,19 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
 
     String TABLE_SELECT = """
         SELECT
-            cs.id AS id,
+            cs.section_id AS id,
+            sch.schedule_id AS scheduleId,
+            cs.section_code AS sectionCode,
             cs.semester_id AS semesterId,
             cs.course_id AS courseId,
             cs.lecturer_id AS lecturerId,
             cs.max_capacity AS maxCapacity,
             CONCAT(c.course_code, '.L', cs.section_code) AS classCode,
             c.course_name AS courseName,
-            f.code AS facultyCode,
-            d.code AS departmentCode,
+            NULL AS facultyCode,
+            d.department_code AS departmentCode,
             c.credits AS credits,
+            c.required_room_type AS requiredRoomType,
             cs.enrolled_count AS studentCount,
             l.full_name AS lecturerName,
 
@@ -43,9 +47,11 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
             ts_start.slot_no AS slot,
             ts_start.slot_no AS slotStart,
             ts_end.slot_no AS slotEnd,
+            sch.from_week_no AS fromWeekNo,
+            sch.to_week_no AS toWeekNo,
 
             CASE
-                WHEN sch.id IS NULL THEN '-'
+                WHEN sch.schedule_id IS NULL THEN '-'
                 ELSE CONCAT(
                     CASE sch.day_of_week
                         WHEN 'MON' THEN 'Thu 2'
@@ -63,92 +69,58 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
                 )
             END AS schedule,
 
-            cr.id AS classroomId,
-            CONCAT(b.code, '-', cr.room_number) AS room,
+            cr.classroom_id AS classroomId,
+            cr.capacity AS roomCapacity,
+            CASE
+                WHEN cr.classroom_id IS NULL THEN NULL
+                ELSE CONCAT(b.building_code, '-', cr.room_number)
+            END AS room,
+            CASE
+                WHEN cr.classroom_id IS NULL THEN NULL
+                ELSE CONCAT(b.building_code, '-', cr.room_number)
+            END AS classroomCode,
+
+            sch.status AS scheduleStatus,
+            sch.validation_status AS validationStatus,
+            sch.conflict_reason AS conflictReason,
+            sch.note AS note,
 
             CASE
-                WHEN sch.id IS NULL THEN 'NO_SCHEDULE'
-                WHEN EXISTS (
-                    SELECT 1
-                    FROM schedules sch2
-                    JOIN class_sections cs2 ON cs2.id = sch2.section_id
-                    WHERE sch2.status = 'ACTIVE'
-                      AND cs2.status <> 'CANCELLED'
-                      AND sch2.classroom_id = sch.classroom_id
-                      AND sch2.day_of_week = sch.day_of_week
-                      AND sch2.slot_start_id <= sch.slot_end_id
-                      AND sch2.slot_end_id >= sch.slot_start_id
-                      AND sch2.id <> sch.id
-                ) THEN 'CONFLICT'
+                WHEN sch.schedule_id IS NULL THEN 'NO_SCHEDULE'
+                WHEN sch.status = 'UNASSIGNED' OR sch.classroom_id IS NULL THEN 'UNASSIGNED'
+                WHEN sch.validation_status = 'CONFLICT' THEN 'CONFLICT'
                 ELSE 'ASSIGNED'
             END AS allocationStatus,
 
             CASE
-                WHEN sch.id IS NULL THEN 'Chua co lich'
-                WHEN EXISTS (
-                    SELECT 1
-                    FROM schedules sch2
-                    JOIN class_sections cs2 ON cs2.id = sch2.section_id
-                    WHERE sch2.status = 'ACTIVE'
-                      AND cs2.status <> 'CANCELLED'
-                      AND sch2.classroom_id = sch.classroom_id
-                      AND sch2.day_of_week = sch.day_of_week
-                      AND sch2.slot_start_id <= sch.slot_end_id
-                      AND sch2.slot_end_id >= sch.slot_start_id
-                      AND sch2.id <> sch.id
-                ) THEN 'Xung dot lich'
+                WHEN sch.schedule_id IS NULL THEN 'Chua co lich'
+                WHEN sch.status = 'UNASSIGNED' OR sch.classroom_id IS NULL THEN 'Chua phan phong'
+                WHEN sch.validation_status = 'CONFLICT' THEN 'Xung dot lich'
                 ELSE 'Da phan phong'
             END AS statusText,
 
             cs.status AS sectionStatus,
+            NULL AS classIds,
+            cs.class_name AS classCodes,
+            cs.class_name AS classNames,
 
-            (
-                SELECT GROUP_CONCAT(DISTINCT cls.id ORDER BY cls.class_code)
-                FROM student_section_enrollments sse
-                JOIN students st ON st.id = sse.student_id
-                JOIN classes cls ON cls.id = st.class_id
-                WHERE sse.section_id = cs.id
-                  AND sse.status = 'ENROLLED'
-                  AND st.is_deleted = FALSE
-                  AND cls.is_deleted = FALSE
-            ) AS classIds,
-
-            (
-                SELECT GROUP_CONCAT(DISTINCT cls.class_code ORDER BY cls.class_code SEPARATOR ', ')
-                FROM student_section_enrollments sse
-                JOIN students st ON st.id = sse.student_id
-                JOIN classes cls ON cls.id = st.class_id
-                WHERE sse.section_id = cs.id
-                  AND sse.status = 'ENROLLED'
-                  AND st.is_deleted = FALSE
-                  AND cls.is_deleted = FALSE
-            ) AS classCodes,
-
-            (
-                SELECT GROUP_CONCAT(DISTINCT cls.class_name ORDER BY cls.class_code SEPARATOR ', ')
-                FROM student_section_enrollments sse
-                JOIN students st ON st.id = sse.student_id
-                JOIN classes cls ON cls.id = st.class_id
-                WHERE sse.section_id = cs.id
-                  AND sse.status = 'ENROLLED'
-                  AND st.is_deleted = FALSE
-                  AND cls.is_deleted = FALSE
-            ) AS classNames
+            -- --- THÊM 2 DÒNG NÀY VÀO ĐÂY ĐỂ SELECT DỮ LIỆU THỜI GIAN ---
+            ts_start.start_time AS startTime,
+            ts_end.end_time AS endTime
         """;
 
     String TABLE_FROM = """
         FROM class_sections cs
-        JOIN courses c ON c.id = cs.course_id
-        JOIN departments d ON d.id = c.department_id
-        JOIN faculties f ON f.id = d.faculty_id
-        JOIN lecturers l ON l.id = cs.lecturer_id
+        JOIN courses c ON c.course_id = cs.course_id
+        JOIN departments d ON d.department_id = c.department_id
+        JOIN lecturers l ON l.lecturer_id = cs.lecturer_id
         LEFT JOIN schedules sch
-               ON sch.section_id = cs.id
-              AND sch.status = 'ACTIVE'
+               ON sch.section_id = cs.section_id
+              AND sch.status <> 'CANCELLED'
         LEFT JOIN time_slots ts_start ON ts_start.slot_id = sch.slot_start_id
         LEFT JOIN time_slots ts_end ON ts_end.slot_id = sch.slot_end_id
-        LEFT JOIN classrooms cr ON cr.id = sch.classroom_id
-        LEFT JOIN buildings b ON b.id = cr.building_id
+        LEFT JOIN classrooms cr ON cr.classroom_id = sch.classroom_id
+        LEFT JOIN buildings b ON b.building_id = cr.building_id
         WHERE cs.status <> 'CANCELLED'
         """;
 
@@ -162,15 +134,16 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
     List<StaffSectionTableProjection> findStaffTable(@Param("semesterId") Integer semesterId);
 
     @Query(value = TABLE_SELECT + TABLE_FROM + """
-            AND cs.id = :id
+            AND cs.section_id = :id
             """ + TABLE_ORDER, nativeQuery = true)
     Optional<StaffSectionTableProjection> findStaffTableById(@Param("id") Integer id);
 
     @Query(value = """
         SELECT COUNT(*)
         FROM classrooms
-        WHERE id = :classroomId
+        WHERE classroom_id = :classroomId
           AND is_active = TRUE
+          AND is_deleted = FALSE
         """, nativeQuery = true)
     int countActiveClassroomById(@Param("classroomId") Integer classroomId);
 
@@ -186,10 +159,10 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
                             @Param("slotEndId") Integer slotEndId);
 
     @Query(value = """
-        SELECT id
+        SELECT schedule_id
         FROM schedules
         WHERE section_id = :sectionId
-          AND status = 'ACTIVE'
+          AND status <> 'CANCELLED'
         LIMIT 1
         """, nativeQuery = true)
     Optional<Integer> findScheduleIdBySectionId(@Param("sectionId") Integer sectionId);
@@ -204,6 +177,7 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
             slot_end_id,
             start_time,
             end_time,
+            assigned_at,
             status
         )
         SELECT
@@ -214,7 +188,8 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
             end_slot.slot_id,
             start_slot.start_time,
             end_slot.end_time,
-            'ACTIVE'
+            CASE WHEN :classroomId IS NULL THEN NULL ELSE CURRENT_TIMESTAMP END,
+            CASE WHEN :classroomId IS NULL THEN 'UNASSIGNED' ELSE 'ASSIGNED' END
         FROM time_slots start_slot
         JOIN time_slots end_slot ON end_slot.slot_id = :slotEndId
         WHERE start_slot.slot_id = :slotStartId
@@ -235,8 +210,10 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
             slot_start_id = :slotStartId,
             slot_end_id = :slotEndId,
             start_time = (SELECT start_time FROM time_slots WHERE slot_id = :slotStartId),
-            end_time = (SELECT end_time FROM time_slots WHERE slot_id = :slotEndId)
-        WHERE id = :scheduleId
+            end_time = (SELECT end_time FROM time_slots WHERE slot_id = :slotEndId),
+            assigned_at = CASE WHEN :classroomId IS NULL THEN NULL ELSE COALESCE(assigned_at, CURRENT_TIMESTAMP) END,
+            status = CASE WHEN :classroomId IS NULL THEN 'UNASSIGNED' ELSE 'ASSIGNED' END
+        WHERE schedule_id = :scheduleId
         """, nativeQuery = true)
     void updateScheduleById(
             @Param("scheduleId") Integer scheduleId,
@@ -254,26 +231,16 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
         """, nativeQuery = true)
     void deactivateSchedulesOfSection(@Param("sectionId") Integer sectionId);
 
-    @Query(value = "SELECT status FROM semesters WHERE id = :semesterId", nativeQuery = true)
+    @Query(value = "SELECT status FROM semesters WHERE semester_id = :semesterId", nativeQuery = true)
     String findSemesterStatus(@Param("semesterId") Integer semesterId);
 
     @Query(value = """
         SELECT COUNT(*)
-        FROM classes
-        WHERE id IN (:classIds)
+        FROM students
+        WHERE class_name = :className
           AND is_deleted = FALSE
         """, nativeQuery = true)
-    int countActiveClassesByIds(@Param("classIds") List<Integer> classIds);
-
-    @Query(value = """
-        SELECT COUNT(*)
-        FROM students s
-        JOIN classes cls ON cls.id = s.class_id
-        WHERE cls.id IN (:classIds)
-          AND cls.is_deleted = FALSE
-          AND s.is_deleted = FALSE
-        """, nativeQuery = true)
-    int countStudentsByClassIds(@Param("classIds") List<Integer> classIds);
+    int countStudentsByClassName(@Param("className") String className);
 
     @Query(value = """
         SELECT COUNT(*)
@@ -294,21 +261,21 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
     @Modifying
     @Query(value = """
         INSERT INTO student_section_enrollments(student_id, section_id, status, enrolled_at)
-        SELECT s.id, :sectionId, 'ENROLLED', CURRENT_TIMESTAMP
+        SELECT s.student_id, :sectionId, 'ENROLLED', CURRENT_TIMESTAMP
         FROM students s
-        JOIN classes cls ON cls.id = s.class_id
-        WHERE cls.id IN (:classIds)
-          AND cls.is_deleted = FALSE
+        WHERE s.class_name = :className
           AND s.is_deleted = FALSE
         ON DUPLICATE KEY UPDATE
             status = 'ENROLLED',
             enrolled_at = VALUES(enrolled_at)
         """, nativeQuery = true)
-    void enrollStudentsFromClasses(@Param("sectionId") Integer sectionId,
-                                   @Param("classIds") List<Integer> classIds);
+    void enrollStudentsByClassName(@Param("sectionId") Integer sectionId,
+                                   @Param("className") String className);
 
     interface StaffSectionTableProjection {
         Integer getId();
+        Integer getScheduleId();
+        String getSectionCode();
         String getClassCode();
         String getCourseName();
         String getFacultyCode();
@@ -318,6 +285,7 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
         Integer getLecturerId();
         Integer getMaxCapacity();
         Integer getCredits();
+        String getRequiredRoomType();
         Integer getStudentCount();
         String getLecturerName();
         String getDay();
@@ -327,14 +295,25 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Inte
         Integer getSlotEndId();
         Integer getSlotStart();
         Integer getSlotEnd();
+        Integer getFromWeekNo();
+        Integer getToWeekNo();
         String getSchedule();
         Integer getClassroomId();
+        Integer getRoomCapacity();
         String getRoom();
+        String getClassroomCode();
+        String getScheduleStatus();
+        String getValidationStatus();
+        String getConflictReason();
+        String getNote();
         String getAllocationStatus();
         String getStatusText();
         String getSectionStatus();
         String getClassIds();
         String getClassCodes();
         String getClassNames();
+        // --- THÊM 2 DÒNG NÀY VÀO INTERFACE PROJECTION ---
+        LocalTime getStartTime();
+        LocalTime getEndTime();
     }
 }
