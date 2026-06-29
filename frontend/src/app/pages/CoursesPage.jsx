@@ -23,6 +23,11 @@ import {
 } from "../components/ui/table";
 import { httpClient } from "@/services/httpClient";
 
+const readCourseActive = (course) => {
+  const value = course.is_active ?? course.isActive ?? course.active;
+  return value === true || value === 1 || value === "1" || String(value).toLowerCase() === "true";
+};
+
 const EMPTY_FORM = {
   id: null,
   department_id: "",
@@ -60,8 +65,9 @@ const normalizeCourse = (course) => ({
   description: course.description ?? "",
   department_name:
     course.department_name ?? course.departmentName ?? course.department ?? "",
-  department_code: course.department_code ?? course.departmentCode ?? "",
-  is_deleted: course.is_deleted ?? course.isDeleted ?? 0,
+  department_code: course.department_code ?? course.departmentCode ?? "",  is_deleted: course.is_deleted ?? course.isDeleted ?? 0,
+  is_active: readCourseActive(course),
+  isActive: readCourseActive(course),
 });
 
 const normalizeDepartment = (department) => ({
@@ -343,10 +349,30 @@ export const CoursesPage = () => {
                         course.required_room_type}
                     </TableCell>
                     <TableCell>
-                      <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
-                        Đang sử dụng
-                      </Badge>
-                    </TableCell>
+  {(() => {
+    const isActive =
+      course.is_active === true ||
+      course.is_active === 1 ||
+      course.is_active === "1" ||
+      course.is_active === "true" ||
+      course.isActive === true ||
+      course.isActive === 1 ||
+      course.isActive === "1" ||
+      course.isActive === "true";
+
+    return (
+      <Badge
+        className={
+          isActive
+            ? "bg-green-100 text-green-700 hover:bg-green-100"
+            : "bg-gray-100 text-gray-600 hover:bg-gray-100"
+        }
+      >
+        {isActive ? "Đang sử dụng" : "Chưa sử dụng"}
+      </Badge>
+    );
+  })()}
+</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button

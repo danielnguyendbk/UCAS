@@ -6,6 +6,8 @@ import io.jsonwebtoken.JwtException;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -142,6 +145,36 @@ public class GlobalExceptionHandler {
         return build(status, status.name(), message, null, null);
     }
 
+
+    @ExceptionHandler(DataAccessException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(DataAccessException exception) {
+        String rawMessage = extractRootMessage(exception);
+        String lower = rawMessage == null ? "" : rawMessage.toLowerCase();
+
+        String message = "D\u1eef li\u1ec7u kh\u00f4ng h\u1ee3p l\u1ec7 ho\u1eb7c \u0111ang b\u1ecb r\u00e0ng bu\u1ed9c b\u1edfi d\u1eef li\u1ec7u li\u00ean quan.";
+
+        if (lower.contains("duplicate entry") && (lower.contains("course_code") || lower.contains("courses"))) {
+            message = "M\u00e3 m\u00f4n h\u1ecdc \u0111\u00e3 t\u1ed3n t\u1ea1i. Vui l\u00f2ng nh\u1eadp m\u00e3 m\u00f4n h\u1ecdc kh\u00e1c.";
+        } else if (lower.contains("duplicate entry")) {
+            message = "D\u1eef li\u1ec7u \u0111\u00e3 t\u1ed3n t\u1ea1i trong h\u1ec7 th\u1ed1ng. Vui l\u00f2ng ki\u1ec3m tra l\u1ea1i m\u00e3 ho\u1eb7c th\u00f4ng tin \u0111\u1ecbnh danh.";
+        } else if (rawMessage != null && rawMessage.contains("Kh\u00f4ng th\u1ec3 x\u00f3a ph\u00f2ng h\u1ecdc")) {
+            message = extractTriggerMessage(rawMessage, "Kh\u00f4ng th\u1ec3 x\u00f3a ph\u00f2ng h\u1ecdc");
+        } else if (rawMessage != null && rawMessage.contains("Kh\u00f4ng th\u1ec3 g\u00e1n l\u1ecbch v\u00e0o ph\u00f2ng h\u1ecdc")) {
+            message = extractTriggerMessage(rawMessage, "Kh\u00f4ng th\u1ec3 g\u00e1n l\u1ecbch v\u00e0o ph\u00f2ng h\u1ecdc");
+        } else if (rawMessage != null && rawMessage.contains("Kh\u00f4ng th\u1ec3 x\u00f3a ho\u1eb7c v\u00f4 hi\u1ec7u h\u00f3a m\u00f4n h\u1ecdc")) {
+            message = extractTriggerMessage(rawMessage, "Kh\u00f4ng th\u1ec3 x\u00f3a ho\u1eb7c v\u00f4 hi\u1ec7u h\u00f3a m\u00f4n h\u1ecdc");
+        } else if (rawMessage != null && rawMessage.contains("Kh\u00f4ng th\u1ec3 x\u00f3a c\u1ee9ng m\u00f4n h\u1ecdc")) {
+            message = extractTriggerMessage(rawMessage, "Kh\u00f4ng th\u1ec3 x\u00f3a c\u1ee9ng m\u00f4n h\u1ecdc");
+        }
+
+        return build(
+                HttpStatus.CONFLICT,
+                "DATA_CONSTRAINT_VIOLATION",
+                message,
+                rawMessage,
+                null
+        );
+    }
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception exception) {
         log.error("Unhandled application exception", exception);
@@ -155,6 +188,45 @@ public class GlobalExceptionHandler {
         );
     }
 
+
+    private String extractRootMessage(Throwable exception) {
+        Throwable current = exception;
+        Throwable last = exception;
+
+        while (current != null) {
+            last = current;
+            current = current.getCause();
+        }
+
+        if (last instanceof SQLException sqlException) {
+            return sqlException.getMessage();
+        }
+
+        return last != null && last.getMessage() != null
+                ? last.getMessage()
+                : exception.getMessage();
+    }
+
+    private String extractTriggerMessage(String rawMessage, String startText) {
+        int start = rawMessage.indexOf(startText);
+        if (start < 0) {
+            return rawMessage;
+        }
+
+        String message = rawMessage.substring(start).trim();
+
+        int quote = message.indexOf("'");
+        if (quote > 0) {
+            message = message.substring(0, quote).trim();
+        }
+
+        int semicolon = message.indexOf(";");
+        if (semicolon > 0) {
+            message = message.substring(0, semicolon).trim();
+        }
+
+        return message;
+    }
     private ResponseEntity<ErrorResponse> build(
             HttpStatus status,
             String errorCode,

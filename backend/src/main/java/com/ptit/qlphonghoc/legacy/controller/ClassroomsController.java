@@ -5,6 +5,8 @@ import com.ptit.qlphonghoc.legacy.common.DbHelper;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -56,6 +58,8 @@ public class ClassroomsController {
                     ApiResponse.ok(
                             "Fetch classrooms successfully",
                             jdbcTemplate.queryForList(sql)));
+        } catch (DataAccessException e) {
+            throw e;
         } catch (Exception e) {
             return serverError(e);
         }
@@ -101,7 +105,11 @@ public class ClassroomsController {
                         .body(ApiResponse.fail("Classroom not found"));
             }
 
+            enrichClassroomUsageStatus(row);
+
             return ResponseEntity.ok(ApiResponse.ok("Fetch classroom successfully", row));
+        } catch (DataAccessException e) {
+            throw e;
         } catch (Exception e) {
             return serverError(e);
         }
@@ -202,6 +210,8 @@ public class ClassroomsController {
                     .status(HttpStatus.CREATED)
                     .body(ApiResponse.ok("Create classroom successfully",
                             DbHelper.row("classroom_id", newId, "id", newId)));
+        } catch (DataAccessException e) {
+            throw e;
         } catch (Exception e) {
             return serverError(e);
         }
@@ -339,6 +349,8 @@ public class ClassroomsController {
                     id);
 
             return ResponseEntity.ok(ApiResponse.ok("Update classroom successfully"));
+        } catch (DataAccessException e) {
+            throw e;
         } catch (Exception e) {
             return serverError(e);
         }
@@ -363,11 +375,96 @@ public class ClassroomsController {
                     id);
 
             return ResponseEntity.ok(ApiResponse.ok("Delete classroom successfully"));
+        } catch (DataAccessException e) {
+            throw e;
         } catch (Exception e) {
             return serverError(e);
         }
     }
 
+
+    private void enrichClassroomUsageStatus(Map<String, Object> room) {
+        Integer classroomId = toInteger(room.get("classroom_id"));
+
+        if (classroomId == null) {
+            classroomId = toInteger(room.get("id"));
+        }
+
+        boolean active = toBoolean(room.get("is_active"), true);
+        boolean inUse = active && isClassroomInUse(classroomId);
+
+        String usageStatus;
+        String usageStatusLabel;
+
+        if (!active) {
+            usageStatus = "DISABLED";
+            usageStatusLabel = "Bảo trì / Tạm ngưng";
+        } else if (inUse) {
+            usageStatus = "IN_USE";
+            usageStatusLabel = "Đang được sử dụng";
+        } else {
+            usageStatus = "AVAILABLE";
+            usageStatusLabel = "Sẵn sàng sử dụng";
+        }
+
+        room.put("is_in_use", inUse);
+        room.put("isInUse", inUse);
+        room.put("usage_status", usageStatus);
+        room.put("usageStatus", usageStatus);
+        room.put("usage_status_label", usageStatusLabel);
+        room.put("usageStatusLabel", usageStatusLabel);
+    }
+
+    private boolean isClassroomInUse(Integer classroomId) {
+        if (classroomId == null) {
+            return false;
+        }
+
+        Integer usageCount = jdbcTemplate.queryForObject(
+                """
+                        SELECT
+                            (
+                                SELECT COUNT(*)
+                                FROM schedules sc
+                                JOIN class_sections cs ON cs.section_id = sc.section_id
+                                WHERE sc.classroom_id = ?
+                                  AND sc.status = 'ASSIGNED'
+                                  AND COALESCE(cs.status, 'ACTIVE') NOT IN ('CANCELLED', 'COMPLETED')
+                            )
+                            +
+                            (
+                                SELECT COUNT(*)
+                                FROM class_sessions ses
+                                JOIN class_sections cs ON cs.section_id = ses.section_id
+                                WHERE ses.classroom_id = ?
+                                  AND ses.session_status IN ('SCHEDULED', 'MAKEUP', 'RESCHEDULED')
+                                  AND COALESCE(cs.status, 'ACTIVE') NOT IN ('CANCELLED', 'COMPLETED')
+                            )
+                            +
+                            (
+                                SELECT COUNT(*)
+                                FROM exams e
+                                WHERE e.classroom_id = ?
+                                  AND e.status IN ('DRAFT', 'SCHEDULED', 'ROOM_ASSIGNED', 'READY_FOR_APPROVAL', 'PUBLISHED')
+                                  AND e.is_deleted = 0
+                            )
+                            +
+                            (
+                                SELECT COUNT(*)
+                                FROM room_borrow_requests r
+                                WHERE r.approved_classroom_id = ?
+                                  AND r.status = 'APPROVED'
+                                  AND r.booking_date >= CURDATE()
+                            ) AS usage_count
+                        """,
+                Integer.class,
+                classroomId,
+                classroomId,
+                classroomId,
+                classroomId);
+
+        return usageCount != null && usageCount > 0;
+    }
     private boolean existsBuilding(Integer buildingId) {
         if (buildingId == null) {
             return false;

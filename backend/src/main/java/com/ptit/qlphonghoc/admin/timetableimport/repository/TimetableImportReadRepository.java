@@ -44,7 +44,7 @@ public class TimetableImportReadRepository implements TimetableImportDataSource 
 
         Map<String, CourseRef> courses = index(jdbc.query("""
                 SELECT course_id, course_code, required_room_type
-                FROM courses WHERE is_active = TRUE AND is_deleted = FALSE
+                FROM courses WHERE is_deleted = FALSE
                 """, params, (rs, n) -> new CourseRef(
                 rs.getLong("course_id"), rs.getString("course_code"), rs.getString("required_room_type")
         )), CourseRef::code);
