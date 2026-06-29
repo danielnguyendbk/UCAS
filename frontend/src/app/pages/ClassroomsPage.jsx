@@ -66,20 +66,69 @@ const getResponseData = (response) => {
   return [];
 };
 
-const normalizeClassroom = (room) => ({
-  id: room.id,
-  building_id: room.building_id ?? room.buildingId ?? "",
-  floor_number: room.floor_number ?? room.floorNumber ?? "",
-  room_number: room.room_number ?? room.roomNumber ?? "",
-  room_name: room.room_name ?? room.roomName ?? "",
-  room_type: room.room_type ?? room.roomType ?? "LECTURE",
-  capacity: room.capacity ?? "",
-  has_projector: Boolean(room.has_projector ?? room.hasProjector),
-  has_ac: Boolean(room.has_ac ?? room.hasAc),
-  is_active: Boolean(room.is_active ?? room.isActive ?? true),
-  building_name: room.building_name ?? room.buildingName ?? "",
-  building_code: room.building_code ?? room.buildingCode ?? "",
-});
+
+const readBoolean = (value, fallback = false) => {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+
+  const normalized = String(value).trim().toLowerCase();
+  return ["1", "true", "yes", "y"].includes(normalized);
+};
+
+const getRoomStatusBadge = (room) => {
+  if (!room.is_active || room.usage_status === "DISABLED") {
+    return {
+      label: "Bảo trì / Tạm ngưng",
+      className: "bg-gray-100 text-gray-700 hover:bg-gray-100",
+    };
+  }
+
+  if (room.is_in_use || room.usage_status === "IN_USE") {
+    return {
+      label: "Đang được sử dụng",
+      className: "bg-amber-100 text-amber-700 hover:bg-amber-100",
+    };
+  }
+
+  return {
+    label: "Sẵn sàng sử dụng",
+    className: "bg-green-100 text-green-700 hover:bg-green-100",
+  };
+};
+const normalizeClassroom = (room) => {
+  const isActive = readBoolean(room.is_active ?? room.isActive, true);
+  const isInUse = readBoolean(room.is_in_use ?? room.isInUse, false);
+  const usageStatus =
+    room.usage_status ??
+    room.usageStatus ??
+    (!isActive ? "DISABLED" : isInUse ? "IN_USE" : "AVAILABLE");
+
+  return {
+    id: room.id,
+    building_id: room.building_id ?? room.buildingId ?? "",
+    floor_number: room.floor_number ?? room.floorNumber ?? "",
+    room_number: room.room_number ?? room.roomNumber ?? "",
+    room_name: room.room_name ?? room.roomName ?? "",
+    room_type: room.room_type ?? room.roomType ?? "LECTURE",
+    capacity: room.capacity ?? "",
+    has_projector: readBoolean(room.has_projector ?? room.hasProjector, false),
+    has_ac: readBoolean(room.has_ac ?? room.hasAc, false),
+    is_active: isActive,
+    is_in_use: isInUse,
+    usage_status: usageStatus,
+    usage_status_label:
+      room.usage_status_label ??
+      room.usageStatusLabel ??
+      getRoomStatusBadge({
+        is_active: isActive,
+        is_in_use: isInUse,
+        usage_status: usageStatus,
+      }).label,
+    building_name: room.building_name ?? room.buildingName ?? "",
+    building_code: room.building_code ?? room.buildingCode ?? "",
+  };
+};
 
 const normalizeBuilding = (building) => ({
   id: building.id,
@@ -537,15 +586,15 @@ export const ClassroomsPage = () => {
                       </div>
                     </div>
 
-                    <Badge
-                      className={
-                        room.is_active
-                          ? "bg-green-100 text-green-700 hover:bg-green-100"
-                          : "bg-gray-100 text-gray-700 hover:bg-gray-100"
-                      }
-                    >
-                      {room.is_active ? "Đang hoạt động" : "Ngừng sử dụng"}
-                    </Badge>
+                    {(() => {
+                      const statusBadge = getRoomStatusBadge(room);
+
+                      return (
+                        <Badge className={statusBadge.className}>
+                          {statusBadge.label}
+                        </Badge>
+                      );
+                    })()}
                   </div>
 
                   <div className="space-y-3">
@@ -791,7 +840,7 @@ export const ClassroomsPage = () => {
                     handleChangeForm("is_active", event.target.checked)
                   }
                 />
-                Đang hoạt động
+                Cho phép sử dụng phòng
               </label>
             </div>
           </div>
@@ -877,7 +926,7 @@ export const ClassroomsPage = () => {
               <div className="grid grid-cols-3 gap-2">
                 <span className="font-semibold text-gray-600">Trạng thái:</span>
                 <span className="col-span-2">
-                  {viewClassroom.is_active ? "Đang hoạt động" : "Ngừng sử dụng"}
+                  {viewClassroom.usage_status_label || getRoomStatusBadge(viewClassroom).label}
                 </span>
               </div>
             </div>

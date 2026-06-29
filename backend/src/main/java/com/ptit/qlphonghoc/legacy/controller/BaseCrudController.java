@@ -5,6 +5,8 @@ import com.ptit.qlphonghoc.legacy.common.DbHelper;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
@@ -90,8 +92,14 @@ public abstract class BaseCrudController {
             }
             String sql = listSelectSql() + " WHERE " + String.join(" AND ", where) + " ORDER BY " + defaultOrderBy;
             return ResponseEntity.ok(ApiResponse.ok("Fetch " + tableName + " successfully", jdbcTemplate.queryForList(sql, args.toArray())));
+        } catch (DataAccessException e) {
+
+            throw e;
+
         } catch (Exception e) {
+
             return serverError(e);
+
         }
     }
 
@@ -102,8 +110,14 @@ public abstract class BaseCrudController {
             Map<String, Object> row = DbHelper.firstOrNull(jdbcTemplate, sql, id);
             if (row == null) return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.fail(tableName + " not found"));
             return ResponseEntity.ok(ApiResponse.ok("Fetch " + tableName + " successfully", row));
+        } catch (DataAccessException e) {
+
+            throw e;
+
         } catch (Exception e) {
+
             return serverError(e);
+
         }
     }
 
@@ -126,8 +140,14 @@ public abstract class BaseCrudController {
             String sql = "INSERT INTO " + tableName + " (" + String.join(", ", cols) + ") VALUES (" + placeholders + ")";
             Number newId = DbHelper.insert(jdbcTemplate, sql, vals.toArray());
             return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok("Create " + tableName + " successfully", DbHelper.row(idColumn, newId)));
+        } catch (DataAccessException e) {
+
+            throw e;
+
         } catch (Exception e) {
+
             return serverError(e);
+
         }
     }
 
@@ -152,8 +172,14 @@ public abstract class BaseCrudController {
             String sql = "UPDATE " + tableName + " SET " + String.join(", ", sets) + " WHERE " + idColumn + " = ?";
             jdbcTemplate.update(sql, vals.toArray());
             return ResponseEntity.ok(ApiResponse.ok("Update " + tableName + " successfully"));
+        } catch (DataAccessException e) {
+
+            throw e;
+
         } catch (Exception e) {
+
             return serverError(e);
+
         }
     }
 
@@ -166,8 +192,14 @@ public abstract class BaseCrudController {
             if (softDelete) jdbcTemplate.update("UPDATE " + tableName + " SET is_deleted = 1 WHERE " + idColumn + " = ?", id);
             else jdbcTemplate.update("DELETE FROM " + tableName + " WHERE " + idColumn + " = ?", id);
             return ResponseEntity.ok(ApiResponse.ok("Delete " + tableName + " successfully"));
+        } catch (DataAccessException e) {
+
+            throw e;
+
         } catch (Exception e) {
+
             return serverError(e);
+
         }
     }
 
