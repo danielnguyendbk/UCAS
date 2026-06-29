@@ -234,7 +234,7 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-600 via-blue-700 to-blue-900 flex items-center justify-center p-4">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-blue-600 via-blue-700 to-blue-900 px-4 py-8">
       <div
         className="absolute inset-0 opacity-10"
         style={{
@@ -243,38 +243,10 @@ const LoginPage = () => {
         }}
       />
 
-      <div className="w-full max-w-4xl relative flex gap-6">
-        <div className="hidden lg:flex flex-col justify-center flex-1 text-white pr-8">
-          <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mb-6 backdrop-blur">
-            <GraduationCap className="w-10 h-10 text-white" />
-          </div>
+      <div className="relative z-10 flex w-full max-w-xl justify-center">
 
-          <h1 className="text-3xl font-bold mb-3">Hệ thống Quản lý</h1>
-          <h2 className="text-2xl font-semibold text-blue-200 mb-4">
-            Phòng học & Thời khóa biểu
-          </h2>
 
-          <p className="text-blue-200 leading-relaxed">
-            Nền tảng quản lý phân công phòng học, thời khóa biểu và lịch học
-            cho toàn bộ trường đại học, tích hợp đa vai trò, thời gian thực và
-            thân thiện người dùng.
-          </p>
-
-          <div className="mt-8 grid grid-cols-2 gap-4">
-            {[
-              "48 Phòng học",
-              "156 Môn học",
-              "892 Tiết học/tuần",
-              "5 Vai trò",
-            ].map((item) => (
-              <div key={item} className="bg-white/10 rounded-xl p-3 backdrop-blur">
-                <p className="text-sm font-medium text-white">{item}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="w-full lg:w-[420px] bg-white rounded-2xl shadow-2xl p-8">
+        <div className="w-full max-w-[500px] rounded-3xl bg-white p-10 shadow-2xl sm:p-12">
           <div className="flex flex-col items-center mb-6">
             <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center mb-3 lg:hidden">
               <GraduationCap className="w-7 h-7 text-white" />
@@ -285,7 +257,7 @@ const LoginPage = () => {
             </h1>
 
             <p className="text-sm text-gray-500 mt-1">
-              CSMS — University Scheduling System
+
             </p>
           </div>
 
@@ -317,7 +289,7 @@ const LoginPage = () => {
                 onChange={(event) => {
                   setUsername(event.target.value);
                 }}
-                className="h-11"
+                className="h-12 text-base"
               />
             </div>
 
@@ -335,7 +307,7 @@ const LoginPage = () => {
                   onChange={(event) => {
                     setPassword(event.target.value);
                   }}
-                  className="h-11 pr-10"
+                  className="h-12 pr-10 text-base"
                 />
 
                 <button
@@ -364,7 +336,7 @@ const LoginPage = () => {
 
             <Button
               type="submit"
-              className="w-full h-11 bg-blue-600 hover:bg-blue-700 font-medium"
+              className="h-12 w-full bg-blue-600 text-base font-semibold hover:bg-blue-700"
               disabled={loading}
             >
               {loading ? "Đang đăng nhập..." : "Đăng nhập"}
